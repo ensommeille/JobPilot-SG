@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  skeleton:
+    name: Repo skeleton validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate required structure
+        run: python scripts/check_skeleton.py
+      - name: Validate docker-compose
+        run: docker compose config -q
+
+  backend-quality:
+    name: Backend lint / test / SAST / deps
+    if: hashFiles('backend/pyproject.toml') != ''
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install
+        run: pip install -e ".[dev]" semgrep pip-audit
+      - name: Lint (Ruff)
+        run: ruff check .
+      - name: Unit / API tests (pytest)
+        run: pytest
+      - name: SAST (Semgrep)
+        run: semgrep --config=auto --error app/
+      - name: Dependency scan (pip-audit)
+        run: pip-audit
+
+  docker:
+    name: Docker build (backend)
+    if: hashFiles('backend/Dockerfile') != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -t jobpilot-sg-backend ./backend
