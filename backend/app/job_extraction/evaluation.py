@@ -108,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.fixtures:
             protected.append(args.fixtures)
         else:
-            from importlib.resources import files
+            from importlib.resources import files  # nosemgrep: python37-compatibility-importlib2
 
             protected.append(
                 Path(str(files("app.job_extraction").joinpath("fixtures/demo_cases.json")))

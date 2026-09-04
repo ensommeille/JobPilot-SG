@@ -7,7 +7,7 @@ import asyncio
 import json
 import sys
 from datetime import UTC, datetime
-from importlib.resources import files
+from importlib.resources import files  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
