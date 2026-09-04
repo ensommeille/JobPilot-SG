@@ -1,0 +1,436 @@
+{
+  "notice": "Draft example annotations for offline fixture replay only. Not model predictions or independently reviewed gold data.",
+  "cases": [
+    {
+      "case_id": "internsg-269798",
+      "source_id": "internsg",
+      "external_id": "269798",
+      "input_hash": "2e2dc0fda222a3e63e82772630fe632a239d1443ba9afc956f70f9799ddad8fd",
+      "annotation_status": "draft_requires_human_review",
+      "extraction": {
+        "summary": {
+          "value": "Support client accounts and marketing execution.",
+          "evidence": "This is a hands-on role where you’ll get exposure to both client servicing and marketing execution."
+        },
+        "responsibilities": [
+          {
+            "value": "Support the day-to-day management of assigned client accounts",
+            "evidence": "Support the day-to-day management of assigned client accounts"
+          },
+          {
+            "value": "Communicate and coordinate with clients on ongoing projects and deliverables",
+            "evidence": "Communicate and coordinate with clients on ongoing projects and deliverables"
+          },
+          {
+            "value": "Work with the team to develop content ideas and campaign concepts",
+            "evidence": "Work with the team to develop content ideas and campaign concepts"
+          },
+          {
+            "value": "Assist with monthly content planning and content calendars",
+            "evidence": "Assist with monthly content planning and content calendars"
+          },
+          {
+            "value": "Coordinate with designers, videographers, creators and other team members",
+            "evidence": "Coordinate with designers, videographers, creators and other team members"
+          },
+          {
+            "value": "Prepare briefs and ensure deliverables are completed according to requirements",
+            "evidence": "Prepare briefs and ensure deliverables are completed according to requirements"
+          },
+          {
+            "value": "Keep track of timelines, approvals, feedback and outstanding items",
+            "evidence": "Keep track of timelines, approvals, feedback and outstanding items"
+          },
+          {
+            "value": "Assist with client meetings, meeting notes and follow-ups",
+            "evidence": "Assist with client meetings, meeting notes and follow-ups"
+          },
+          {
+            "value": "Monitor clients’ social media accounts, competitors and industry trends",
+            "evidence": "Monitor clients’ social media accounts, competitors and industry trends"
+          },
+          {
+            "value": "Assist with monthly reports and identify useful insights",
+            "evidence": "Assist with monthly reports and identify useful insights"
+          },
+          {
+            "value": "Support campaign launches, shoots and other marketing activities",
+            "evidence": "Support campaign launches, shoots and other marketing activities"
+          },
+          {
+            "value": "Ensure that what we promise our clients actually gets done — and done well",
+            "evidence": "Ensure that what we promise our clients actually gets done — and done well"
+          },
+          {
+            "value": "Occasional graphic design work (simple ones!)",
+            "evidence": "Occasional graphic design work (simple ones!)"
+          }
+        ],
+        "required_skills": [
+          {
+            "value": "Organised and good at keeping track of multiple moving parts",
+            "evidence": "Organised and good at keeping track of multiple moving parts"
+          },
+          {
+            "value": "Comfortable communicating with clients",
+            "evidence": "Comfortable communicating with clients"
+          },
+          {
+            "value": "Creative and genuinely interested in marketing and social media",
+            "evidence": "Creative and genuinely interested in marketing and social media"
+          },
+          {
+            "value": "Proactive — you don’t always wait to be told what to do",
+            "evidence": "Proactive — you don’t always wait to be told what to do"
+          },
+          {
+            "value": "Able to communicate clearly and professionally",
+            "evidence": "Able to communicate clearly and professionally"
+          },
+          {
+            "value": "Detail-oriented and responsible with deadlines",
+            "evidence": "Detail-oriented and responsible with deadlines"
+          },
+          {
+            "value": "Comfortable working in a fast-moving boutique agency environment",
+            "evidence": "Comfortable working in a fast-moving boutique agency environment"
+          }
+        ],
+        "preferred_skills": [],
+        "required_qualifications": [],
+        "preferred_qualifications": [],
+        "education": {
+          "degree": null,
+          "fields_of_study": [
+            {
+              "value": "Marketing",
+              "evidence": "Currently studying Marketing, Communications, Business or a related field"
+            },
+            {
+              "value": "Communications",
+              "evidence": "Currently studying Marketing, Communications, Business or a related field"
+            },
+            {
+              "value": "Business",
+              "evidence": "Currently studying Marketing, Communications, Business or a related field"
+            },
+            {
+              "value": "Related field",
+              "evidence": "Currently studying Marketing, Communications, Business or a related field"
+            }
+          ],
+          "enrollment": {
+            "value": "Currently studying",
+            "evidence": "Currently studying Marketing, Communications, Business or a related field"
+          }
+        },
+        "experience": {
+          "requirement": {
+            "value": "Experience is a plus, but initiative, attitude and willingness to learn matter more to us!",
+            "evidence": "Experience is a plus, but initiative, attitude and willingness to learn matter more to us!"
+          },
+          "minimum_years": null
+        },
+        "languages": []
+      }
+    },
+    {
+      "case_id": "internsg-269796",
+      "source_id": "internsg",
+      "external_id": "269796",
+      "input_hash": "50b31871f8c4b33929d18934b4f33cdfd6693e31898fd480d2d2b6a407b5d496",
+      "annotation_status": "draft_requires_human_review",
+      "extraction": {
+        "summary": {
+          "value": "Support sales and marketing activities.",
+          "evidence": "Support the sales team with quotations, follow-ups and customer enquiries\nAssist with marketing activities, events and exhibitions"
+        },
+        "responsibilities": [
+          {
+            "value": "Support the sales team with quotations, follow-ups and customer enquiries",
+            "evidence": "Support the sales team with quotations, follow-ups and customer enquiries"
+          },
+          {
+            "value": "Assist with marketing activities, events and exhibitions",
+            "evidence": "Assist with marketing activities, events and exhibitions"
+          },
+          {
+            "value": "Support telemarketing and customer outreach",
+            "evidence": "Support telemarketing and customer outreach"
+          },
+          {
+            "value": "Maintain customer and sales data",
+            "evidence": "Maintain customer and sales data"
+          },
+          {
+            "value": "Prepare marketing materials and simple reports",
+            "evidence": "Prepare marketing materials and simple reports"
+          },
+          {
+            "value": "Coordinate with customers and internal teams",
+            "evidence": "Coordinate with customers and internal teams"
+          }
+        ],
+        "required_skills": [],
+        "preferred_skills": [],
+        "required_qualifications": [],
+        "preferred_qualifications": [],
+        "education": {
+          "degree": null,
+          "fields_of_study": [],
+          "enrollment": null
+        },
+        "experience": {
+          "requirement": null,
+          "minimum_years": null
+        },
+        "languages": []
+      }
+    },
+    {
+      "case_id": "internsg-269795",
+      "source_id": "internsg",
+      "external_id": "269795",
+      "input_hash": "ee4399bc600aa37bc0af7a2de156e3896b3dd3f7674c4dd025bdd3278aedd578",
+      "annotation_status": "draft_requires_human_review",
+      "extraction": {
+        "summary": {
+          "value": "Support UI/UX design for mobile app and vending machine kiosk experiences.",
+          "evidence": "We are looking for a Product Design Intern (UI/UX) to support the design of AIKIT's mobile app and vending machine kiosk experiences. You will work closely with the Product Design Lead on UI execution, design system maintenance, prototyping, design QA, and user research. This is an onsite internship in Singapore for 3-6 months; full-time is preferred, with part-time considered case by case."
+        },
+        "responsibilities": [
+          {
+            "value": "Design and refine UI for our mobile app and vending machine kiosk.",
+            "evidence": "Design and refine UI for our mobile app and vending machine kiosk."
+          },
+          {
+            "value": "dentify and design missing states, edge cases, and interaction details.",
+            "evidence": "dentify and design missing states, edge cases, and interaction details."
+          },
+          {
+            "value": "Maintain and improve our Figma design system, components, and files.",
+            "evidence": "Maintain and improve our Figma design system, components, and files."
+          },
+          {
+            "value": "Create interactive prototypes for new and existing user flows.",
+            "evidence": "Create interactive prototypes for new and existing user flows."
+          },
+          {
+            "value": "Conduct design QA and flag visual or interaction inconsistencies.",
+            "evidence": "Conduct design QA and flag visual or interaction inconsistencies."
+          },
+          {
+            "value": "Support user research, usability testing, and synthesis of findings.",
+            "evidence": "Support user research, usability testing, and synthesis of findings."
+          },
+          {
+            "value": "Prepare designs and assets for developer handoff.",
+            "evidence": "Prepare designs and assets for developer handoff."
+          },
+          {
+            "value": "Work with developers on design clarifications as you gain product experience.",
+            "evidence": "Work with developers on design clarifications as you gain product experience."
+          }
+        ],
+        "required_skills": [
+          {
+            "value": "Strong visual design fundamentals with good attention to detail.",
+            "evidence": "Strong visual design fundamentals with good attention to detail."
+          },
+          {
+            "value": "Strong proficiency in Figma, including interactive prototyping.",
+            "evidence": "Strong proficiency in Figma, including interactive prototyping."
+          },
+          {
+            "value": "Able to execute motion graphics and UI animation for product interactions.",
+            "evidence": "Able to execute motion graphics and UI animation for product interactions."
+          },
+          {
+            "value": "Familiarity with Adobe Illustrator and AI design tools.",
+            "evidence": "Familiarity with Adobe Illustrator and AI design tools."
+          },
+          {
+            "value": "Good understanding of components, design systems, and consistent UI patterns.",
+            "evidence": "Good understanding of components, design systems, and consistent UI patterns."
+          },
+          {
+            "value": "Responsible, proactive, and able to work independently, taking initiative while knowing when to ask for help.",
+            "evidence": "Responsible, proactive, and able to work independently, taking initiative while knowing when to ask for help."
+          },
+          {
+            "value": "Able to manage tasks and keep up with product development timelines.",
+            "evidence": "Able to manage tasks and keep up with product development timelines."
+          },
+          {
+            "value": "Curious about users and comfortable participating in user research.",
+            "evidence": "Curious about users and comfortable participating in user research."
+          }
+        ],
+        "preferred_skills": [],
+        "required_qualifications": [
+          {
+            "value": "Portfolio required, showing relevant UI/visual design work and your design process.",
+            "evidence": "Portfolio required, showing relevant UI/visual design work and your design process."
+          }
+        ],
+        "preferred_qualifications": [],
+        "education": {
+          "degree": {
+            "value": "University degree (level unspecified)",
+            "evidence": "Currently pursuing a university degree or a fresh graduate in Singapore."
+          },
+          "fields_of_study": [
+            {
+              "value": "Product Design",
+              "evidence": "Background in Product Design, UI/UX, Visual Communication, Interaction Design, or a related field."
+            },
+            {
+              "value": "UI/UX",
+              "evidence": "Background in Product Design, UI/UX, Visual Communication, Interaction Design, or a related field."
+            },
+            {
+              "value": "Visual Communication",
+              "evidence": "Background in Product Design, UI/UX, Visual Communication, Interaction Design, or a related field."
+            },
+            {
+              "value": "Interaction Design",
+              "evidence": "Background in Product Design, UI/UX, Visual Communication, Interaction Design, or a related field."
+            },
+            {
+              "value": "Related field",
+              "evidence": "Background in Product Design, UI/UX, Visual Communication, Interaction Design, or a related field."
+            }
+          ],
+          "enrollment": {
+            "value": "Currently pursuing a university degree or a fresh graduate in Singapore",
+            "evidence": "Currently pursuing a university degree or a fresh graduate in Singapore."
+          }
+        },
+        "experience": {
+          "requirement": null,
+          "minimum_years": null
+        },
+        "languages": []
+      }
+    },
+    {
+      "case_id": "internsg-269794",
+      "source_id": "internsg",
+      "external_id": "269794",
+      "input_hash": "b58395b447b90c53355f7707fec142c030ab4a016a21a052b2f466a4cd59b280",
+      "annotation_status": "draft_requires_human_review",
+      "extraction": {
+        "summary": {
+          "value": "Provide administrative support to the company.",
+          "evidence": "We are looking for a dynamic and adaptive individual to provide administrative support to the company ranging from the below but not limited to it:"
+        },
+        "responsibilities": [
+          {
+            "value": "1. Support management with all admin duties",
+            "evidence": "1. Support management with all admin duties"
+          },
+          {
+            "value": "2. Provide admin support for projects",
+            "evidence": "2. Provide admin support for projects"
+          },
+          {
+            "value": "3. Goods import and export documentations",
+            "evidence": "3. Goods import and export documentations"
+          },
+          {
+            "value": "4. Good receiving and keep track of receivable and duly disbursement of items to respective individual",
+            "evidence": "4. Good receiving and keep track of receivable and duly disbursement of items to respective individual"
+          },
+          {
+            "value": "5. Keep track of timelines for various project works",
+            "evidence": "5. Keep track of timelines for various project works"
+          },
+          {
+            "value": "6. Provide coverage for some forms of HR admin duties",
+            "evidence": "6. Provide coverage for some forms of HR admin duties"
+          },
+          {
+            "value": "7. Purchasing of items as per needed by projects",
+            "evidence": "7. Purchasing of items as per needed by projects"
+          },
+          {
+            "value": "8. Secretariat/HR duties to the directors",
+            "evidence": "8. Secretariat/HR duties to the directors"
+          },
+          {
+            "value": "9 Marketing / Sales duties if deemed to be suitable",
+            "evidence": "9 Marketing / Sales duties if deemed to be suitable"
+          }
+        ],
+        "required_skills": [
+          {
+            "value": "Able to work in a fast-paced environment",
+            "evidence": "We are looking for a person who can work in a fast pace environment and the experience will be enriching with a good career progression. Fresh graduate will be considered with the right attitude and passion in wanting to serve."
+          }
+        ],
+        "preferred_skills": [],
+        "required_qualifications": [],
+        "preferred_qualifications": [],
+        "education": {
+          "degree": null,
+          "fields_of_study": [],
+          "enrollment": null
+        },
+        "experience": {
+          "requirement": {
+            "value": "Fresh graduates considered",
+            "evidence": "Fresh graduate will be considered with the right attitude and passion in wanting to serve."
+          },
+          "minimum_years": null
+        },
+        "languages": []
+      }
+    },
+    {
+      "case_id": "internsg-269793",
+      "source_id": "internsg",
+      "external_id": "269793",
+      "input_hash": "3c9b78d79f4e493753d896258b222c26310cad40e97072c1b4f9f5d2e5d10c46",
+      "annotation_status": "draft_requires_human_review",
+      "extraction": {
+        "summary": {
+          "value": "Support customer reception and car sales.",
+          "evidence": "1. Customer Reception: Salesperson need to establish friendly relationships with customers and listen to their needs and preferences.\n2. Car Sales: By using effective sales techniques, salesperson recommend suitable car models to customers, introduce the features, performance, and advantages of the vehicles, in order to stimulate customer interest and increase sales opportunities."
+        },
+        "responsibilities": [
+          {
+            "value": "1. Customer Reception: Salesperson need to establish friendly relationships with customers and listen to their needs and preferences.",
+            "evidence": "1. Customer Reception: Salesperson need to establish friendly relationships with customers and listen to their needs and preferences."
+          },
+          {
+            "value": "2. Car Sales: By using effective sales techniques, salesperson recommend suitable car models to customers, introduce the features, performance, and advantages of the vehicles, in order to stimulate customer interest and increase sales opportunities.",
+            "evidence": "2. Car Sales: By using effective sales techniques, salesperson recommend suitable car models to customers, introduce the features, performance, and advantages of the vehicles, in order to stimulate customer interest and increase sales opportunities."
+          },
+          {
+            "value": "3. Answering Questions: Need to solve customer question about vehicles, warranties, after-sales services, and provide professional advice to assist customers in making wise car purchase decisions.",
+            "evidence": "3. Answering Questions: Need to solve customer question about vehicles, warranties, after-sales services, and provide professional advice to assist customers in making wise car purchase decisions."
+          },
+          {
+            "value": "4. Vehicle Presentation: Salesperson showcase the interior and exterior features of the cars, demonstrate vehicle functionalities and technical capabilities, and offer test drives to captivate",
+            "evidence": "4. Vehicle Presentation: Salesperson showcase the interior and exterior features of the cars, demonstrate vehicle functionalities and technical capabilities, and offer test drives to captivate"
+          }
+        ],
+        "required_skills": [],
+        "preferred_skills": [],
+        "required_qualifications": [],
+        "preferred_qualifications": [],
+        "education": {
+          "degree": null,
+          "fields_of_study": [],
+          "enrollment": null
+        },
+        "experience": {
+          "requirement": null,
+          "minimum_years": null
+        },
+        "languages": []
+      }
+    }
+  ]
+}
+

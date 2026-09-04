@@ -9,7 +9,7 @@ jobs:
     name: Repo skeleton validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Validate required structure
         run: python scripts/check_skeleton.py
       - name: Validate docker-compose
@@ -22,8 +22,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         if: hashFiles('backend/pyproject.toml') != ''
         with:
           python-version: "3.13"
@@ -32,6 +32,9 @@ jobs:
       - name: Install
         if: hashFiles('backend/pyproject.toml') != ''
         run: pip install -e ".[dev]" semgrep pip-audit
+      - name: Upgrade pip (dependency-scan toolchain)
+        if: hashFiles('backend/pyproject.toml') != ''
+        run: python -m pip install --upgrade pip
       - name: Lint (Ruff)
         if: hashFiles('backend/pyproject.toml') != ''
         run: ruff check .
@@ -49,7 +52,7 @@ jobs:
     name: Docker build (backend)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build backend image
         if: hashFiles('backend/Dockerfile') != ''
         run: docker build -t jobpilot-sg-backend ./backend
