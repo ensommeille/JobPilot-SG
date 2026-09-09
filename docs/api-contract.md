@@ -44,5 +44,12 @@ GET    /audit-logs
 ## Conventions
 
 - JSON over HTTPS; JWT bearer auth; role checks on Admin endpoints.
+- Registration accepts `{email, password}` and returns the public user record with HTTP 201.
+- Login accepts `{email, password}` and returns `{access_token, token_type, expires_in, user}`.
+- Passwords require 8–128 characters and are stored as Argon2 hashes; email uniqueness is
+  case-insensitive because addresses are normalized before persistence.
+- `/users/me` and all user-owned resources require `Authorization: Bearer <token>`.
+- Access tokens expire after the configured interval. RBAC reads the current role from PostgreSQL,
+  so a stale token cannot preserve permissions after an account or role change.
 - Ownership boundary: `/assistant/*` routers & persistence = M2; FormMappingService / DraftGenerationService (domain) = M4.
 - LLM output contracts (extraction JSON, field-mapping JSON) are defined in the development document §8.2 / §9.2 and are schema-validated (Pydantic).

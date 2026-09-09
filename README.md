@@ -45,6 +45,8 @@ cd backend
 python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
 pip install -e ".[dev]"
+cp .env.example .env                  # replace JWT_SECRET_KEY before shared deployment
+alembic upgrade head
 uvicorn app.main:app --reload
 
 # 3. Health check
