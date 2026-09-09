@@ -9,7 +9,7 @@ POST   /auth/login
 GET    /users/me
 
 # Jobs
-GET    /jobs?q=&tags=&city=&salary_min=&salary_max=&type=&page=
+GET    /jobs?q=&tags=&city=&salary_min=&salary_max=&type=&deadline_from=&deadline_to=&page=&page_size=
 GET    /jobs/{id}
 POST   /jobs/{id}/favorite
 DELETE /jobs/{id}/favorite
@@ -51,5 +51,11 @@ GET    /audit-logs
 - `/users/me` and all user-owned resources require `Authorization: Bearer <token>`.
 - Access tokens expire after the configured interval. RBAC reads the current role from PostgreSQL,
   so a stale token cannot preserve permissions after an account or role change.
+- Job list and detail routes expose only active or incomplete records. Keyword search covers title,
+  company and description. Repeated or comma-separated `tags` values are intersected.
+- Salary filters select overlapping job salary ranges; records without salary data are excluded only
+  when a salary filter is supplied. Results use deterministic descending posted-date order.
+- Job discovery and tag listing are public. Favorites require a bearer token, are isolated by user,
+  and treat repeated create or delete requests idempotently.
 - Ownership boundary: `/assistant/*` routers & persistence = M2; FormMappingService / DraftGenerationService (domain) = M4.
 - LLM output contracts (extraction JSON, field-mapping JSON) are defined in the development document §8.2 / §9.2 and are schema-validated (Pydantic).
