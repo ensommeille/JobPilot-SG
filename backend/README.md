@@ -24,6 +24,12 @@ The application reads configuration from environment variables or `backend/.env`
 POST /auth/register
 POST /auth/login
 GET  /users/me
+GET  /jobs
+GET  /jobs/{job_id}
+GET  /tags
+POST /jobs/{job_id}/favorite
+DELETE /jobs/{job_id}/favorite
+GET  /favorites
 GET  /health
 ```
 
@@ -43,6 +49,10 @@ The initial migration creates the 13 planned domain tables for users, profiles, 
 job sources, job postings, tags, favorites, application forms, applications, mapping records, crawl
 runs, and audit logs. SQLite is used only by the isolated test suite; PostgreSQL remains the runtime
 database.
+
+Job discovery is public so the team can demonstrate the repository before login. Favorites remain
+user-owned and require a bearer token. `GET /jobs` accepts keyword, tag, city, type, salary, deadline,
+page, and page-size parameters; multiple tag values are combined as an intersection.
 
 ## Test & lint
 
