@@ -30,6 +30,19 @@ GET  /tags
 POST /jobs/{job_id}/favorite
 DELETE /jobs/{job_id}/favorite
 GET  /favorites
+GET  /profile
+PUT  /profile
+POST /profile/resumes
+GET  /profile/resumes
+POST /jobs/{job_id}/applications
+GET  /applications
+GET  /applications/{application_id}
+PATCH /applications/{application_id}
+GET  /assistant/bootstrap
+GET  /assistant/forms/{form_id}
+POST /assistant/map-fields
+POST /assistant/applications
+GET  /assistant/mappings/{mapping_id}
 GET  /health
 ```
 
@@ -53,6 +66,14 @@ database.
 Job discovery is public so the team can demonstrate the repository before login. Favorites remain
 user-owned and require a bearer token. `GET /jobs` accepts keyword, tag, city, type, salary, deadline,
 page, and page-size parameters; multiple tag values are combined as an intersection.
+
+Profile and resume routes store the structured pre-fill source and validated resume metadata. The
+MVP does not store uploaded resume bytes. Application routes provide user-owned history and a
+controlled lifecycle from draft through submitted, interviewing, offered, rejected, or withdrawn.
+
+The `/assistant/map-fields` route delegates to the injectable Member 4 mapping service. Until that
+service is registered it returns HTTP 503 with a manual-entry fallback. Confirmed assistant results
+are written atomically to the application and form-mapping tables.
 
 ## Test & lint
 
