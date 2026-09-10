@@ -1,0 +1,204 @@
+{
+  "$defs": {
+    "EducationRequirements": {
+      "additionalProperties": false,
+      "properties": {
+        "degree": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fields_of_study": {
+          "items": {
+            "$ref": "#/$defs/TextFact"
+          },
+          "maxItems": 30,
+          "title": "Fields Of Study",
+          "type": "array"
+        },
+        "enrollment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "degree",
+        "fields_of_study",
+        "enrollment"
+      ],
+      "title": "EducationRequirements",
+      "type": "object"
+    },
+    "ExperienceRequirements": {
+      "additionalProperties": false,
+      "properties": {
+        "requirement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "minimum_years": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NumberFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "requirement",
+        "minimum_years"
+      ],
+      "title": "ExperienceRequirements",
+      "type": "object"
+    },
+    "NumberFact": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "maximum": 80,
+          "minimum": 0,
+          "title": "Value",
+          "type": "number"
+        },
+        "evidence": {
+          "maxLength": 2500,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "evidence"
+      ],
+      "title": "NumberFact",
+      "type": "object"
+    },
+    "TextFact": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "evidence": {
+          "description": "Verbatim supporting quote from description",
+          "maxLength": 2500,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "evidence"
+      ],
+      "title": "TextFact",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "All keys are required; unknown information is represented by null or an empty list.",
+  "properties": {
+    "summary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TextFact"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "responsibilities": {
+      "items": {
+        "$ref": "#/$defs/TextFact"
+      },
+      "maxItems": 40,
+      "title": "Responsibilities",
+      "type": "array"
+    },
+    "required_skills": {
+      "items": {
+        "$ref": "#/$defs/TextFact"
+      },
+      "maxItems": 40,
+      "title": "Required Skills",
+      "type": "array"
+    },
+    "preferred_skills": {
+      "items": {
+        "$ref": "#/$defs/TextFact"
+      },
+      "maxItems": 40,
+      "title": "Preferred Skills",
+      "type": "array"
+    },
+    "required_qualifications": {
+      "items": {
+        "$ref": "#/$defs/TextFact"
+      },
+      "maxItems": 40,
+      "title": "Required Qualifications",
+      "type": "array"
+    },
+    "preferred_qualifications": {
+      "items": {
+        "$ref": "#/$defs/TextFact"
+      },
+      "maxItems": 40,
+      "title": "Preferred Qualifications",
+      "type": "array"
+    },
+    "education": {
+      "$ref": "#/$defs/EducationRequirements"
+    },
+    "experience": {
+      "$ref": "#/$defs/ExperienceRequirements"
+    },
+    "languages": {
+      "items": {
+        "$ref": "#/$defs/TextFact"
+      },
+      "maxItems": 20,
+      "title": "Languages",
+      "type": "array"
+    }
+  },
+  "required": [
+    "summary",
+    "responsibilities",
+    "required_skills",
+    "preferred_skills",
+    "required_qualifications",
+    "preferred_qualifications",
+    "education",
+    "experience",
+    "languages"
+  ],
+  "title": "JobExtractionSchema",
+  "type": "object"
+}
+

@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+.pytest-*/
 .ruff_cache/
 .coverage
 coverage.xml
@@ -32,3 +33,4 @@ Thumbs.db
 # Local data / logs
 *.log
 data/
+output/
