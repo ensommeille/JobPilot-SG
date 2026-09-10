@@ -16,7 +16,7 @@ jobs:
         run: docker compose config -q
 
   backend-quality:
-    name: Backend lint / test / SAST / deps
+    name: Backend lint / test / coverage / SAST / deps
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -38,15 +38,51 @@ jobs:
       - name: Lint (Ruff)
         if: hashFiles('backend/pyproject.toml') != ''
         run: ruff check .
-      - name: Unit / API tests (pytest)
+      - name: Unit / API tests + coverage (pytest)
         if: hashFiles('backend/pyproject.toml') != ''
-        run: pytest
+        run: >-
+          pytest -q
+          --cov=app --cov-branch
+          --cov-report=term-missing
+          --cov-report=xml:coverage.xml
+          --cov-fail-under=85
+      - name: Upload coverage report
+        if: ${{ always() && hashFiles('backend/pyproject.toml') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          if-no-files-found: ignore
       - name: SAST (Semgrep)
         if: hashFiles('backend/pyproject.toml') != ''
         run: semgrep --config=auto --error app/
       - name: Dependency scan (pip-audit)
         if: hashFiles('backend/pyproject.toml') != ''
         run: pip-audit
+
+  frontend-quality:
+    name: Frontend lint / build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        if: hashFiles('frontend/package.json') != ''
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        if: hashFiles('frontend/package.json') != ''
+        run: npm ci
+      - name: Lint (ESLint)
+        if: hashFiles('frontend/package.json') != ''
+        run: npm run lint
+      - name: Type-check and build (tsc + Vite)
+        if: hashFiles('frontend/package.json') != ''
+        run: npm run build
 
   docker:
     name: Docker build (backend)
