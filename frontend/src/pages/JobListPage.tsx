@@ -31,6 +31,8 @@ const JobListPage = () => {
     setFavorites(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id])
   }
 
+  const [now] = useState(() => Date.now())
+
   const filtered = MOCK_JOBS.filter(job => {
     const matchSearch = job.title.toLowerCase().includes(search.toLowerCase()) ||
       job.company.toLowerCase().includes(search.toLowerCase())
@@ -38,9 +40,9 @@ const JobListPage = () => {
     const matchType = type === 'All Types' || job.type === type
     const matchTag = tag === 'All Tags' || job.tags.includes(tag)
     const matchDeadline = deadline === 'Any Deadline' ||
-      (deadline === 'Within 1 week' && new Date(job.deadline) <= new Date(Date.now() + 7 * 86400000)) ||
-      (deadline === 'Within 2 weeks' && new Date(job.deadline) <= new Date(Date.now() + 14 * 86400000)) ||
-      (deadline === 'Within 1 month' && new Date(job.deadline) <= new Date(Date.now() + 30 * 86400000))
+      (deadline === 'Within 1 week' && new Date(job.deadline) <= new Date(now + 7 * 86400000)) ||
+      (deadline === 'Within 2 weeks' && new Date(job.deadline) <= new Date(now + 14 * 86400000)) ||
+      (deadline === 'Within 1 month' && new Date(job.deadline) <= new Date(now + 30 * 86400000))
     const matchPosted = posted === 'Any Time' ||
       (posted === 'Today' && job.postedDaysAgo === 0) ||
       (posted === 'Last 3 days' && job.postedDaysAgo <= 3) ||
