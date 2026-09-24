@@ -262,7 +262,7 @@ def test_factory_builds_deepseek_without_exposing_secret() -> None:
         provider="deepseek",
         api_key=SecretStr("very-secret"),
         base_url="https://api.deepseek.com",
-        model="deepseek-flash",
+        model="deepseek-v4-flash",
         max_retries=0,
     )
     provider = build_live_provider(settings)

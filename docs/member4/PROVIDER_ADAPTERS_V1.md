@@ -34,9 +34,9 @@ DeepSeek:
 - LLM_PROVIDER=deepseek
 - LLM_API_KEY=<secret>
 - LLM_BASE_URL=https://api.deepseek.com
-- LLM_MODEL=deepseek-flash
+- LLM_MODEL=deepseek-v4-flash
 
-Qwen on Alibaba Cloud Model Studio requires the workspace/region compatible-mode base URL:
+Qwen on Alibaba Cloud Model Studio Singapore:
 - LLM_PROVIDER=qwen
 - LLM_API_KEY=<secret>
 - LLM_BASE_URL=https://<workspace-id>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1

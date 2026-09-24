@@ -15,7 +15,7 @@ class DeepSeekProvider(OpenAICompatibleChatProvider):
         *,
         api_key: str,
         base_url: str = "https://api.deepseek.com",
-        model: str = "deepseek-flash",
+        model: str = "deepseek-v4-flash",
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
         retry_backoff_seconds: float = 0.25,

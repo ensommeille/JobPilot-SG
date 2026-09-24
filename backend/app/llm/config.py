@@ -53,7 +53,7 @@ def build_live_provider(settings: LLMSettings | None = None) -> LLMProvider:
     if config.provider == "deepseek":
         return DeepSeekProvider(
             base_url=config.base_url or "https://api.deepseek.com",
-            model=config.model or "deepseek-flash",
+            model=config.model or "deepseek-v4-flash",
             **common,
         )
 
