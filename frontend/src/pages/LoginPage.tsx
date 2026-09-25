@@ -17,8 +17,8 @@ const LoginPage = () => {
       const data = await loginApi(email, password)
       saveToken(data.access_token)
       navigate('/jobs')
-    } catch (err: any) {
-      const msg = err.response?.data?.detail
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setError(typeof msg === 'string' ? msg : 'Login failed. Please check your credentials.')
     } finally {
       setLoading(false)

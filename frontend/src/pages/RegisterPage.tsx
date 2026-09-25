@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { registerApi, saveToken } from '../services/auth'
+import { registerApi } from '../services/auth'
 
 const RegisterPage = () => {
   const [email, setEmail] = useState('')
@@ -19,8 +19,8 @@ const RegisterPage = () => {
     try {
       await registerApi(email, password)
       navigate('/')
-    } catch (err: any) {
-      const msg = err.response?.data?.detail
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setError(typeof msg === 'string' ? msg : 'Registration failed. Email may already be in use.')
     } finally {
       setLoading(false)
