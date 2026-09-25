@@ -47,6 +47,8 @@ GET    /audit-logs
 ## Conventions
 
 - JSON over HTTPS; JWT bearer auth; role checks on Admin endpoints.
+- Browser clients use an explicit `CORS_ORIGINS` allowlist. Local development permits Vite on
+  `localhost:5173` and `127.0.0.1:5173`; shared deployments must provide their own JSON origin list.
 - Registration accepts `{email, password}` and returns the public user record with HTTP 201.
 - Login accepts `{email, password}` and returns `{access_token, token_type, expires_in, user}`.
 - Passwords require 8–128 characters and are stored as Argon2 hashes; email uniqueness is
