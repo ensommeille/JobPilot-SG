@@ -49,9 +49,18 @@ cp .env.example .env                  # replace JWT_SECRET_KEY before shared dep
 alembic upgrade head
 uvicorn app.main:app --reload
 
-# 3. Health check
+# 3. Optional: create a local administrator and repeatable demo data
+export JOBPILOT_DEMO_ADMIN_PASSWORD='replace-with-a-local-password'
+python -m app.demo_seed --admin-email admin@jobpilot.sg
+unset JOBPILOT_DEMO_ADMIN_PASSWORD
+
+# 4. Health check
 curl http://localhost:8000/health   # -> {"status":"ok"}
 ```
+
+The demo bootstrap is idempotent and does not print the password. See the
+[Member 2 Chinese run report](docs/member2/BLOCK_5_LOCAL_DEMO_BOOTSTRAP_PROGRESS_REPORT_ZH.md)
+for usage and safety notes.
 
 ## Team
 
