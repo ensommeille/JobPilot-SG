@@ -60,6 +60,15 @@ GET    /audit-logs
   when a salary filter is supplied. Results use deterministic descending posted-date order.
 - Job discovery and tag listing are public. Favorites require a bearer token, are isolated by user,
   and treat repeated create or delete requests idempotently.
+- Source and crawl-run routes require the `admin` role. `POST /sources/{id}/run` executes one bounded
+  crawl synchronously, stores normalized jobs and a `CrawlRun`, and returns the completed run. The
+  live adapter currently accepts enabled InternSG HTML sources only; fixture/mock adapters remain
+  injectable for deterministic tests.
+- Ingestion maps the first normalized job type to `job_postings.job_type` and preserves every
+  normalized job type/tag through `job_posting_tags`. A missing apply URL falls back to the public
+  source URL. Repeated `(source_id, external_id)` records update only when `raw_hash` changes.
+- Failed and partial crawls never delete accepted jobs. Their counters and structured errors remain
+  available through `/runs` and `/runs/{id}`, while source health is updated for administration.
 - `PUT /profile` replaces the authenticated user's structured pre-fill data. Resume endpoints accept
   validated PDF/DOC/DOCX metadata up to 5 MiB; binary storage is outside the current MVP.
 - Manual applications start as draft or submitted. Status changes follow the documented lifecycle;
