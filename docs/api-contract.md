@@ -47,6 +47,8 @@ GET    /audit-logs
 ## Conventions
 
 - JSON over HTTPS; JWT bearer auth; role checks on Admin endpoints.
+- Browser clients use an explicit `CORS_ORIGINS` allowlist. Local development permits Vite on
+  `localhost:5173` and `127.0.0.1:5173`; shared deployments must provide their own JSON origin list.
 - Registration accepts `{email, password}` and returns the public user record with HTTP 201.
 - Login accepts `{email, password}` and returns `{access_token, token_type, expires_in, user}`.
 - Passwords require 8–128 characters and are stored as Argon2 hashes; email uniqueness is
@@ -60,6 +62,15 @@ GET    /audit-logs
   when a salary filter is supplied. Results use deterministic descending posted-date order.
 - Job discovery and tag listing are public. Favorites require a bearer token, are isolated by user,
   and treat repeated create or delete requests idempotently.
+- Source and crawl-run routes require the `admin` role. `POST /sources/{id}/run` executes one bounded
+  crawl synchronously, stores normalized jobs and a `CrawlRun`, and returns the completed run. The
+  live adapter currently accepts enabled InternSG HTML sources only; fixture/mock adapters remain
+  injectable for deterministic tests.
+- Ingestion maps the first normalized job type to `job_postings.job_type` and preserves every
+  normalized job type/tag through `job_posting_tags`. A missing apply URL falls back to the public
+  source URL. Repeated `(source_id, external_id)` records update only when `raw_hash` changes.
+- Failed and partial crawls never delete accepted jobs. Their counters and structured errors remain
+  available through `/runs` and `/runs/{id}`, while source health is updated for administration.
 - `PUT /profile` replaces the authenticated user's structured pre-fill data. Resume endpoints accept
   validated PDF/DOC/DOCX metadata up to 5 MiB; binary storage is outside the current MVP.
 - Manual applications start as draft or submitted. Status changes follow the documented lifecycle;

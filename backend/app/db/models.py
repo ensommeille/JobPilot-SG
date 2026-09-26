@@ -210,6 +210,7 @@ class JobPosting(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     job_type: Mapped[str | None] = mapped_column(String(80), index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     apply_url: Mapped[str] = mapped_column(String(2000), nullable=False)
+    source_url: Mapped[str | None] = mapped_column(String(2048))
     posted_at: Mapped[date | None] = mapped_column(Date, index=True)
     deadline: Mapped[date | None] = mapped_column(Date, index=True)
     dedup_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -388,3 +389,37 @@ class AuditLog(UUIDPrimaryKeyMixin, Base):
     )
 
     actor: Mapped[User | None] = relationship(back_populates="audit_logs")
+
+
+class JobExtractionRun(UUIDPrimaryKeyMixin, Base):
+    """Append-only extraction history with a database-enforced per-job running lease."""
+
+    __tablename__ = "job_extraction_runs"
+    __table_args__ = (
+        CheckConstraint("status IN ('running', 'needs_review', 'failed')", name="extraction_status"),
+        CheckConstraint(
+            "(status = 'running' AND active_key IS NOT NULL AND finished_at IS NULL) OR "
+            "(status <> 'running' AND active_key IS NULL AND finished_at IS NOT NULL)",
+            name="extraction_lease",
+        ),
+        Index("ix_extraction_job_started", "job_id", "started_at"),
+        Index("ix_extraction_cache", "job_id", "input_hash", "pipeline_hash", "status"),
+    )
+
+    job_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("job_postings.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    active_key: Mapped[str | None] = mapped_column(String(36), unique=True)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    pipeline_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    input_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    pipeline_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    result_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
