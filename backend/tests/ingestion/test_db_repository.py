@@ -107,3 +107,39 @@ def test_upsert_updates_by_source_external_id_when_content_changes(db: Session) 
     assert jobs[0].title == "Senior Backend Engineer Intern"
     assert jobs[0].raw_hash == "2" * 64
     assert {tag.name for tag in jobs[0].tags} == {"internship", "fastapi"}
+
+
+def test_recrawl_backfills_original_url_without_inventing_it(db: Session) -> None:
+    source = JobSource(name="Legacy", source_type="mock", base_url="https://jobs.example.test")
+    db.add(source)
+    db.commit()
+    repository = SqlAlchemyJobRepository(db, source)
+    record = make_record(apply_url="https://jobs.example.test/apply")
+    repository.upsert([record])
+    db.commit()
+    job = db.scalar(select(JobPosting))
+    job.source_url = None
+    db.commit()
+    stats = repository.upsert([record])
+    db.commit()
+    assert stats.items_unchanged == 1
+    assert job.source_url == record.source_url
+    assert job.apply_url != job.source_url
+
+
+def test_cross_source_duplicate_preserves_canonical_identity(db: Session) -> None:
+    first = JobSource(name="First", source_type="mock", base_url="https://jobs.example.test")
+    second = JobSource(name="Second", source_type="mock", base_url="https://other.example.test")
+    db.add_all([first, second])
+    db.commit()
+    SqlAlchemyJobRepository(db, first).upsert([make_record()])
+    db.commit()
+    stats = SqlAlchemyJobRepository(db, second).upsert([make_record(
+        external_id="other-id", raw_hash="2" * 64, source_url="https://other.example.test/job/other-id",
+    )])
+    db.commit()
+    job = db.scalar(select(JobPosting))
+    assert stats.items_unchanged == 1
+    assert job.source_id == first.id
+    assert job.external_id == "job-1"
+    assert job.source_url == "https://jobs.example.test/job/job-1"

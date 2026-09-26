@@ -40,6 +40,7 @@ class JobRead(BaseModel):
     job_type: str | None
     description: str
     apply_url: str
+    source_url: str | None = None
     posted_at: date | None
     deadline: date | None
     status: str

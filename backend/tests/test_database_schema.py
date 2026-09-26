@@ -14,6 +14,7 @@ def test_all_planned_core_tables_are_created() -> None:
         "favorites",
         "form_mapping_records",
         "job_posting_tags",
+        "job_extraction_runs",
         "job_postings",
         "job_sources",
         "job_tags",

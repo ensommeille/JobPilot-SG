@@ -8,7 +8,12 @@ This branch integrates the first tested Member 3 delivery into the backend modul
 - `backend/app/job_extraction`: source-neutral semantic extraction schema, prompts, evidence diagnostics, bounded repair, audit result, offline fixture runner, and evaluator.
 - `backend/app/llm`: proposed shared structured-generation contract and deterministic MockProvider. Member 4 owns live provider implementations and must review this boundary before merge.
 
-The LLM schema intentionally enriches deterministic job data rather than regenerating title, company, salary, dates, or location. Database persistence and the final pipeline merge are separate integration work with Member 2.
+The LLM schema intentionally enriches deterministic job data rather than regenerating title, company, salary, dates, or location.
+
+The local integration follow-up now includes extraction persistence and admin APIs.
+See [Extraction persistence v1](EXTRACTION_PERSISTENCE_V1.md) for the current contract,
+migration instructions, offline-only defaults and verification boundaries; see
+[Offline integration v2](OFFLINE_INTEGRATION_V2.md) for dependency branch details.
 
 ## Verification
 
