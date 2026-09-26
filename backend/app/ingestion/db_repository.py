@@ -37,7 +37,12 @@ class SqlAlchemyJobRepository:
                 self._copy_record(job, record)
                 self.db.add(job)
                 items_new += 1
+            elif job.source_id != self.source.id:
+                # Keep the canonical source identity intact on cross-source deduplication.
+                items_unchanged += 1
             elif job.raw_hash == record.raw_hash:
+                # Backfill provenance for legacy rows even when page content is unchanged.
+                job.source_url = record.source_url
                 items_unchanged += 1
             else:
                 self._copy_record(job, record)
@@ -73,6 +78,7 @@ class SqlAlchemyJobRepository:
         job.job_type = record.job_type[0] if record.job_type else None
         job.description = record.description
         job.apply_url = record.apply_url or record.source_url
+        job.source_url = record.source_url
         job.posted_at = record.posted_at
         job.deadline = record.deadline
         job.dedup_hash = record.dedup_hash
