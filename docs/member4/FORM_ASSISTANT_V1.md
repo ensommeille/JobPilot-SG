@@ -1,6 +1,7 @@
 # M4 AI Form Mapping Assistant v1
 
-Status: implemented on the M4 feature branch; real-provider smoke and browser E2E are pending.
+Status: implemented on the M4 feature branch; local no-key browser E2E passed, while live-provider
+smoke remains pending.
 
 ## Architecture and ownership
 
@@ -51,8 +52,15 @@ small M1 integration guard added here prevents a mock fallback or failed persist
 being shown as a successful submission, and requires non-empty required values. This does not
 expand M1's page design or M2's API contract.
 
+Local browser verification exposed existing M1 API-shape mismatches: job IDs were parsed as numbers,
+tags/source were rendered as strings, and history expected flattened fields. Small display adapters
+now consume M2's actual UUID/nested response shapes. The separate M1 profile page and navbar still
+show static demo data; the browser test populated its test user's profile through the API.
+
 ## Next integration step
 
-Run an authorized, low-volume Qwen/DeepSeek schema smoke with a valid key; then perform a browser
-E2E on a seeded job and profile, checking review, edits, persistence, and history. Neither is
-claimed complete by offline tests. See `TEST_REPORT.md` and `INTEGRATION_STATUS.md`.
+Run an authorized, low-volume Qwen/DeepSeek schema smoke with a valid key. Repeat the local browser
+flow with a live semantic draft and separately test a mock fallback and richer forms. A duplicate
+save returning a backend conflict was browser-tested and did not show a false success screen.
+The completed browser path used a no-key/manual semantic fallback and proves neither vendor output
+quality nor external employer submission. See `TEST_REPORT.md` and `INTEGRATION_STATUS.md`.

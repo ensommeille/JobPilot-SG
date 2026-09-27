@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import { fetchJobs, addFavorite, removeFavorite } from '../services/jobs'
+import { fetchJobs, addFavorite, removeFavorite, formatSalary } from '../services/jobs'
 
 const CITIES = ['All Cities', 'Singapore', 'Remote']
 const TYPES = ['All Types', 'Internship', 'Full-time']
@@ -10,14 +10,17 @@ const DEADLINES = ['Any Deadline', 'Within 1 week', 'Within 2 weeks', 'Within 1 
 const POSTED = ['Any Time', 'Today', 'Last 3 days', 'Last week']
 
 interface Job {
-  id: number
+  id: string
   title: string
   company: string
-  location: string
-  type: string
-  deadline: string
-  salary?: string
-  tags: string[]
+  city: string | null
+  job_type: string | null
+  deadline: string | null
+  salary_min: number | null
+  salary_max: number | null
+  salary_currency: string | null
+  salary_period: string | null
+  tags: { id: string; name: string }[]
   posted_at?: string
 }
 
@@ -31,7 +34,7 @@ const JobListPage = () => {
   const [tag, setTag] = useState('All Tags')
   const [deadline, setDeadline] = useState('Any Deadline')
   const [posted, setPosted] = useState('Any Time')
-  const [favorites, setFavorites] = useState<number[]>([])
+  const [favorites, setFavorites] = useState<string[]>([])
   const [now] = useState(() => Date.now())
   const navigate = useNavigate()
 
@@ -52,7 +55,7 @@ const JobListPage = () => {
     return () => clearTimeout(timer)
   }, [search])
 
-  const toggleFavorite = async (e: React.MouseEvent, id: number) => {
+  const toggleFavorite = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
     try {
       if (favorites.includes(id)) {
@@ -68,13 +71,15 @@ const JobListPage = () => {
   }
 
   const filtered = jobs.filter(job => {
-    const matchCity = city === 'All Cities' || job.location === city
-    const matchType = type === 'All Types' || job.type === type
-    const matchTag = tag === 'All Tags' || (job.tags ?? []).includes(tag)
+    const matchCity = city === 'All Cities' || job.city === city
+    const matchType = type === 'All Types' || job.job_type?.toLowerCase() === type.toLowerCase()
+    const matchTag = tag === 'All Tags' || (job.tags ?? []).some(item => item.name === tag)
     const matchDeadline = deadline === 'Any Deadline' ||
-      (deadline === 'Within 1 week' && new Date(job.deadline) <= new Date(now + 7 * 86400000)) ||
-      (deadline === 'Within 2 weeks' && new Date(job.deadline) <= new Date(now + 14 * 86400000)) ||
-      (deadline === 'Within 1 month' && new Date(job.deadline) <= new Date(now + 30 * 86400000))
+      (job.deadline !== null && (
+        (deadline === 'Within 1 week' && new Date(job.deadline) <= new Date(now + 7 * 86400000)) ||
+        (deadline === 'Within 2 weeks' && new Date(job.deadline) <= new Date(now + 14 * 86400000)) ||
+        (deadline === 'Within 1 month' && new Date(job.deadline) <= new Date(now + 30 * 86400000))
+      ))
     return matchCity && matchType && matchTag && matchDeadline
   })
 
@@ -126,22 +131,22 @@ const JobListPage = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ flex: 1 }}>
                       <h3 style={{ margin: '0 0 4px 0' }}>{job.title}</h3>
-                      <p style={{ margin: '0 0 8px 0', color: '#666' }}>{job.company} · {job.location}</p>
+                      <p style={{ margin: '0 0 8px 0', color: '#666' }}>{job.company} · {job.city ?? 'Location not specified'}</p>
                       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                         <span style={{ backgroundColor: '#e8f0fe', color: '#1a73e8',
-                          padding: '2px 8px', borderRadius: '12px', fontSize: '12px' }}>{job.type}</span>
+                          padding: '2px 8px', borderRadius: '12px', fontSize: '12px' }}>{job.job_type}</span>
                         {(job.tags ?? []).map(t => (
-                          <span key={t} style={{ backgroundColor: '#f1f3f4', color: '#666',
-                            padding: '2px 8px', borderRadius: '12px', fontSize: '12px' }}>{t}</span>
+                          <span key={t.id} style={{ backgroundColor: '#f1f3f4', color: '#666',
+                            padding: '2px 8px', borderRadius: '12px', fontSize: '12px' }}>{t.name}</span>
                         ))}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right', marginLeft: '16px' }}>
-                      {job.salary && (
-                        <p style={{ margin: '0 0 4px 0', fontWeight: 'bold', color: '#1a73e8' }}>{job.salary}</p>
+                      {formatSalary(job) && (
+                        <p style={{ margin: '0 0 4px 0', fontWeight: 'bold', color: '#1a73e8' }}>{formatSalary(job)}</p>
                       )}
                       <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#999' }}>
-                        Deadline: {job.deadline}
+                        Deadline: {job.deadline ?? 'Not specified'}
                       </p>
                       <button onClick={e => toggleFavorite(e, job.id)}
                         style={{ backgroundColor: favorites.includes(job.id) ? '#fef3c7' : 'white',
