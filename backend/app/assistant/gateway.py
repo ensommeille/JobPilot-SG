@@ -1,10 +1,11 @@
 """Injectable interface owned by Member 4's form-mapping domain service."""
 
+import asyncio
 from typing import Any, Protocol
 
-from fastapi import HTTPException, status
-
+from app.assistant.mapping import ProfileFormMappingService
 from app.assistant.schemas import FormSnapshotField, MappingDraft
+from app.llm.config import build_live_provider
 
 
 class FormMappingGateway(Protocol):
@@ -17,7 +18,16 @@ class FormMappingGateway(Protocol):
 
 
 def get_form_mapping_gateway() -> FormMappingGateway:
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Form mapping service is not configured; use manual entry",
-    )
+    return LiveFormMappingGateway()
+
+
+class LiveFormMappingGateway:
+    """M2's synchronous gateway boundary, executed in FastAPI's worker thread."""
+
+    def map_fields(
+        self, *, form_snapshot: list[FormSnapshotField], profile_data: dict[str, Any]
+    ) -> MappingDraft:
+        service = ProfileFormMappingService(provider_factory=build_live_provider)
+        return asyncio.run(
+            service.map_fields(form_snapshot=form_snapshot, profile_data=profile_data)
+        )

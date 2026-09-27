@@ -23,8 +23,13 @@ interface Field {
   required: boolean; confLevel: 'high' | 'medium' | 'low'
 }
 
+interface SnapshotField {
+  field_id: string; label: string; type: string; required: boolean
+  name?: string | null; options?: string[]; placeholder?: string | null; context?: string | null
+}
+
 // 后备假数据（M4 API 未就绪时）
-const MOCK_SNAPSHOT = [
+const MOCK_SNAPSHOT: SnapshotField[] = [
   { field_id: 'f1',  label: 'Full Name',                   type: 'text',     required: true  },
   { field_id: 'f2',  label: 'Email Address',               type: 'email',    required: true  },
   { field_id: 'f3',  label: 'Phone Number',                type: 'tel',      required: true  },
@@ -67,6 +72,7 @@ const ApplicationFormPage = () => {
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [usingMock, setUsingMock] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -77,7 +83,7 @@ const ApplicationFormPage = () => {
         const forms: Array<{ id: string; job_id: string }> = boot.data.forms ?? []
         const matched = forms.find(f => f.job_id === id)
 
-        let snapshot = MOCK_SNAPSHOT
+        let snapshot: SnapshotField[] = MOCK_SNAPSHOT
         let fid: string | null = null
 
         if (matched) {
@@ -91,6 +97,10 @@ const ApplicationFormPage = () => {
             label: String(f.label ?? ''),
             type: String(f.type ?? f.field_type ?? 'text'),
             required: Boolean(f.required ?? false),
+            name: typeof f.name === 'string' ? f.name : null,
+            options: Array.isArray(f.options) ? f.options.filter((option): option is string => typeof option === 'string') : [],
+            placeholder: typeof f.placeholder === 'string' ? f.placeholder : null,
+            context: typeof f.context === 'string' ? f.context : null,
           }))
         } else {
           setUsingMock(true)
@@ -101,10 +111,7 @@ const ApplicationFormPage = () => {
         try {
           const mapRes = await api.post('/assistant/map-fields', {
             form_id: fid ?? '00000000-0000-0000-0000-000000000000',
-            form_snapshot: snapshot.map(f => ({
-              field_id: f.field_id, label: f.label,
-              type: f.type, required: f.required,
-            })),
+            form_snapshot: snapshot,
           })
           mapping = mapRes.data.mapping ?? []
           setMappingDraft(mapRes.data)
@@ -150,7 +157,10 @@ const ApplicationFormPage = () => {
     load()
   }, [id])
 
-  const confirm = (fid: string) => setStatuses(s => ({ ...s, [fid]: 'confirmed' }))
+  const confirm = (fid: string) => {
+    if (!values[fid]?.trim()) return
+    setStatuses(s => ({ ...s, [fid]: 'confirmed' }))
+  }
 
   const edit = (fid: string, value: string) => {
     setValues(v => ({ ...v, [fid]: value }))
@@ -158,10 +168,17 @@ const ApplicationFormPage = () => {
   }
 
   const requiredFields = fields.filter(f => f.required)
-  const allConfirmed = requiredFields.every(f => statuses[f.field_id] === 'confirmed' || statuses[f.field_id] === 'edited')
+  const allConfirmed = requiredFields.every(f =>
+    Boolean(values[f.field_id]?.trim()) && (statuses[f.field_id] === 'confirmed' || statuses[f.field_id] === 'edited')
+  )
   const confirmedCount = fields.filter(f => statuses[f.field_id] === 'confirmed' || statuses[f.field_id] === 'edited').length
 
   const handleSubmit = async () => {
+    if (usingMock || !formId || !mappingDraft) {
+      setSubmitError('The live application form is unavailable. No application was recorded.')
+      return
+    }
+    setSubmitError(null)
     setSubmitting(true)
     try {
       const confirmedIds = fields
@@ -175,19 +192,19 @@ const ApplicationFormPage = () => {
 
       await api.post('/assistant/applications', {
         job_id: id,
-        form_id: formId ?? '00000000-0000-0000-0000-000000000000',
-        mapping_version: 'v1',
-        provider: 'qwen',
-        prompt_version: 'v1',
+        form_id: formId,
+        mapping_version: 'mapping-v1',
+        provider: 'm4-mapping',
+        prompt_version: 'form-mapping-v1',
         mapping_draft: mappingDraft,
         confirmed_field_ids: confirmedIds,
         edited_values: editedValues,
       })
+      setSubmitted(true)
     } catch {
-      // 静默失败，仍显示成功
+      setSubmitError('Your application could not be recorded. Please review the fields and try again.')
     } finally {
       setSubmitting(false)
-      setSubmitted(true)
     }
   }
 
@@ -287,8 +304,8 @@ const ApplicationFormPage = () => {
                       fontSize: '14px', boxSizing: 'border-box',
                       backgroundColor: isConfirmed ? '#f0fdf4' : 'white' }} />
                 )}
-                {!isConfirmed && (
-                  <button onClick={() => confirm(field.field_id)}
+                {!isConfirmed && !isEdited && (
+                  <button onClick={() => confirm(field.field_id)} disabled={!values[field.field_id]?.trim()}
                     style={{ marginTop: '8px', padding: '4px 16px', backgroundColor: '#34a853',
                       color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
                     ✓ Confirm this field
@@ -304,7 +321,7 @@ const ApplicationFormPage = () => {
           <p style={{ margin: '0 0 16px 0', color: '#666', fontSize: '14px' }}>
             By submitting, you confirm all values above are accurate.
           </p>
-          <button onClick={handleSubmit} disabled={!allConfirmed || submitting}
+          <button onClick={handleSubmit} disabled={!allConfirmed || submitting || usingMock}
             style={{ padding: '12px 48px', fontSize: '16px', fontWeight: '500', color: 'white', border: 'none', borderRadius: '4px',
               backgroundColor: allConfirmed && !submitting ? '#1a73e8' : '#ccc',
               cursor: allConfirmed && !submitting ? 'pointer' : 'not-allowed' }}>
@@ -315,6 +332,8 @@ const ApplicationFormPage = () => {
               Please confirm all required fields (*) before submitting
             </p>
           )}
+          {usingMock && <p style={{ color: '#dc2626' }}>Demo data cannot be submitted.</p>}
+          {submitError && <p role="alert" style={{ color: '#dc2626' }}>{submitError}</p>}
         </div>
       </div>
     </div>
