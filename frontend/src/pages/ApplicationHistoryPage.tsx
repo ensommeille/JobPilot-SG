@@ -4,11 +4,10 @@ import Navbar from '../components/Navbar'
 import { fetchApplications } from '../services/applications'
 
 interface Application {
-  id: number
-  job_id: number
-  job_title: string
-  company: string
-  applied_at: string
+  id: string
+  job: { id: string; title: string; company: string }
+  submitted_at: string | null
+  created_at: string
   status: string
 }
 
@@ -82,10 +81,10 @@ const ApplicationHistoryPage = () => {
                   borderRadius: '8px', boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <h3 style={{ margin: '0 0 4px 0' }}>{app.job_title}</h3>
-                    <p style={{ margin: '0 0 4px 0', color: '#666' }}>{app.company}</p>
+                    <h3 style={{ margin: '0 0 4px 0' }}>{app.job.title}</h3>
+                    <p style={{ margin: '0 0 4px 0', color: '#666' }}>{app.job.company}</p>
                     <p style={{ margin: 0, fontSize: '13px', color: '#999' }}>
-                      Applied: {new Date(app.applied_at).toLocaleDateString()}
+                      Applied: {new Date(app.submitted_at ?? app.created_at).toLocaleDateString()}
                     </p>
                   </div>
                   <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column',
@@ -94,7 +93,7 @@ const ApplicationHistoryPage = () => {
                       padding: '4px 12px', borderRadius: '12px', fontSize: '13px', fontWeight: '500' }}>
                       {label}
                     </span>
-                    <button onClick={() => navigate(`/jobs/${app.job_id}`)}
+                    <button onClick={() => navigate(`/jobs/${app.job.id}`)}
                       style={{ fontSize: '13px', color: '#1a73e8', background: 'none',
                         border: 'none', cursor: 'pointer', padding: 0 }}>
                       View Job →

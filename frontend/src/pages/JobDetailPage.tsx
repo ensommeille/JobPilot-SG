@@ -1,21 +1,24 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import { fetchJobById, addFavorite, removeFavorite } from '../services/jobs'
+import { fetchJobById, addFavorite, removeFavorite, formatSalary } from '../services/jobs'
 
 interface Job {
-  id: number
+  id: string
   title: string
   company: string
-  location: string
-  type: string
-  deadline: string
-  salary?: string
+  city: string | null
+  job_type: string | null
+  deadline: string | null
+  salary_min: number | null
+  salary_max: number | null
+  salary_currency: string | null
+  salary_period: string | null
   description?: string
   requirements?: string[]
-  url?: string
-  source?: string
-  tags?: string[]
+  source_url: string | null
+  source: { name: string }
+  tags: { id: string; name: string }[]
 }
 
 const JobDetailPage = () => {
@@ -32,7 +35,7 @@ const JobDetailPage = () => {
       setLoading(true)
       setError('')
       try {
-        const res = await fetchJobById(Number(id))
+        const res = await fetchJobById(String(id))
         setJob(res.data)
         setIsFavorited(res.data.is_favorited ?? false)
       } catch {
@@ -95,25 +98,25 @@ const JobDetailPage = () => {
             <div>
               <h2 style={{ margin: '0 0 8px 0' }}>{job.title}</h2>
               <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '16px' }}>
-                {job.company} · {job.location}
+                {job.company} · {job.city ?? 'Location not specified'}
               </p>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 <span style={{ backgroundColor: '#e8f0fe', color: '#1a73e8',
-                  padding: '4px 12px', borderRadius: '12px', fontSize: '13px' }}>{job.type}</span>
+                  padding: '4px 12px', borderRadius: '12px', fontSize: '13px' }}>{job.job_type}</span>
                 {(job.tags ?? []).map(t => (
-                  <span key={t} style={{ backgroundColor: '#f1f3f4', color: '#666',
-                    padding: '4px 12px', borderRadius: '12px', fontSize: '13px' }}>{t}</span>
+                  <span key={t.id} style={{ backgroundColor: '#f1f3f4', color: '#666',
+                    padding: '4px 12px', borderRadius: '12px', fontSize: '13px' }}>{t.name}</span>
                 ))}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              {job.salary && (
+              {formatSalary(job) && (
                 <p style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: 'bold', color: '#1a73e8' }}>
-                  {job.salary}
+                  {formatSalary(job)}
                 </p>
               )}
               <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#999' }}>
-                Deadline: {job.deadline}
+                Deadline: {job.deadline ?? 'Not specified'}
               </p>
               <button onClick={toggleFavorite} disabled={favLoading}
                 style={{ padding: '6px 16px', borderRadius: '4px', cursor: 'pointer',
@@ -146,14 +149,14 @@ const JobDetailPage = () => {
           {/* Source */}
           {job.source && (
             <p style={{ fontSize: '12px', color: '#999', marginBottom: '16px' }}>
-              Source: {job.source}
+              Source: {job.source.name}
             </p>
           )}
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: '12px' }}>
-            {job.url && (
-              <a href={job.url} target="_blank" rel="noopener noreferrer"
+            {job.source_url && (
+              <a href={job.source_url} target="_blank" rel="noopener noreferrer"
                 style={{ padding: '10px 24px', backgroundColor: 'white',
                   border: '1px solid #1a73e8', color: '#1a73e8',
                   borderRadius: '4px', textDecoration: 'none', fontSize: '14px' }}>

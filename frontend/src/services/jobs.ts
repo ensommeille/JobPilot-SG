@@ -16,8 +16,20 @@ export const removeFavorite = (id: JobId) => api.delete(`/jobs/${id}/favorite`)
 
 export const fetchFavorites = () => api.get('/favorites')
 
+/* #17: job-object salary formatter (used by JobDetailPage on raw JobRead) */
+export const formatSalary = (job: {
+  salary_min: number | null; salary_max: number | null
+  salary_currency: string | null; salary_period: string | null
+}): string | null => {
+  if (job.salary_min === null && job.salary_max === null) return null
+  const amount = job.salary_min === null ? `${job.salary_max}`
+    : job.salary_max === null ? `${job.salary_min}`
+      : `${job.salary_min}–${job.salary_max}`
+  return `${job.salary_currency ?? ''} ${amount}${job.salary_period ? ` / ${job.salary_period}` : ''}`.trim()
+}
+
 /* ------------------------------------------------------------------
- * 统一的岗位数据结构
+ * 统一的岗位数据结构 (from #18)
  * 后端 JobRead 返回 city / job_type / salary_min / tags:[{name}] / source:{name}，
  * 早期 mock 数据用的是 location / type / salary / tags:string[]。
  * normalizeJob 两种都接受，页面只依赖 JobView。
@@ -42,7 +54,7 @@ type RawJob = Record<string, unknown>
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
-const formatSalary = (min: number | null, max: number | null, currency: string | null, period: string | null) => {
+const formatSalaryRange = (min: number | null, max: number | null, currency: string | null, period: string | null) => {
   if (min == null && max == null) return null
   const cur = currency && currency.toUpperCase() !== 'SGD' ? `${currency} ` : 'S$'
   const fmt = (n: number) => n.toLocaleString('en-SG')
@@ -64,7 +76,7 @@ export const normalizeJob = (raw: RawJob): JobView => {
     tags: ((raw.tags as RawTag[] | undefined) ?? [])
       .map(t => (typeof t === 'string' ? t : t?.name ?? ''))
       .filter(Boolean),
-    salaryText: formatSalary(min, max, str(raw.salary_currency), str(raw.salary_period)) ?? str(raw.salary),
+    salaryText: formatSalaryRange(min, max, str(raw.salary_currency), str(raw.salary_period)) ?? str(raw.salary),
     salaryValue: min ?? max,
     deadline: str(raw.deadline),
     postedAt: str(raw.posted_at),

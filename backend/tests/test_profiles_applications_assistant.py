@@ -58,9 +58,7 @@ def application_context(db: Session) -> tuple[JobPosting, ApplicationForm]:
 
 
 def auth_headers(client: TestClient, email: str = "profile@example.com") -> dict[str, str]:
-    registration = client.post(
-        "/auth/register", json={"email": email, "password": PASSWORD}
-    )
+    registration = client.post("/auth/register", json={"email": email, "password": PASSWORD})
     assert registration.status_code == 201
     login = client.post("/auth/login", json={"email": email, "password": PASSWORD})
     assert login.status_code == 200
@@ -202,7 +200,7 @@ def test_assistant_bootstrap_and_form_contract(
     assert form_response.json()["fields_json"][0]["field_id"] == "name"
 
 
-def test_mapping_route_fails_safely_until_gateway_is_injected(
+def test_mapping_route_uses_deterministic_gateway_without_api_key(
     client: TestClient, application_context: tuple[JobPosting, ApplicationForm]
 ) -> None:
     _, form = application_context
@@ -217,8 +215,10 @@ def test_mapping_route_fails_safely_until_gateway_is_injected(
             ],
         },
     )
-    assert response.status_code == 503
-    assert "manual entry" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["mapping"] == []
+    assert response.json()["unmapped_fields"] == ["name"]
+    assert response.json()["missing_profile_fields"] == ["full_name"]
 
 
 def test_mapping_gateway_receives_minimized_profile(
@@ -319,9 +319,7 @@ def test_assistant_application_requires_confirmation_and_owns_mapping(
         "confirmed_field_ids": ["name"],
         "edited_values": {},
     }
-    missing_confirmation = client.post(
-        "/assistant/applications", headers=alice, json=base_payload
-    )
+    missing_confirmation = client.post("/assistant/applications", headers=alice, json=base_payload)
     assert missing_confirmation.status_code == 422
 
     base_payload["edited_values"] = {"email": "verified@example.com"}

@@ -75,8 +75,10 @@ GET    /audit-logs
   validated PDF/DOC/DOCX metadata up to 5 MiB; binary storage is outside the current MVP.
 - Manual applications start as draft or submitted. Status changes follow the documented lifecycle;
   invalid or duplicate changes return HTTP 409 and another user's record appears as HTTP 404.
-- `/assistant/map-fields` resolves only the authenticated user's minimized profile and delegates to
-  the injectable Form Mapping Service. An unavailable service returns HTTP 503 with manual fallback.
+- `/assistant/map-fields` resolves only the authenticated user's profile snapshot and delegates to
+  M4's concrete Form Mapping Service. It returns HTTP 200 with a partial `MappingDraft`; absent LLM
+  credentials or per-field model failures leave semantic fields in `unmapped_fields` for manual entry.
+  Deterministic suggestions have high workflow confidence; semantic suggestions always need review.
 - `/assistant/applications` accepts the form mapping, provider/prompt versions, confirmations and
   edits. Every required form field must be confirmed or edited before the application and mapping
   records are committed together.

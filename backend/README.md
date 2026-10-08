@@ -71,9 +71,11 @@ Profile and resume routes store the structured pre-fill source and validated res
 MVP does not store uploaded resume bytes. Application routes provide user-owned history and a
 controlled lifecycle from draft through submitted, interviewing, offered, rejected, or withdrawn.
 
-The `/assistant/map-fields` route delegates to the injectable Member 4 mapping service. Until that
-service is registered it returns HTTP 503 with a manual-entry fallback. Confirmed assistant results
-are written atomically to the application and form-mapping tables.
+The `/assistant/map-fields` route delegates to Member 4's concrete profile-to-form mapping service.
+It returns a partial `MappingDraft` even when no LLM key is configured: direct fields are mapped,
+while unsupported or unavailable fields remain available for manual entry. Semantic answers are
+drafts requiring human review. Confirmed assistant results are written atomically to the application
+and form-mapping tables. See [the M4 design](../docs/member4/FORM_ASSISTANT_V1.md).
 
 ## Test & lint
 
