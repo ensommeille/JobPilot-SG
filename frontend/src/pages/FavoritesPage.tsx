@@ -1,20 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import { fetchFavorites, removeFavorite } from '../services/jobs'
-
-interface Job {
-  id: number
-  title: string
-  company: string
-  location: string
-  type: string
-  deadline: string
-  salary?: string
-}
+import { fetchFavorites, removeFavorite, normalizeJobList } from '../services/jobs'
+import type { JobView } from '../services/jobs'
 
 const FavoritesPage = () => {
-  const [favorites, setFavorites] = useState<Job[]>([])
+  const [favorites, setFavorites] = useState<JobView[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const navigate = useNavigate()
@@ -24,7 +15,7 @@ const FavoritesPage = () => {
       setLoading(true)
       try {
         const res = await fetchFavorites()
-        setFavorites(res.data?.items ?? res.data ?? [])
+        setFavorites(normalizeJobList(res.data))
       } catch {
         setError('Failed to load favorites.')
       } finally {
@@ -34,7 +25,7 @@ const FavoritesPage = () => {
     load()
   }, [])
 
-  const handleRemove = async (e: React.MouseEvent, id: number) => {
+  const handleRemove = async (e: React.MouseEvent, id: string | number) => {
     e.stopPropagation()
     try {
       await removeFavorite(id)
@@ -79,11 +70,11 @@ const FavoritesPage = () => {
                     padding: '2px 8px', borderRadius: '12px', fontSize: '12px' }}>{job.type}</span>
                 </div>
                 <div style={{ textAlign: 'right', marginLeft: '16px' }}>
-                  {job.salary && (
-                    <p style={{ margin: '0 0 4px 0', fontWeight: 'bold', color: '#1a73e8' }}>{job.salary}</p>
+                  {job.salaryText && (
+                    <p style={{ margin: '0 0 4px 0', fontWeight: 'bold', color: '#1a73e8' }}>{job.salaryText}</p>
                   )}
                   <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#999' }}>
-                    Deadline: {job.deadline}
+                    Deadline: {job.deadline ?? 'N/A'}
                   </p>
                   <button onClick={e => handleRemove(e, job.id)}
                     style={{ backgroundColor: '#fef3c7', border: '1px solid #f59e0b',

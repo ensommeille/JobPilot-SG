@@ -28,36 +28,9 @@ interface SnapshotField {
   name?: string | null; options?: string[]; placeholder?: string | null; context?: string | null
 }
 
-// 后备假数据（M4 API 未就绪时）
-const MOCK_SNAPSHOT: SnapshotField[] = [
-  { field_id: 'f1',  label: 'Full Name',                   type: 'text',     required: true  },
-  { field_id: 'f2',  label: 'Email Address',               type: 'email',    required: true  },
-  { field_id: 'f3',  label: 'Phone Number',                type: 'tel',      required: true  },
-  { field_id: 'f4',  label: 'Nationality',                 type: 'text',     required: true  },
-  { field_id: 'f5',  label: 'Highest Qualification',       type: 'text',     required: true  },
-  { field_id: 'f6',  label: 'Expected Graduation',         type: 'text',     required: true  },
-  { field_id: 'f7',  label: 'Availability / Start Date',   type: 'text',     required: true  },
-  { field_id: 'f8',  label: 'Why do you want to join?',    type: 'textarea', required: true  },
-  { field_id: 'f9',  label: 'Relevant Skills',             type: 'text',     required: true  },
-  { field_id: 'f10', label: 'LinkedIn Profile URL',        type: 'url',      required: false },
-  { field_id: 'f11', label: 'Expected Salary (SGD/month)', type: 'text',     required: false },
-  { field_id: 'f12', label: 'Additional Information',      type: 'textarea', required: false },
-]
-
-const MOCK_MAPPING = [
-  { field_id: 'f1',  value: 'Tang Yuchen',                    confidence: 0.95, needs_review: false },
-  { field_id: 'f2',  value: 'yuchen.tang@example.com',        confidence: 0.95, needs_review: false },
-  { field_id: 'f3',  value: '+65 9897 7897',                  confidence: 0.95, needs_review: false },
-  { field_id: 'f4',  value: 'Chinese',                        confidence: 0.95, needs_review: false },
-  { field_id: 'f5',  value: 'Master in Software Engineering (NUS)', confidence: 0.9, needs_review: false },
-  { field_id: 'f6',  value: '2027',                           confidence: 0.9,  needs_review: false },
-  { field_id: 'f7',  value: 'February 2027',                  confidence: 0.7,  needs_review: true  },
-  { field_id: 'f8',  value: 'I am passionate about leveraging technology to create meaningful impact. My background in software engineering and data analytics aligns well with this role.', confidence: 0.65, needs_review: true },
-  { field_id: 'f9',  value: 'Python, React, TypeScript, SQL, Data Analysis', confidence: 0.9, needs_review: false },
-  { field_id: 'f10', value: 'https://linkedin.com/in/yuchen-tang', confidence: 0.95, needs_review: false },
-  { field_id: 'f11', value: '$1200-1500',                     confidence: 0.4,  needs_review: true  },
-  { field_id: 'f12', value: '',                               confidence: 0.0,  needs_review: true  },
-]
+interface MappingField {
+  field_id: string; value: unknown; confidence: number; needs_review: boolean
+}
 
 const ApplicationFormPage = () => {
   const { id } = useParams()
@@ -69,9 +42,10 @@ const ApplicationFormPage = () => {
   const [formId, setFormId] = useState<string | null>(null)
   const [mappingDraft, setMappingDraft] = useState<object | null>(null)
   const [loading, setLoading] = useState(true)
+  const [noForm, setNoForm] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [usingMock, setUsingMock] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -83,46 +57,45 @@ const ApplicationFormPage = () => {
         const forms: Array<{ id: string; job_id: string }> = boot.data.forms ?? []
         const matched = forms.find(f => f.job_id === id)
 
-        let snapshot: SnapshotField[] = MOCK_SNAPSHOT
-        let fid: string | null = null
-
-        if (matched) {
-          fid = matched.id
-          setFormId(fid)
-          // Step 2: 获取 form 的 fields_json
-          const formRes = await api.get(`/assistant/forms/${fid}`)
-          const rawFields = formRes.data.fields_json ?? []
-          snapshot = rawFields.map((f: Record<string, unknown>, i: number) => ({
-            field_id: String(f.field_id ?? f.id ?? `f${i}`),
-            label: String(f.label ?? ''),
-            type: String(f.type ?? f.field_type ?? 'text'),
-            required: Boolean(f.required ?? false),
-            name: typeof f.name === 'string' ? f.name : null,
-            options: Array.isArray(f.options) ? f.options.filter((option): option is string => typeof option === 'string') : [],
-            placeholder: typeof f.placeholder === 'string' ? f.placeholder : null,
-            context: typeof f.context === 'string' ? f.context : null,
-          }))
-        } else {
-          setUsingMock(true)
+        if (!matched) {
+          setNoForm(true)
+          setLoading(false)
+          return
         }
 
-        // Step 3: map-fields
-        let mapping = MOCK_MAPPING
+        const fid = matched.id
+        setFormId(fid)
+
+        // Step 2: 获取 form 的 fields_json
+        const formRes = await api.get(`/assistant/forms/${fid}`)
+        const rawFields = formRes.data.fields_json ?? []
+        const snapshot: SnapshotField[] = rawFields.map((f: Record<string, unknown>, i: number) => ({
+          field_id: String(f.field_id ?? f.id ?? `f${i}`),
+          label: String(f.label ?? ''),
+          type: String(f.type ?? f.field_type ?? 'text'),
+          required: Boolean(f.required ?? false),
+          name: typeof f.name === 'string' ? f.name : null,
+          options: Array.isArray(f.options) ? f.options.filter((option): option is string => typeof option === 'string') : [],
+          placeholder: typeof f.placeholder === 'string' ? f.placeholder : null,
+          context: typeof f.context === 'string' ? f.context : null,
+        }))
+
+        // Step 3: map-fields（失败则字段留空，交由用户手填）
+        let mapping: MappingField[] = []
         try {
           const mapRes = await api.post('/assistant/map-fields', {
-            form_id: fid ?? '00000000-0000-0000-0000-000000000000',
+            form_id: fid,
             form_snapshot: snapshot,
           })
           mapping = mapRes.data.mapping ?? []
           setMappingDraft(mapRes.data)
         } catch {
-          setUsingMock(true)
+          mapping = []
         }
 
-        // 合并 snapshot + mapping
         const valueMap: Record<string, string> = {}
         const confMap: Record<string, 'high' | 'medium' | 'low'> = {}
-        mapping.forEach((m: { field_id: string; value: unknown; confidence: number; needs_review: boolean }) => {
+        mapping.forEach((m: MappingField) => {
           valueMap[m.field_id] = String(m.value ?? '')
           confMap[m.field_id] = getConfLevel(m.confidence, m.needs_review)
         })
@@ -137,19 +110,7 @@ const ApplicationFormPage = () => {
         setValues(valueMap)
         setStatuses(Object.fromEntries(displayFields.map(f => [f.field_id, 'pending' as Status])))
       } catch {
-        // 全部 fallback 到假数据
-        setUsingMock(true)
-        const display: Field[] = MOCK_SNAPSHOT.map(f => ({
-          ...f,
-          confLevel: getConfLevel(
-            MOCK_MAPPING.find(m => m.field_id === f.field_id)?.confidence ?? 0,
-            MOCK_MAPPING.find(m => m.field_id === f.field_id)?.needs_review ?? true
-          )
-        }))
-        setFields(display)
-        setValues(Object.fromEntries(MOCK_MAPPING.map(m => [m.field_id, m.value])))
-        setStatuses(Object.fromEntries(display.map(f => [f.field_id, 'pending' as Status])))
-        setMappingDraft({ mapping: MOCK_MAPPING, unmapped_fields: [], missing_profile_fields: [] })
+        setLoadError('Failed to load the application form. Please try again.')
       } finally {
         setLoading(false)
       }
@@ -174,7 +135,7 @@ const ApplicationFormPage = () => {
   const confirmedCount = fields.filter(f => statuses[f.field_id] === 'confirmed' || statuses[f.field_id] === 'edited').length
 
   const handleSubmit = async () => {
-    if (usingMock || !formId || !mappingDraft) {
+    if (!formId || !mappingDraft) {
       setSubmitError('The live application form is unavailable. No application was recorded.')
       return
     }
@@ -217,6 +178,38 @@ const ApplicationFormPage = () => {
     </div>
   )
 
+  if (noForm) return (
+    <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+      <Navbar backTo={`/jobs/${id}`} backLabel="← Back to Job" />
+      <div style={{ maxWidth: '600px', margin: '80px auto', padding: '0 24px', textAlign: 'center' }}>
+        <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '48px', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}>
+          <p style={{ fontSize: '48px', margin: '0 0 16px 0' }}>📝</p>
+          <h2>Application not available yet</h2>
+          <p style={{ color: '#666' }}>This role has no application form configured yet. Please check back later or apply through the original posting.</p>
+          <button onClick={() => navigate(`/jobs/${id}`)}
+            style={{ marginTop: '16px', padding: '10px 24px', backgroundColor: '#1a73e8',
+              color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+            Back to Job
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  if (loadError) return (
+    <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+      <Navbar backTo={`/jobs/${id}`} backLabel="← Back to Job" />
+      <div style={{ textAlign: 'center', marginTop: '80px' }}>
+        <p style={{ color: '#dc2626' }}>{loadError}</p>
+        <button onClick={() => navigate(`/jobs/${id}`)}
+          style={{ marginTop: '16px', padding: '10px 24px', backgroundColor: '#1a73e8',
+            color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+          Back to Job
+        </button>
+      </div>
+    </div>
+  )
+
   if (submitted) return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
       <Navbar />
@@ -248,11 +241,6 @@ const ApplicationFormPage = () => {
         {/* Header */}
         <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '24px', marginBottom: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}>
           <h2 style={{ margin: '0 0 4px 0' }}>AI-Assisted Application</h2>
-          {usingMock && (
-            <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#f59e0b' }}>
-              ⚠ AI service not yet available — using demo data. Fields will be mapped from your profile once M4 service is connected.
-            </p>
-          )}
           <div style={{ backgroundColor: '#f1f3f4', borderRadius: '4px', height: '8px', marginBottom: '8px' }}>
             <div style={{ backgroundColor: '#1a73e8', height: '8px', borderRadius: '4px',
               width: `${fields.length ? (confirmedCount / fields.length) * 100 : 0}%`,
@@ -321,7 +309,7 @@ const ApplicationFormPage = () => {
           <p style={{ margin: '0 0 16px 0', color: '#666', fontSize: '14px' }}>
             By submitting, you confirm all values above are accurate.
           </p>
-          <button onClick={handleSubmit} disabled={!allConfirmed || submitting || usingMock}
+          <button onClick={handleSubmit} disabled={!allConfirmed || submitting}
             style={{ padding: '12px 48px', fontSize: '16px', fontWeight: '500', color: 'white', border: 'none', borderRadius: '4px',
               backgroundColor: allConfirmed && !submitting ? '#1a73e8' : '#ccc',
               cursor: allConfirmed && !submitting ? 'pointer' : 'not-allowed' }}>
@@ -332,7 +320,6 @@ const ApplicationFormPage = () => {
               Please confirm all required fields (*) before submitting
             </p>
           )}
-          {usingMock && <p style={{ color: '#dc2626' }}>Demo data cannot be submitted.</p>}
           {submitError && <p role="alert" style={{ color: '#dc2626' }}>{submitError}</p>}
         </div>
       </div>
