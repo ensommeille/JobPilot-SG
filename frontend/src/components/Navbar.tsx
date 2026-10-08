@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { removeToken } from '../services/auth'
+import api from '../services/api'
 
 interface NavbarProps {
   backTo?: string
@@ -15,6 +17,15 @@ const NAV_ITEMS = [
 const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
   const navigate = useNavigate()
   const location = useLocation()
+  const [userName, setUserName] = useState('')
+
+  useEffect(() => {
+    let active = true
+    api.get('/profile')
+      .then(res => { if (active) setUserName(res.data.full_name ?? res.data.contact_email ?? 'Account') })
+      .catch(() => { if (active) setUserName('Account') })
+    return () => { active = false }
+  }, [])
 
   const handleLogout = () => {
     removeToken()
@@ -52,8 +63,8 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
           <div className="nav-divider" />
 
           <button className="user-chip" onClick={() => navigate('/profile')}>
-            <span className="avatar">T</span>
-            <span className="user-name">Tang Yuchen</span>
+            <span className="avatar">{userName.charAt(0) || '?'}</span>
+            <span className="user-name">{userName || 'Account'}</span>
           </button>
 
           <button className="btn btn-ghost btn-sm" onClick={handleLogout}>

@@ -12,37 +12,9 @@ const SKILL_CATEGORIES: Record<string, string[]> = {
   'Soft Skills': ['Project Management', 'Agile/Scrum', 'Leadership', 'Communication', 'Critical Thinking', 'Problem Solving'],
 }
 
-const ALL_LANGUAGES = ['English', 'Mandarin Chinese', 'Cantonese', 'Bahasa Malay', 'Tamil', 'Hindi', 'French', 'German', 'Spanish', 'Japanese', 'Korean', 'Portuguese', 'Arabic', 'Russian', 'Italian', 'Bahasa Indonesia', 'Thai', 'Vietnamese', 'Tagalog', 'Bengali', 'Urdu', 'Other']
-const LANGUAGE_LEVELS = ['Native', 'Fluent', 'Advanced', 'Intermediate', 'Basic']
-const GENDER_OPTIONS = ['Prefer not to say', 'Female', 'Male', 'Non-binary', 'Other']
-const WORK_AUTH_OPTIONS = ['Singapore Citizen', 'Singapore PR', 'Employment Pass', 'S Pass', 'Student Pass', 'Dependent Pass', 'Other']
-const DEGREE_OPTIONS = ['Bachelor', 'Master', 'PhD', 'Diploma', 'Associate', 'Certificate', 'Other']
-const YEAR_OPTIONS = Array.from({ length: 15 }, (_, i) => String(2020 + i))
-
-interface Education { id: number; school: string; degree: string; major: string; graduationYear: string; gpa: string }
-interface Experience { id: number; company: string; position: string; startDate: string; endDate: string; isCurrent: boolean; description: string }
-interface Project { id: number; name: string; role: string; startDate: string; endDate: string; isCurrent: boolean; description: string; url: string }
-interface Language { id: number; language: string; level: string }
-interface Certification { id: number; name: string; issuer: string; issueDate: string; expiryDate: string; credentialId: string }
-
 const sectionStyle = { backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 4px rgba(0,0,0,0.1)', padding: '24px', marginBottom: '16px' }
 const inputStyle = { width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box' as const, marginBottom: '8px' }
 const labelStyle = { fontSize: '13px', color: '#666', marginBottom: '4px', display: 'block' as const }
-
-const SectionHeader = ({ title, editing, onEdit, onCancel, onSave }: {
-  title: string; editing: boolean; onEdit: () => void; onCancel: () => void; onSave: () => void
-}) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-    <h2 style={{ margin: 0 }}>{title}</h2>
-    {!editing
-      ? <button onClick={onEdit} style={{ padding: '6px 16px', border: '1px solid #1a73e8', color: '#1a73e8', backgroundColor: 'white', borderRadius: '4px', cursor: 'pointer' }}>Edit</button>
-      : <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={onCancel} style={{ padding: '6px 16px', border: '1px solid #ddd', backgroundColor: 'white', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
-          <button onClick={onSave} style={{ padding: '6px 16px', backgroundColor: '#1a73e8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Save</button>
-        </div>
-    }
-  </div>
-)
 
 const SkillSelector = ({ selected, onChange }: { selected: string[], onChange: (s: string[]) => void }) => {
   const [search, setSearch] = useState('')
@@ -62,7 +34,7 @@ const SkillSelector = ({ selected, onChange }: { selected: string[], onChange: (
         </div>
       )}
       <input placeholder="🔍 Search skills..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...inputStyle, marginBottom: '8px' }} />
-      <div style={{ border: '1px solid #ddd', borderRadius: '4px', maxHeight: '260px', overflowY: 'auto' }}>
+      <div style={{ border: '1px solid #ddd', borderRadius: '4px', maxHeight: '220px', overflowY: 'auto' }}>
         {Object.entries(SKILL_CATEGORIES).map(([cat, skills]) => {
           const filtered = skills.filter(s => s.toLowerCase().includes(search.toLowerCase()))
           if (search && filtered.length === 0) return null
@@ -96,298 +68,129 @@ const SkillSelector = ({ selected, onChange }: { selected: string[], onChange: (
   )
 }
 
+interface LinkItem { label: string; url: string }
+
 const ProfilePage = () => {
-  const [personalEdit, setPersonalEdit] = useState(false)
-  const [personal, setPersonal] = useState({ name: 'Tang Yuchen', email: 'yuchen.tang@example.com', phone: '+65 9897 7897', city: 'Singapore', address: '', dob: '', gender: 'Prefer not to say', linkedin: 'https://linkedin.com/in/yuchen-tang', photoName: '', resumeName: '' })
-  const [personalDraft, setPersonalDraft] = useState({ ...personal })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
 
-  const [aboutEdit, setAboutEdit] = useState(false)
-  const [about, setAbout] = useState('Motivated Information Management graduate with experience in finance and data analytics. Passionate about leveraging technology to solve real-world problems. Currently pursuing MSc in Software Engineering at NUS.')
-  const [aboutDraft, setAboutDraft] = useState(about)
+  const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [contactEmail, setContactEmail] = useState('')
+  const [education, setEducation] = useState('')
+  const [experience, setExperience] = useState('')
+  const [skills, setSkills] = useState<string[]>([])
+  const [links, setLinks] = useState<LinkItem[]>([])
 
-  const [authEdit, setAuthEdit] = useState(false)
-  const [auth, setAuth] = useState({ nationality: 'Chinese', workAuth: 'Student Pass', availability: '2027-01', expectedSalary: '$1200-1500/month' })
-  const [authDraft, setAuthDraft] = useState({ ...auth })
-
-  const [eduEdit, setEduEdit] = useState(false)
-  const [educations, setEducations] = useState<Education[]>([
-    { id: 1, school: 'National University of Singapore', degree: 'Master', major: 'Software Engineering', graduationYear: '2027', gpa: '' },
-    { id: 2, school: 'Shenzhen University', degree: 'Bachelor', major: 'Information Management', graduationYear: '2025', gpa: '3.8' },
-  ])
-  const [eduDraft, setEduDraft] = useState<Education[]>([...educations])
-
-  const [expEdit, setExpEdit] = useState(false)
-  const [experiences, setExperiences] = useState<Experience[]>([
-    { id: 1, company: 'CITIC Securities', position: 'Client Manager Intern', startDate: '2025-06', endDate: '2025-09', isCurrent: false, description: 'Online channel customer acquisition in Network Finance Division.' },
-    { id: 2, company: 'Huatai Securities', position: 'Wealth Management Content Intern', startDate: '2024-06', endDate: '2024-09', isCurrent: false, description: 'Content operations for wealth management products.' },
-  ])
-  const [expDraft, setExpDraft] = useState<Experience[]>([...experiences])
-
-  const [projEdit, setProjEdit] = useState(false)
-  const [projects, setProjects] = useState<Project[]>([
-    { id: 1, name: 'JobPilot SG', role: 'Frontend Developer', startDate: '2026-08', endDate: '', isCurrent: true, description: 'Full-stack job aggregation platform with AI-assisted application form assistant.', url: 'https://github.com/ensommeille/JobPilot-SG' },
-  ])
-  const [projDraft, setProjDraft] = useState<Project[]>([...projects])
-
-  const [skillEdit, setSkillEdit] = useState(false)
-  const [skills, setSkills] = useState(['Python', 'React', 'TypeScript', 'SQL', 'Excel (Advanced)', 'Data Analysis'])
-  const [skillDraft, setSkillDraft] = useState([...skills])
-
-  const [langEdit, setLangEdit] = useState(false)
-  const [languages, setLanguages] = useState<Language[]>([
-    { id: 1, language: 'Mandarin Chinese', level: 'Native' },
-    { id: 2, language: 'English', level: 'Fluent' },
-    { id: 3, language: 'French', level: 'Intermediate' },
-  ])
-  const [langDraft, setLangDraft] = useState<Language[]>([...languages])
-  const [newLang, setNewLang] = useState({ language: 'English', level: 'Intermediate' })
-
-  const [certEdit, setCertEdit] = useState(false)
-  const [certifications, setCertifications] = useState<Certification[]>([])
-  const [certDraft, setCertDraft] = useState<Certification[]>([])
-
-  // 从后端加载 Profile
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetchProfile()
+    fetchProfile()
+      .then(res => {
         const d = res.data
-        if (d.name) setPersonal(p => ({ ...p, name: d.name ?? p.name, email: d.email ?? p.email, phone: d.phone ?? p.phone, city: d.city ?? p.city, linkedin: d.linkedin ?? p.linkedin }))
-        if (d.about) setAbout(d.about)
-        if (d.education?.length) setEducations(d.education)
-        if (d.experience?.length) setExperiences(d.experience)
-        if (d.projects?.length) setProjects(d.projects)
-        if (d.skills?.length) setSkills(d.skills)
-        if (d.languages?.length) setLanguages(d.languages)
-        if (d.certifications?.length) setCertifications(d.certifications)
-      } catch {
-        // 静默失败，保留本地假数据
-      }
-    }
-    load()
+        setFullName(d.full_name ?? '')
+        setPhone(d.phone ?? '')
+        setContactEmail(d.contact_email ?? '')
+        setEducation(d.education ?? '')
+        setExperience(d.experience ?? '')
+        setSkills(d.skills ?? [])
+        setLinks(Object.entries(d.links ?? {}).map(([label, url]) => ({ label, url: String(url) })))
+      })
+      .catch(() => setError('Failed to load your profile.'))
+      .finally(() => setLoading(false))
   }, [])
 
-  const saveProfile = async (patch: object) => {
-    try { await updateProfile(patch) } catch { /* 静默失败 */ }
+  const save = async () => {
+    setSaving(true)
+    setSaved(false)
+    setError('')
+    try {
+      await updateProfile({
+        full_name: fullName.trim() || null,
+        phone: phone.trim() || null,
+        contact_email: contactEmail.trim() || null,
+        education: education.trim() || null,
+        experience: experience.trim() || null,
+        skills,
+        links: Object.fromEntries(links.filter(l => l.label.trim() && l.url.trim()).map(l => [l.label.trim(), l.url.trim()])),
+      })
+      setSaved(true)
+    } catch {
+      setError('Failed to save your profile.')
+    } finally {
+      setSaving(false)
+    }
   }
+
+  const setLink = (i: number, patch: Partial<LinkItem>) => {
+    setLinks(prev => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
+  }
+
+  if (loading) return (
+    <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+      <Navbar />
+      <p style={{ textAlign: 'center', marginTop: '80px', color: '#666' }}>Loading profile...</p>
+    </div>
+  )
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
       <Navbar />
-      <div style={{ maxWidth: '800px', margin: '32px auto', padding: '0 24px' }}>
+      <div style={{ maxWidth: '720px', margin: '32px auto', padding: '0 24px' }}>
 
-        {/* Personal Info */}
+        {/* Personal */}
         <div style={sectionStyle}>
-          <SectionHeader title="Personal Information" editing={personalEdit}
-            onEdit={() => { setPersonalDraft({ ...personal }); setPersonalEdit(true) }}
-            onCancel={() => setPersonalEdit(false)}
-            onSave={async () => { setPersonal({ ...personalDraft }); setPersonalEdit(false); await saveProfile({ name: personalDraft.name, email: personalDraft.email, phone: personalDraft.phone, city: personalDraft.city, linkedin: personalDraft.linkedin }) }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-            <div style={{ width: '72px', height: '72px', borderRadius: '50%', backgroundColor: '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 'bold', color: '#1a73e8' }}>
-              {personal.name.charAt(0)}
-            </div>
-            <div>
-              <p style={{ margin: '0 0 4px 0', fontWeight: '500', fontSize: '18px' }}>{personal.name}</p>
-              {personalEdit && <label style={{ fontSize: '13px', color: '#1a73e8', cursor: 'pointer' }}>📷 Upload Photo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => setPersonalDraft(d => ({ ...d, photoName: e.target.files?.[0]?.name || '' }))} /></label>}
-            </div>
-          </div>
-          {personalEdit ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {[{ label: 'Full Name', key: 'name', type: 'text' }, { label: 'Email', key: 'email', type: 'email' }, { label: 'Phone', key: 'phone', type: 'tel' }, { label: 'City', key: 'city', type: 'text' }].map(({ label, key, type }) => (
-                <div key={key}><label style={labelStyle}>{label}</label><input type={type} style={inputStyle} value={personalDraft[key as keyof typeof personalDraft]} onChange={e => setPersonalDraft(d => ({ ...d, [key]: e.target.value }))} /></div>
-              ))}
-              <div><label style={labelStyle}>Date of Birth</label><input type="date" style={inputStyle} value={personalDraft.dob} onChange={e => setPersonalDraft(d => ({ ...d, dob: e.target.value }))} /></div>
-              <div><label style={labelStyle}>Gender</label><select style={inputStyle} value={personalDraft.gender} onChange={e => setPersonalDraft(d => ({ ...d, gender: e.target.value }))}>{GENDER_OPTIONS.map(g => <option key={g}>{g}</option>)}</select></div>
-              <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Full Address (optional)</label><input style={inputStyle} value={personalDraft.address} onChange={e => setPersonalDraft(d => ({ ...d, address: e.target.value }))} /></div>
-              <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>LinkedIn URL</label><input style={inputStyle} value={personalDraft.linkedin} onChange={e => setPersonalDraft(d => ({ ...d, linkedin: e.target.value }))} /></div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>Resume (PDF)</label>
-                <label style={{ display: 'inline-block', padding: '8px 16px', border: '1px dashed #ddd', borderRadius: '4px', cursor: 'pointer', fontSize: '14px', color: '#666' }}>
-                  📄 {personalDraft.resumeName || 'Upload Resume PDF'}
-                  <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => setPersonalDraft(d => ({ ...d, resumeName: e.target.files?.[0]?.name || '' }))} />
-                </label>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {[{ label: 'Email', value: personal.email, full: false }, { label: 'Phone', value: personal.phone, full: false }, { label: 'City', value: personal.city, full: false }, { label: 'Date of Birth', value: personal.dob || 'Not set', full: false }, { label: 'Gender', value: personal.gender, full: false }, { label: 'LinkedIn', value: personal.linkedin, full: true }, { label: 'Full Address', value: personal.address || 'Not set', full: true }, { label: 'Resume', value: personal.resumeName || 'Not uploaded', full: false }].map(({ label, value, full }) => (
-                <div key={label} style={{ gridColumn: full ? '1 / -1' : 'auto' }}>
-                  <span style={{ fontSize: '12px', color: '#999' }}>{label}</span>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '14px' }}>{value}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* About Me */}
-        <div style={sectionStyle}>
-          <SectionHeader title="About Me" editing={aboutEdit}
-            onEdit={() => { setAboutDraft(about); setAboutEdit(true) }}
-            onCancel={() => setAboutEdit(false)}
-            onSave={async () => { setAbout(aboutDraft); setAboutEdit(false); await saveProfile({ about: aboutDraft }) }} />
-          {aboutEdit
-            ? <textarea style={{ ...inputStyle, height: '100px', resize: 'vertical' }} value={aboutDraft} onChange={e => setAboutDraft(e.target.value)} />
-            : <p style={{ margin: 0, color: '#444', lineHeight: '1.6' }}>{about}</p>}
-        </div>
-
-        {/* Work Authorization */}
-        <div style={sectionStyle}>
-          <SectionHeader title="Work Authorization & Availability" editing={authEdit}
-            onEdit={() => { setAuthDraft({ ...auth }); setAuthEdit(true) }}
-            onCancel={() => setAuthEdit(false)}
-            onSave={async () => { setAuth({ ...authDraft }); setAuthEdit(false); await saveProfile({ work_authorization: authDraft }) }} />
-          {authEdit ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div><label style={labelStyle}>Nationality</label><input style={inputStyle} value={authDraft.nationality} onChange={e => setAuthDraft(d => ({ ...d, nationality: e.target.value }))} /></div>
-              <div><label style={labelStyle}>Work Authorization</label><select style={inputStyle} value={authDraft.workAuth} onChange={e => setAuthDraft(d => ({ ...d, workAuth: e.target.value }))}>{WORK_AUTH_OPTIONS.map(o => <option key={o}>{o}</option>)}</select></div>
-              <div><label style={labelStyle}>Earliest Start Date</label><input type="month" style={inputStyle} value={authDraft.availability} onChange={e => setAuthDraft(d => ({ ...d, availability: e.target.value }))} /></div>
-              <div><label style={labelStyle}>Expected Salary</label><input style={inputStyle} value={authDraft.expectedSalary} onChange={e => setAuthDraft(d => ({ ...d, expectedSalary: e.target.value }))} /></div>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {[{ label: 'Nationality', value: auth.nationality }, { label: 'Work Authorization', value: auth.workAuth }, { label: 'Earliest Start Date', value: auth.availability }, { label: 'Expected Salary', value: auth.expectedSalary }].map(({ label, value }) => (
-                <div key={label}><span style={{ fontSize: '12px', color: '#999' }}>{label}</span><p style={{ margin: '2px 0 0 0', fontSize: '14px' }}>{value}</p></div>
-              ))}
-            </div>
-          )}
+          <h2 style={{ margin: '0 0 16px 0' }}>Personal Information</h2>
+          <div><label style={labelStyle}>Full Name</label><input style={inputStyle} value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your name" /></div>
+          <div><label style={labelStyle}>Contact Email</label><input type="email" style={inputStyle} value={contactEmail} onChange={e => setContactEmail(e.target.value)} /></div>
+          <div><label style={labelStyle}>Phone</label><input type="tel" style={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} placeholder="+65 ..." /></div>
         </div>
 
         {/* Education */}
         <div style={sectionStyle}>
-          <SectionHeader title="Education" editing={eduEdit}
-            onEdit={() => { setEduDraft(educations.map(e => ({ ...e }))); setEduEdit(true) }}
-            onCancel={() => setEduEdit(false)}
-            onSave={async () => { setEducations([...eduDraft]); setEduEdit(false); await saveProfile({ education: eduDraft }) }} />
-          {eduDraft.map((edu, i) => (
-            <div key={edu.id} style={{ borderLeft: '3px solid #1a73e8', paddingLeft: '16px', marginBottom: '16px' }}>
-              {eduEdit ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>School / University</label><input style={inputStyle} value={edu.school} onChange={e => { const u = [...eduDraft]; u[i] = { ...u[i], school: e.target.value }; setEduDraft(u) }} /></div>
-                  <div><label style={labelStyle}>Degree</label><select style={inputStyle} value={edu.degree} onChange={e => { const u = [...eduDraft]; u[i] = { ...u[i], degree: e.target.value }; setEduDraft(u) }}>{DEGREE_OPTIONS.map(d => <option key={d}>{d}</option>)}</select></div>
-                  <div><label style={labelStyle}>Major</label><input style={inputStyle} value={edu.major} onChange={e => { const u = [...eduDraft]; u[i] = { ...u[i], major: e.target.value }; setEduDraft(u) }} /></div>
-                  <div><label style={labelStyle}>Graduation Year</label><select style={inputStyle} value={edu.graduationYear} onChange={e => { const u = [...eduDraft]; u[i] = { ...u[i], graduationYear: e.target.value }; setEduDraft(u) }}>{YEAR_OPTIONS.map(y => <option key={y}>{y}</option>)}</select></div>
-                  <div><label style={labelStyle}>GPA (optional)</label><input style={inputStyle} value={edu.gpa} onChange={e => { const u = [...eduDraft]; u[i] = { ...u[i], gpa: e.target.value }; setEduDraft(u) }} /></div>
-                  <div style={{ gridColumn: '1 / -1', textAlign: 'right' }}><button onClick={() => setEduDraft(d => d.filter((_, idx) => idx !== i))} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>🗑 Remove</button></div>
-                </div>
-              ) : (
-                <><p style={{ margin: '0 0 4px 0', fontWeight: '600' }}>{edu.school}</p><p style={{ margin: '0 0 4px 0', color: '#444' }}>{edu.degree} in {edu.major}</p><p style={{ margin: 0, fontSize: '13px', color: '#999' }}>Class of {edu.graduationYear}{edu.gpa ? ` · GPA: ${edu.gpa}` : ''}</p></>
-              )}
-            </div>
-          ))}
-          {eduEdit && <button onClick={() => setEduDraft(d => [...d, { id: Date.now(), school: '', degree: 'Bachelor', major: '', graduationYear: '2027', gpa: '' }])} style={{ padding: '6px 16px', border: '1px dashed #1a73e8', color: '#1a73e8', backgroundColor: 'white', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>+ Add Education</button>}
+          <h2 style={{ margin: '0 0 16px 0' }}>Education</h2>
+          <textarea style={{ ...inputStyle, height: '100px', resize: 'vertical' }} value={education} onChange={e => setEducation(e.target.value)}
+            placeholder="e.g. Bachelor of Computing, National University of Singapore (2025)" />
         </div>
 
         {/* Experience */}
         <div style={sectionStyle}>
-          <SectionHeader title="Work Experience" editing={expEdit}
-            onEdit={() => { setExpDraft(experiences.map(e => ({ ...e }))); setExpEdit(true) }}
-            onCancel={() => setExpEdit(false)}
-            onSave={async () => { setExperiences([...expDraft]); setExpEdit(false); await saveProfile({ experience: expDraft }) }} />
-          {expDraft.map((exp, i) => (
-            <div key={exp.id} style={{ borderLeft: '3px solid #34a853', paddingLeft: '16px', marginBottom: '16px' }}>
-              {expEdit ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div><label style={labelStyle}>Company</label><input style={inputStyle} value={exp.company} onChange={e => { const u = [...expDraft]; u[i] = { ...u[i], company: e.target.value }; setExpDraft(u) }} /></div>
-                  <div><label style={labelStyle}>Position</label><input style={inputStyle} value={exp.position} onChange={e => { const u = [...expDraft]; u[i] = { ...u[i], position: e.target.value }; setExpDraft(u) }} /></div>
-                  <div><label style={labelStyle}>Start Date</label><input type="month" style={inputStyle} value={exp.startDate} onChange={e => { const u = [...expDraft]; u[i] = { ...u[i], startDate: e.target.value }; setExpDraft(u) }} /></div>
-                  <div><label style={labelStyle}>End Date</label>{!exp.isCurrent && <input type="month" style={{ ...inputStyle, marginBottom: '4px' }} value={exp.endDate} onChange={e => { const u = [...expDraft]; u[i] = { ...u[i], endDate: e.target.value }; setExpDraft(u) }} />}<label style={{ fontSize: '13px', color: '#666', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}><input type="checkbox" checked={exp.isCurrent} onChange={e => { const u = [...expDraft]; u[i] = { ...u[i], isCurrent: e.target.checked, endDate: '' }; setExpDraft(u) }} />Currently working here</label></div>
-                  <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Description</label><textarea style={{ ...inputStyle, height: '80px', resize: 'vertical' }} value={exp.description} onChange={e => { const u = [...expDraft]; u[i] = { ...u[i], description: e.target.value }; setExpDraft(u) }} /></div>
-                  <div style={{ gridColumn: '1 / -1', textAlign: 'right' }}><button onClick={() => setExpDraft(d => d.filter((_, idx) => idx !== i))} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>🗑 Remove</button></div>
-                </div>
-              ) : (
-                <><p style={{ margin: '0 0 4px 0', fontWeight: '600' }}>{exp.position}</p><p style={{ margin: '0 0 4px 0', color: '#444' }}>{exp.company}</p><p style={{ margin: '0 0 4px 0', fontSize: '13px', color: '#999' }}>{exp.startDate} – {exp.isCurrent ? 'Present' : exp.endDate}</p><p style={{ margin: 0, fontSize: '14px', color: '#555' }}>{exp.description}</p></>
-              )}
-            </div>
-          ))}
-          {expEdit && <button onClick={() => setExpDraft(d => [...d, { id: Date.now(), company: '', position: '', startDate: '', endDate: '', isCurrent: false, description: '' }])} style={{ padding: '6px 16px', border: '1px dashed #34a853', color: '#34a853', backgroundColor: 'white', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>+ Add Experience</button>}
-        </div>
-
-        {/* Projects */}
-        <div style={sectionStyle}>
-          <SectionHeader title="Projects" editing={projEdit}
-            onEdit={() => { setProjDraft(projects.map(p => ({ ...p }))); setProjEdit(true) }}
-            onCancel={() => setProjEdit(false)}
-            onSave={async () => { setProjects([...projDraft]); setProjEdit(false); await saveProfile({ projects: projDraft }) }} />
-          {projDraft.map((proj, i) => (
-            <div key={proj.id} style={{ borderLeft: '3px solid #9333ea', paddingLeft: '16px', marginBottom: '16px' }}>
-              {projEdit ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div><label style={labelStyle}>Project Name</label><input style={inputStyle} value={proj.name} onChange={e => { const u = [...projDraft]; u[i] = { ...u[i], name: e.target.value }; setProjDraft(u) }} /></div>
-                  <div><label style={labelStyle}>Your Role</label><input style={inputStyle} value={proj.role} onChange={e => { const u = [...projDraft]; u[i] = { ...u[i], role: e.target.value }; setProjDraft(u) }} /></div>
-                  <div><label style={labelStyle}>Start Date</label><input type="month" style={inputStyle} value={proj.startDate} onChange={e => { const u = [...projDraft]; u[i] = { ...u[i], startDate: e.target.value }; setProjDraft(u) }} /></div>
-                  <div><label style={labelStyle}>End Date</label>{!proj.isCurrent && <input type="month" style={{ ...inputStyle, marginBottom: '4px' }} value={proj.endDate} onChange={e => { const u = [...projDraft]; u[i] = { ...u[i], endDate: e.target.value }; setProjDraft(u) }} />}<label style={{ fontSize: '13px', color: '#666', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}><input type="checkbox" checked={proj.isCurrent} onChange={e => { const u = [...projDraft]; u[i] = { ...u[i], isCurrent: e.target.checked, endDate: '' }; setProjDraft(u) }} />Ongoing</label></div>
-                  <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Project URL (optional)</label><input style={inputStyle} value={proj.url} onChange={e => { const u = [...projDraft]; u[i] = { ...u[i], url: e.target.value }; setProjDraft(u) }} /></div>
-                  <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Description</label><textarea style={{ ...inputStyle, height: '80px', resize: 'vertical' }} value={proj.description} onChange={e => { const u = [...projDraft]; u[i] = { ...u[i], description: e.target.value }; setProjDraft(u) }} /></div>
-                  <div style={{ gridColumn: '1 / -1', textAlign: 'right' }}><button onClick={() => setProjDraft(d => d.filter((_, idx) => idx !== i))} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>🗑 Remove</button></div>
-                </div>
-              ) : (
-                <><p style={{ margin: '0 0 4px 0', fontWeight: '600' }}>{proj.name}</p><p style={{ margin: '0 0 4px 0', color: '#444' }}>{proj.role}</p><p style={{ margin: '0 0 4px 0', fontSize: '13px', color: '#999' }}>{proj.startDate} – {proj.isCurrent ? 'Present' : proj.endDate}</p><p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#555' }}>{proj.description}</p>{proj.url && <a href={proj.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', color: '#1a73e8' }}>{proj.url}</a>}</>
-              )}
-            </div>
-          ))}
-          {projEdit && <button onClick={() => setProjDraft(d => [...d, { id: Date.now(), name: '', role: '', startDate: '', endDate: '', isCurrent: false, description: '', url: '' }])} style={{ padding: '6px 16px', border: '1px dashed #9333ea', color: '#9333ea', backgroundColor: 'white', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>+ Add Project</button>}
+          <h2 style={{ margin: '0 0 16px 0' }}>Experience</h2>
+          <textarea style={{ ...inputStyle, height: '140px', resize: 'vertical' }} value={experience} onChange={e => setExperience(e.target.value)}
+            placeholder="e.g. Software Engineer Intern @ Company (Jun–Aug 2025): built ..." />
         </div>
 
         {/* Skills */}
         <div style={sectionStyle}>
-          <SectionHeader title="Skills" editing={skillEdit}
-            onEdit={() => { setSkillDraft([...skills]); setSkillEdit(true) }}
-            onCancel={() => setSkillEdit(false)}
-            onSave={async () => { setSkills([...skillDraft]); setSkillEdit(false); await saveProfile({ skills: skillDraft }) }} />
-          {skillEdit
-            ? <SkillSelector selected={skillDraft} onChange={setSkillDraft} />
-            : <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>{skills.map(s => <span key={s} style={{ backgroundColor: '#e8f0fe', color: '#1a73e8', padding: '4px 12px', borderRadius: '16px', fontSize: '13px' }}>{s}</span>)}</div>}
+          <h2 style={{ margin: '0 0 16px 0' }}>Skills</h2>
+          <SkillSelector selected={skills} onChange={setSkills} />
         </div>
 
-        {/* Languages */}
+        {/* Links */}
         <div style={sectionStyle}>
-          <SectionHeader title="Languages" editing={langEdit}
-            onEdit={() => { setLangDraft(languages.map(l => ({ ...l }))); setLangEdit(true) }}
-            onCancel={() => setLangEdit(false)}
-            onSave={async () => { setLanguages([...langDraft]); setLangEdit(false); await saveProfile({ languages: langDraft }) }} />
-          {langDraft.map((lang, i) => (
-            <div key={lang.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-              {langEdit ? (
-                <><select style={{ ...inputStyle, marginBottom: 0, flex: 2 }} value={lang.language} onChange={e => { const u = [...langDraft]; u[i] = { ...u[i], language: e.target.value }; setLangDraft(u) }}>{ALL_LANGUAGES.map(l => <option key={l}>{l}</option>)}</select><select style={{ ...inputStyle, marginBottom: 0, flex: 1 }} value={lang.level} onChange={e => { const u = [...langDraft]; u[i] = { ...u[i], level: e.target.value }; setLangDraft(u) }}>{LANGUAGE_LEVELS.map(l => <option key={l}>{l}</option>)}</select><button onClick={() => setLangDraft(d => d.filter((_, idx) => idx !== i))} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' }}>×</button></>
-              ) : (
-                <><span style={{ fontSize: '14px', flex: 2 }}>{lang.language}</span><span style={{ backgroundColor: '#f1f3f4', color: '#666', padding: '2px 10px', borderRadius: '12px', fontSize: '12px' }}>{lang.level}</span></>
-              )}
+          <h2 style={{ margin: '0 0 16px 0' }}>Links</h2>
+          {links.map((l, i) => (
+            <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+              <input style={{ ...inputStyle, marginBottom: 0, flex: 1 }} placeholder="Label (e.g. LinkedIn)" value={l.label} onChange={e => setLink(i, { label: e.target.value })} />
+              <input style={{ ...inputStyle, marginBottom: 0, flex: 2 }} placeholder="https://..." value={l.url} onChange={e => setLink(i, { url: e.target.value })} />
+              <button onClick={() => setLinks(prev => prev.filter((_, idx) => idx !== i))} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' }}>×</button>
             </div>
           ))}
-          {langEdit && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #ddd' }}>
-              <select style={{ ...inputStyle, marginBottom: 0, flex: 2 }} value={newLang.language} onChange={e => setNewLang(l => ({ ...l, language: e.target.value }))}>{ALL_LANGUAGES.filter(l => !langDraft.find(ld => ld.language === l)).map(l => <option key={l}>{l}</option>)}</select>
-              <select style={{ ...inputStyle, marginBottom: 0, flex: 1 }} value={newLang.level} onChange={e => setNewLang(l => ({ ...l, level: e.target.value }))}>{LANGUAGE_LEVELS.map(l => <option key={l}>{l}</option>)}</select>
-              <button onClick={() => { if (!langDraft.find(l => l.language === newLang.language)) setLangDraft(d => [...d, { id: Date.now(), ...newLang }]) }} style={{ padding: '8px 16px', backgroundColor: '#1a73e8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap' as const }}>+ Add</button>
-            </div>
-          )}
+          <button onClick={() => setLinks(prev => [...prev, { label: '', url: '' }])}
+            style={{ padding: '6px 16px', border: '1px dashed #1a73e8', color: '#1a73e8', backgroundColor: 'white', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
+            + Add Link
+          </button>
         </div>
 
-        {/* Certifications */}
-        <div style={sectionStyle}>
-          <SectionHeader title="Certifications & Awards" editing={certEdit}
-            onEdit={() => { setCertDraft(certifications.map(c => ({ ...c }))); setCertEdit(true) }}
-            onCancel={() => setCertEdit(false)}
-            onSave={async () => { setCertifications([...certDraft]); setCertEdit(false); await saveProfile({ certifications: certDraft }) }} />
-          {certDraft.length === 0 && !certEdit && <p style={{ color: '#999', fontSize: '14px', margin: 0 }}>No certifications added yet. Click Edit to add.</p>}
-          {certDraft.map((cert, i) => (
-            <div key={cert.id} style={{ borderLeft: '3px solid #f59e0b', paddingLeft: '16px', marginBottom: '16px' }}>
-              {certEdit ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Certificate / Award Name</label><input style={inputStyle} value={cert.name} onChange={e => { const u = [...certDraft]; u[i] = { ...u[i], name: e.target.value }; setCertDraft(u) }} /></div>
-                  <div><label style={labelStyle}>Issuing Organization</label><input style={inputStyle} value={cert.issuer} onChange={e => { const u = [...certDraft]; u[i] = { ...u[i], issuer: e.target.value }; setCertDraft(u) }} /></div>
-                  <div><label style={labelStyle}>Credential ID (optional)</label><input style={inputStyle} value={cert.credentialId} onChange={e => { const u = [...certDraft]; u[i] = { ...u[i], credentialId: e.target.value }; setCertDraft(u) }} /></div>
-                  <div><label style={labelStyle}>Issue Date</label><input type="month" style={inputStyle} value={cert.issueDate} onChange={e => { const u = [...certDraft]; u[i] = { ...u[i], issueDate: e.target.value }; setCertDraft(u) }} /></div>
-                  <div><label style={labelStyle}>Expiry Date (optional)</label><input type="month" style={inputStyle} value={cert.expiryDate} onChange={e => { const u = [...certDraft]; u[i] = { ...u[i], expiryDate: e.target.value }; setCertDraft(u) }} /></div>
-                  <div style={{ gridColumn: '1 / -1', textAlign: 'right' }}><button onClick={() => setCertDraft(d => d.filter((_, idx) => idx !== i))} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>🗑 Remove</button></div>
-                </div>
-              ) : (
-                <><p style={{ margin: '0 0 4px 0', fontWeight: '600' }}>{cert.name}</p><p style={{ margin: '0 0 4px 0', color: '#444' }}>{cert.issuer}</p><p style={{ margin: 0, fontSize: '13px', color: '#999' }}>Issued: {cert.issueDate}{cert.expiryDate ? ` · Expires: ${cert.expiryDate}` : ' · No Expiry'}{cert.credentialId ? ` · ID: ${cert.credentialId}` : ''}</p></>
-              )}
-            </div>
-          ))}
-          {certEdit && <button onClick={() => setCertDraft(d => [...d, { id: Date.now(), name: '', issuer: '', issueDate: '', expiryDate: '', credentialId: '' }])} style={{ padding: '6px 16px', border: '1px dashed #f59e0b', color: '#f59e0b', backgroundColor: 'white', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>+ Add Certification / Award</button>}
+        {/* Save */}
+        <div style={{ ...sectionStyle, textAlign: 'center' }}>
+          <button onClick={save} disabled={saving}
+            style={{ padding: '12px 48px', fontSize: '15px', fontWeight: '500', color: 'white', border: 'none', borderRadius: '4px',
+              backgroundColor: saving ? '#ccc' : '#1a73e8', cursor: saving ? 'not-allowed' : 'pointer' }}>
+            {saving ? 'Saving...' : 'Save Profile'}
+          </button>
+          {saved && <p style={{ color: '#34a853', margin: '8px 0 0 0' }}>✓ Profile saved.</p>}
+          {error && <p role="alert" style={{ color: '#dc2626', margin: '8px 0 0 0' }}>{error}</p>}
         </div>
 
       </div>
