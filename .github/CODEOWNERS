@@ -1,0 +1,22 @@
+# JobPilot SG — Team 9 code ownership
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# NOTE: self-approval is a hard GitHub rule (PR authors cannot approve their own PRs);
+# CODEOWNERS only routes review requests. Self-merge uses `gh pr merge --admin`.
+
+# Frontend (React + Vite) — M1 TANG YUCHEN
+/frontend/                     @Arielle-tang
+
+# Backend application core — M2 LIAO BINGFENG
+/backend/app/                  @BINFENGLIAO
+
+# Job ingestion + extraction — M3 ZHU PENGXU
+/backend/app/ingestion/        @Robinsonson
+/backend/app/job_extraction/   @Robinsonson
+
+# LLM provider + AI form assistant — M4 LIN XINDA
+/backend/app/llm/              @limidexy
+/backend/app/assistant/        @limidexy
+
+# CI / DevOps / documentation — M5 LIAO CAN
+/.github/                      @ensommeille
+/docs/                         @ensommeille
