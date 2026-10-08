@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import AuthLayout from '../components/AuthLayout'
 import { loginApi, saveToken } from '../services/auth'
 
 const LoginPage = () => {
@@ -26,36 +27,36 @@ const LoginPage = () => {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
-      <div style={{ backgroundColor: 'white', padding: '40px', borderRadius: '8px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)', width: '360px' }}>
-        <h1 style={{ textAlign: 'center', marginBottom: '8px' }}>JobPilot SG</h1>
-        <p style={{ textAlign: 'center', color: '#666', marginBottom: '24px' }}>Sign in to your account</p>
-        {error && <p style={{ color: 'red', textAlign: 'center', marginBottom: '12px', fontSize: '14px' }}>{error}</p>}
-        <input type="email" placeholder="Email" value={email}
-          onChange={e => setEmail(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleLogin()}
-          style={{ width: '100%', padding: '10px', marginBottom: '12px',
-            border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box' }} />
-        <input type="password" placeholder="Password" value={password}
-          onChange={e => setPassword(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleLogin()}
-          style={{ width: '100%', padding: '10px', marginBottom: '16px',
-            border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box' }} />
-        <button onClick={handleLogin} disabled={loading}
-          style={{ width: '100%', padding: '10px', backgroundColor: loading ? '#aaa' : '#1a73e8',
-            color: 'white', border: 'none', borderRadius: '4px',
-            cursor: loading ? 'not-allowed' : 'pointer', fontSize: '16px' }}>
-          {loading ? 'Signing in...' : 'Login'}
+    <AuthLayout>
+      <form className="auth-form" onSubmit={e => { e.preventDefault(); handleLogin() }}>
+        <div>
+          <h1>Welcome back</h1>
+          <p className="muted" style={{ marginTop: 'var(--s-1)' }}>Sign in to continue your job search.</p>
+        </div>
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <label className="field">
+          <span className="label">Email</span>
+          <input className="input" type="email" placeholder="you@example.com" value={email}
+            onChange={e => setEmail(e.target.value)} autoComplete="email" />
+        </label>
+        <label className="field">
+          <span className="label">Password</span>
+          <input className="input" type="password" placeholder="Enter your password" value={password}
+            onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
+        </label>
+
+        <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
+          {loading ? 'Signing in…' : 'Sign in'}
         </button>
-        <p style={{ textAlign: 'center', marginTop: '16px', color: '#666' }}>
+
+        <p className="auth-footer">
           Don't have an account?{' '}
-          <span onClick={() => navigate('/register')}
-            style={{ color: '#1a73e8', cursor: 'pointer' }}>Sign up</span>
+          <button type="button" className="link" onClick={() => navigate('/register')}>Sign up</button>
         </p>
-      </div>
-    </div>
+      </form>
+    </AuthLayout>
   )
 }
 
