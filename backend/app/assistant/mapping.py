@@ -23,6 +23,7 @@ PROMPT_VERSION = "form-mapping-v1"
 MAPPING_VERSION = "mapping-v1"
 DIRECT_CONFIDENCE = 0.95
 SEMANTIC_CONFIDENCE_CEILING = 0.79
+SEMANTIC_MAX_OUTPUT_TOKENS = 2048
 
 
 class SemanticSuggestion(BaseModel):
@@ -297,7 +298,7 @@ class ProfileFormMappingService:
                 ),
             ],
             temperature=0.0,
-            max_output_tokens=600,
+            max_output_tokens=SEMANTIC_MAX_OUTPUT_TOKENS,
         )
         response = await provider.generate_structured(request)
         if response.finish_reason != "stop" or response.data is None:
