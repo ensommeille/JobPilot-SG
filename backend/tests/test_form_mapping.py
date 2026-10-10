@@ -129,6 +129,8 @@ def test_semantic_question_calls_provider_with_only_relevant_evidence() -> None:
     assert len(provider.requests) == 1
     request = provider.requests[0]
     assert request.schema_name == "form_field_draft"
+    # The live DeepSeek flash smoke test exhausted the former 600-token budget.
+    assert request.max_output_tokens >= 2048
     assert request.output_schema["required"] == ["field_id", "value", "confidence", "needs_review"]
     payload = json.loads(request.messages[1].content)
     assert set(payload["profile_evidence"]) == {"education", "experience", "skills"}
