@@ -20,15 +20,29 @@ services:
     ports:
       - "6379:6379"
 
-  # backend:
-  #   build: ./backend
-  #   ports:
-  #     - "8000:8000"
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #   environment:
-  #     DATABASE_URL: postgresql+psycopg://jobpilot:jobpilot@db:5432/jobpilot
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+psycopg://jobpilot:jobpilot@db:5432/jobpilot
+      JWT_SECRET_KEY: jobpilot-dev-only-secret-change-me-in-production-123456
+      JOBPILOT_DEMO_ADMIN_PASSWORD: Demo@1234
+      CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+      # LLM_* intentionally left unset — the AI form runs deterministic mapping only.
+      # To enable semantic drafting, add LLM_PROVIDER / LLM_API_KEY / LLM_MODEL / LLM_BASE_URL.
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
 
 volumes:
   pgdata:
