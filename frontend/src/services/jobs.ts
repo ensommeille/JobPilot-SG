@@ -88,3 +88,8 @@ export const normalizeJobList = (data: unknown): JobView[] => {
   const items = Array.isArray(data) ? data : (data as { items?: unknown[] })?.items ?? []
   return (items as RawJob[]).map(normalizeJob)
 }
+
+export const normalizeFavoriteList = (data: unknown): JobView[] => {
+  const items = Array.isArray(data) ? data : (data as { items?: unknown[] })?.items ?? []
+  return (items as { job: RawJob }[]).map(item => normalizeJob(item.job))
+}

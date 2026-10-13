@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import { fetchFavorites, removeFavorite, normalizeJobList } from '../services/jobs'
+import { fetchFavorites, removeFavorite, normalizeFavoriteList } from '../services/jobs'
 import type { JobView } from '../services/jobs'
 
 const FavoritesPage = () => {
@@ -15,7 +15,7 @@ const FavoritesPage = () => {
       setLoading(true)
       try {
         const res = await fetchFavorites()
-        setFavorites(normalizeJobList(res.data))
+        setFavorites(normalizeFavoriteList(res.data))
       } catch {
         setError('Failed to load favorites.')
       } finally {
