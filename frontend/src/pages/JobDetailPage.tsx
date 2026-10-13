@@ -17,6 +17,7 @@ interface Job {
   description?: string
   requirements?: string[]
   source_url: string | null
+  assistant_form_available: boolean
   source: { name: string }
   tags: { id: string; name: string }[]
 }
@@ -163,12 +164,18 @@ const JobDetailPage = () => {
                 View Original Posting ↗
               </a>
             )}
-            <button onClick={() => navigate(`/jobs/${job.id}/apply`)}
-              style={{ padding: '10px 24px', backgroundColor: '#1a73e8',
-                color: 'white', border: 'none', borderRadius: '4px',
-                cursor: 'pointer', fontSize: '14px' }}>
-              Apply with AI Assistant
-            </button>
+            {job.assistant_form_available ? (
+              <button onClick={() => navigate(`/jobs/${job.id}/apply`)}
+                style={{ padding: '10px 24px', backgroundColor: '#1a73e8',
+                  color: 'white', border: 'none', borderRadius: '4px',
+                  cursor: 'pointer', fontSize: '14px' }}>
+                Apply with AI Assistant
+              </button>
+            ) : (
+              <span style={{ alignSelf: 'center', color: '#666', fontSize: '13px' }}>
+                AI Assistant is available for selected demo jobs.
+              </span>
+            )}
           </div>
         </div>
       </div>

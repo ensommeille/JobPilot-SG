@@ -229,6 +229,12 @@ class JobPosting(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="job", cascade="all, delete-orphan"
     )
 
+    @property
+    def assistant_form_available(self) -> bool:
+        """Whether this job can use the Phase 1 in-platform form assistant."""
+
+        return any(form.is_fixture for form in self.forms)
+
 
 class JobTag(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "job_tags"

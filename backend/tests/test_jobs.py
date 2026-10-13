@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.db.models import JobPosting, JobSource, JobTag
+from app.db.models import ApplicationForm, JobPosting, JobSource, JobTag
 
 PASSWORD = "CorrectHorseBatteryStaple!"
 
@@ -93,7 +93,15 @@ def seeded_jobs(db: Session) -> list[JobPosting]:
             status="archived",
         ),
     ]
-    db.add_all(jobs)
+    form = ApplicationForm(
+        job=jobs[0],
+        template_version="fixture-v1",
+        is_fixture=True,
+        fields_json=[
+            {"field_id": "full_name", "label": "Full name", "type": "text"},
+        ],
+    )
+    db.add_all([*jobs, form])
     db.commit()
     for job in jobs:
         db.refresh(job)
@@ -120,6 +128,8 @@ def test_job_list_is_paginated_and_hides_archived_records(
     assert payload["pages"] == 2
     assert payload["page"] == 1
     assert [item["external_id"] for item in payload["items"]] == ["alpha-1", "beta-2"]
+    assert payload["items"][0]["assistant_form_available"] is True
+    assert payload["items"][1]["assistant_form_available"] is False
 
 
 def test_combined_filters_and_intersecting_tags(
@@ -168,6 +178,7 @@ def test_job_detail_includes_source_and_tags(
     assert visible.status_code == 200
     assert visible.json()["source"]["name"] == "Sandbox Jobs"
     assert len(visible.json()["tags"]) == 2
+    assert visible.json()["assistant_form_available"] is True
     assert hidden.status_code == missing.status_code == 404
 
 
@@ -199,6 +210,7 @@ def test_favorites_require_auth_and_post_is_idempotent(
     assert favorites.status_code == 200
     assert favorites.json()["total"] == 1
     assert UUID(favorites.json()["items"][0]["job"]["id"]) == job_id
+    assert favorites.json()["items"][0]["job"]["assistant_form_available"] is True
 
 
 def test_favorites_are_isolated_by_user(

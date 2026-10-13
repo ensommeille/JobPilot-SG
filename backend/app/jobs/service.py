@@ -20,13 +20,18 @@ def _normalized_values(values: list[str] | None) -> list[str]:
 
 
 def _job_load_options() -> tuple[object, ...]:
-    return (joinedload(JobPosting.source), selectinload(JobPosting.tags))
+    return (
+        joinedload(JobPosting.source),
+        selectinload(JobPosting.tags),
+        selectinload(JobPosting.forms),
+    )
 
 
 def _favorite_load_options() -> tuple[object, ...]:
     return (
         joinedload(Favorite.job).joinedload(JobPosting.source),
         joinedload(Favorite.job).selectinload(JobPosting.tags),
+        joinedload(Favorite.job).selectinload(JobPosting.forms),
     )
 
 

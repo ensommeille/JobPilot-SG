@@ -41,6 +41,7 @@ def _load_options() -> tuple[object, ...]:
     return (
         selectinload(Application.job).joinedload(JobPosting.source),
         selectinload(Application.job).selectinload(JobPosting.tags),
+        selectinload(Application.job).selectinload(JobPosting.forms),
     )
 
 
