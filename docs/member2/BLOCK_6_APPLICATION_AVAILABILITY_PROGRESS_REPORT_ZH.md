@@ -6,7 +6,7 @@
 
 **日期：** 2026-10-13
 
-**关联 Issue：** [#24 Expose AI form availability per job](https://github.com/ensommeille/JobPilot-SG/issues/24)
+**关联 Issue：** [#24 AI 表单可用性](https://github.com/ensommeille/JobPilot-SG/issues/24)、[#27 收藏刷新状态](https://github.com/ensommeille/JobPilot-SG/issues/27)
 
 ## 完成结论
 
@@ -14,12 +14,16 @@
 
 后端现在会在每条职位响应中返回 `assistant_form_available`。前端仅在该值为 `true` 时显示 AI Assistant 按钮，没有表单的真实职位只保留原始职位链接和说明文字。
 
+同时，本板块补充了岗位详情接口的 `is_favorited` 状态。登录用户收藏岗位后，即使刷新详情页，后端仍会根据数据库中的收藏记录返回正确状态；取消收藏后再次请求也会恢复为 `false`。
+
 ## 后端修改
 
 - 为 `JobPosting` 增加只读可用性属性，仅在关联的 fixture 表单存在时返回 `true`；
 - 在 `JobRead` API 契约中增加 `assistant_form_available` 布尔字段；
 - 职位列表、职位详情和收藏查询均预加载表单关系，避免序列化时产生 N 加 1 查询；
 - 收藏响应中的嵌套职位使用同一字段，保证各页面判断一致。
+- 岗位详情接口支持可选登录身份，并返回当前用户持久化的 `is_favorited` 状态；
+- 未登录访问继续保持公开可用，`is_favorited` 返回 `false`；无效令牌仍按鉴权错误处理。
 
 ## 前端衔接
 
@@ -42,6 +46,7 @@
 - 有 fixture 表单的职位返回可用状态；
 - 没有表单的职位返回不可用状态；
 - 分页职位列表、职位详情和收藏嵌套职位均返回一致结果；
+- 登录用户收藏、刷新、取消收藏后的详情状态均完成回归验证；
 - 前端构建和 lint 验证条件渲染；
 - 完整后端测试、覆盖率、Ruff 和 Semgrep 回归检查。
 

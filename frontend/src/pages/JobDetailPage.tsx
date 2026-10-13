@@ -18,6 +18,7 @@ interface Job {
   requirements?: string[]
   source_url: string | null
   assistant_form_available: boolean
+  is_favorited: boolean
   source: { name: string }
   tags: { id: string; name: string }[]
 }
@@ -38,7 +39,7 @@ const JobDetailPage = () => {
       try {
         const res = await fetchJobById(String(id))
         setJob(res.data)
-        setIsFavorited(res.data.is_favorited ?? false)
+        setIsFavorited(res.data.is_favorited)
       } catch {
         setError('Job not found or failed to load.')
       } finally {

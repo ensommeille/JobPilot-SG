@@ -153,6 +153,14 @@ def remove_favorite(db: Session, *, user: User, job_id: UUID) -> None:
         db.commit()
 
 
+def is_favorited(db: Session, *, user: User, job_id: UUID) -> bool:
+    statement = select(Favorite.id).where(
+        Favorite.user_id == user.id,
+        Favorite.job_id == job_id,
+    )
+    return db.scalar(statement) is not None
+
+
 def list_favorites(
     db: Session, *, user: User, page: int, page_size: int
 ) -> tuple[list[Favorite], int, int]:

@@ -45,6 +45,7 @@ class JobRead(BaseModel):
     deadline: date | None
     status: str
     assistant_form_available: bool
+    is_favorited: bool = False
     source: JobSourceRead
     tags: list[JobTagRead]
     created_at: datetime
