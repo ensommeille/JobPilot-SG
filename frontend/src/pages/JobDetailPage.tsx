@@ -16,6 +16,7 @@ interface Job {
   salary_period: string | null
   description?: string
   requirements?: string[]
+  apply_url: string
   source_url: string | null
   assistant_form_available: boolean
   is_favorited: boolean
@@ -157,7 +158,7 @@ const JobDetailPage = () => {
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: '12px' }}>
-            {job.source_url && (
+            {job.source_url && job.source_url !== job.apply_url && (
               <a href={job.source_url} target="_blank" rel="noopener noreferrer"
                 style={{ padding: '10px 24px', backgroundColor: 'white',
                   border: '1px solid #1a73e8', color: '#1a73e8',
@@ -172,9 +173,16 @@ const JobDetailPage = () => {
                   cursor: 'pointer', fontSize: '14px' }}>
                 Apply with AI Assistant
               </button>
+            ) : job.apply_url ? (
+              <a href={job.apply_url} target="_blank" rel="noopener noreferrer"
+                style={{ padding: '10px 24px', backgroundColor: '#1a73e8',
+                  color: 'white', borderRadius: '4px', textDecoration: 'none',
+                  fontSize: '14px' }}>
+                Apply on Original Site ↗
+              </a>
             ) : (
               <span style={{ alignSelf: 'center', color: '#666', fontSize: '13px' }}>
-                AI Assistant is available for selected demo jobs.
+                No application link is available for this job.
               </span>
             )}
           </div>

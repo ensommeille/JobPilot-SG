@@ -29,8 +29,9 @@
 
 - 职位详情页读取后端可用性字段；
 - 有演示表单时显示 `Apply with AI Assistant`；
-- 没有表单时不再展示会进入不可用页面的按钮；
-- 真实来源职位仍可通过 `View Original Posting` 打开原始页面。
+- 没有表单时不再展示会进入不可用页面的 AI 按钮；
+- 真实来源职位直接显示 `Apply on Original Site`，使用后端 `apply_url` 打开原网站申请页；
+- 当 `source_url` 与 `apply_url` 不同时，仍保留 `View Original Posting` 作为职位来源链接。
 
 ## 范围判断
 
