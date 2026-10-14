@@ -58,6 +58,11 @@ GET    /audit-logs
   so a stale token cannot preserve permissions after an account or role change.
 - Job list and detail routes expose only active or incomplete records. Keyword search covers title,
   company and description. Repeated or comma-separated `tags` values are intersected.
+- Every job response includes `assistant_form_available`. It is true only when the job has a Phase 1
+  fixture form. Real-source jobs without a configured form retain their external application link
+  from `apply_url` and must not present the in-platform assistant as available.
+- Every job response includes `is_favorited`. Public responses default to `false`; an authenticated
+  job-detail request reflects that user's persisted favorite state, including after a page refresh.
 - Salary filters select overlapping job salary ranges; records without salary data are excluded only
   when a salary filter is supplied. Results use deterministic descending posted-date order.
 - Job discovery and tag listing are public. Favorites require a bearer token, are isolated by user,

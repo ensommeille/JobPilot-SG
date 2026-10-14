@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.db.models import JobPosting, JobSource, JobTag
+from app.db.models import ApplicationForm, JobPosting, JobSource, JobTag
 
 PASSWORD = "CorrectHorseBatteryStaple!"
 
@@ -93,7 +93,15 @@ def seeded_jobs(db: Session) -> list[JobPosting]:
             status="archived",
         ),
     ]
-    db.add_all(jobs)
+    form = ApplicationForm(
+        job=jobs[0],
+        template_version="fixture-v1",
+        is_fixture=True,
+        fields_json=[
+            {"field_id": "full_name", "label": "Full name", "type": "text"},
+        ],
+    )
+    db.add_all([*jobs, form])
     db.commit()
     for job in jobs:
         db.refresh(job)
@@ -120,6 +128,8 @@ def test_job_list_is_paginated_and_hides_archived_records(
     assert payload["pages"] == 2
     assert payload["page"] == 1
     assert [item["external_id"] for item in payload["items"]] == ["alpha-1", "beta-2"]
+    assert payload["items"][0]["assistant_form_available"] is True
+    assert payload["items"][1]["assistant_form_available"] is False
 
 
 def test_combined_filters_and_intersecting_tags(
@@ -168,6 +178,8 @@ def test_job_detail_includes_source_and_tags(
     assert visible.status_code == 200
     assert visible.json()["source"]["name"] == "Sandbox Jobs"
     assert len(visible.json()["tags"]) == 2
+    assert visible.json()["assistant_form_available"] is True
+    assert visible.json()["is_favorited"] is False
     assert hidden.status_code == missing.status_code == 404
 
 
@@ -199,6 +211,8 @@ def test_favorites_require_auth_and_post_is_idempotent(
     assert favorites.status_code == 200
     assert favorites.json()["total"] == 1
     assert UUID(favorites.json()["items"][0]["job"]["id"]) == job_id
+    assert favorites.json()["items"][0]["job"]["assistant_form_available"] is True
+    assert favorites.json()["items"][0]["job"]["is_favorited"] is True
 
 
 def test_favorites_are_isolated_by_user(
@@ -215,3 +229,29 @@ def test_favorites_are_isolated_by_user(
 
     assert client.delete(f"/jobs/{job_id}/favorite", headers=alice).status_code == 204
     assert client.get("/favorites", headers=alice).json()["total"] == 0
+
+
+def test_job_detail_preserves_authenticated_favorite_state_after_refresh(
+    client: TestClient, seeded_jobs: list[JobPosting]
+) -> None:
+    job_id = seeded_jobs[0].id
+    headers = auth_headers(client, "detail-owner@example.com")
+
+    before = client.get(f"/jobs/{job_id}", headers=headers)
+    created = client.post(f"/jobs/{job_id}/favorite", headers=headers)
+    after_refresh = client.get(f"/jobs/{job_id}", headers=headers)
+    deleted = client.delete(f"/jobs/{job_id}/favorite", headers=headers)
+    after_delete = client.get(f"/jobs/{job_id}", headers=headers)
+
+    assert before.status_code == after_refresh.status_code == after_delete.status_code == 200
+    assert before.json()["is_favorited"] is False
+    assert created.status_code == 201
+    assert created.json()["job"]["is_favorited"] is True
+    assert after_refresh.json()["is_favorited"] is True
+    assert deleted.status_code == 204
+    assert after_delete.json()["is_favorited"] is False
+
+    invalid_token = client.get(
+        f"/jobs/{job_id}", headers={"Authorization": "Bearer invalid-token"}
+    )
+    assert invalid_token.status_code == 401

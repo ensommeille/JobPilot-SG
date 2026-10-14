@@ -7,12 +7,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import CurrentUser
+from app.auth.dependencies import CurrentUser, OptionalCurrentUser
+from app.db.models import Favorite, JobPosting
 from app.db.session import get_db
 from app.jobs.schemas import FavoritePage, FavoriteRead, JobPage, JobRead, JobTagRead
 from app.jobs.service import (
     add_favorite,
     get_job,
+    is_favorited,
     list_favorites,
     list_jobs,
     list_tags,
@@ -21,6 +23,17 @@ from app.jobs.service import (
 
 router = APIRouter(tags=["jobs"])
 DatabaseSession = Annotated[Session, Depends(get_db)]
+
+
+def _job_read(job: JobPosting, *, favorite: bool = False) -> JobRead:
+    return JobRead.model_validate(job).model_copy(update={"is_favorited": favorite})
+
+
+def _favorite_read(favorite: Favorite) -> FavoriteRead:
+    response = FavoriteRead.model_validate(favorite)
+    return response.model_copy(
+        update={"job": response.job.model_copy(update={"is_favorited": True})}
+    )
 
 
 @router.get("/jobs", response_model=JobPage)
@@ -55,7 +68,7 @@ def read_jobs(
         page_size=page_size,
     )
     return JobPage(
-        items=[JobRead.model_validate(item) for item in items],
+        items=[_job_read(item) for item in items],
         page=page,
         page_size=page_size,
         total=total,
@@ -64,11 +77,20 @@ def read_jobs(
 
 
 @router.get("/jobs/{job_id}", response_model=JobRead)
-def read_job(job_id: UUID, db: DatabaseSession) -> JobRead:
+def read_job(
+    job_id: UUID,
+    db: DatabaseSession,
+    current_user: OptionalCurrentUser,
+) -> JobRead:
     job = get_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    return JobRead.model_validate(job)
+    favorite = (
+        is_favorited(db, user=current_user, job_id=job.id)
+        if current_user is not None
+        else False
+    )
+    return _job_read(job, favorite=favorite)
 
 
 @router.get("/tags", response_model=list[JobTagRead])
@@ -81,7 +103,7 @@ def create_favorite(job_id: UUID, db: DatabaseSession, current_user: CurrentUser
     job = get_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    return FavoriteRead.model_validate(add_favorite(db, user=current_user, job=job))
+    return _favorite_read(add_favorite(db, user=current_user, job=job))
 
 
 @router.delete("/jobs/{job_id}/favorite", status_code=204)
@@ -103,7 +125,7 @@ def read_favorites(
         db, user=current_user, page=page, page_size=page_size
     )
     return FavoritePage(
-        items=[FavoriteRead.model_validate(item) for item in items],
+        items=[_favorite_read(item) for item in items],
         page=page,
         page_size=page_size,
         total=total,
