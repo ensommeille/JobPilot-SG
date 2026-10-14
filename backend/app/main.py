@@ -3,10 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.applications.router import router as applications_router
 from app.assistant.router import router as assistant_router
+from app.auth.extension_router import router as extension_auth_router
 from app.auth.router import auth_router, users_router
+from app.browser_assistant import router as browser_assistant_router
 from app.core.config import get_settings
 from app.ingestion.router import router as ingestion_router
 from app.job_extraction.router import router as extraction_router
+from app.job_matching import router as matching_router
+from app.job_recommendations import router as recommendations_router
 from app.jobs.router import router as jobs_router
 from app.profiles.router import router as profiles_router
 
@@ -20,13 +24,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth_router)
+app.include_router(extension_auth_router)
 app.include_router(users_router)
 app.include_router(jobs_router)
+app.include_router(recommendations_router)
+app.include_router(matching_router)
 app.include_router(profiles_router)
 app.include_router(applications_router)
 app.include_router(assistant_router)
 app.include_router(ingestion_router)
 app.include_router(extraction_router)
+app.include_router(browser_assistant_router)
 
 
 @app.get("/health")

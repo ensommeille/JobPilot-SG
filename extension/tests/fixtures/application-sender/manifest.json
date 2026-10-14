@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "JobPilot isolated sender regression fixture",
+  "version": "1.0.0",
+  "background": {"service_worker": "background.js", "type": "module"},
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["http://127.0.0.1/*", "https://www.internsg.com/*"],
+  "externally_connectable": {"matches": ["http://127.0.0.1/*"]}
+}

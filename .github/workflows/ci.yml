@@ -84,6 +84,31 @@ jobs:
         if: hashFiles('frontend/package.json') != ''
         run: npm run build
 
+  extension-quality:
+    name: Extension safety / browser tests
+    runs-on: ubuntu-latest
+    env:
+      FRONTEND_BASE_URL: http://127.0.0.1:5197
+      PLAYWRIGHT_START_FRONTEND: "1"
+      VITE_API_BASE_URL: http://127.0.0.1:8001
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - run: npm ci
+      - name: Install frontend for isolated browser journeys
+        run: npm ci --prefix ../frontend
+      - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - run: npm audit --audit-level=high
+
   docker:
     name: Docker build (backend)
     runs-on: ubuntu-latest

@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from pathlib import PurePath
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -48,7 +49,53 @@ class ResumeRead(BaseModel):
     uploaded_at: datetime
 
 
-class ProfileUpdate(BaseModel):
+COUNTRY_CODES = frozenset(
+    "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ "
+    "CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR "
+    "GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP "
+    "KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ "
+    "NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ "
+    "TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".lower().split()
+)
+APPLICATION_FIELDS = {"resume_summary", "availability_period", "nationality", "study_country"}
+
+
+class ApplicationDetails(BaseModel):
+    resume_summary: str | None = Field(default=None, max_length=3000)
+    availability_period: str | None = Field(default=None, max_length=500)
+    nationality: str | None = Field(default=None, max_length=2)
+    study_country: str | None = Field(default=None, max_length=2)
+
+    @field_validator("resume_summary", "availability_period")
+    @classmethod
+    def clean_application_text(cls, value: str | None) -> str | None:
+        return value.strip() or None if value is not None else None
+
+    @field_validator("nationality", "study_country")
+    @classmethod
+    def country_code(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        code = value.lower()
+        if code not in COUNTRY_CODES:
+            raise ValueError("Use a supported two-letter country code")
+        return code
+
+
+class LocalProfileImport(ApplicationDetails):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    confirmed: Literal[True]
+    phone: str | None = Field(default=None, max_length=40)
+
+    @field_validator("confirmed", mode="before")
+    @classmethod
+    def explicit_confirmation(cls, value: object) -> object:
+        if value is not True:
+            raise ValueError("Explicit confirmation is required")
+        return value
+
+
+class ProfileUpdate(ApplicationDetails):
     full_name: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=40)
     contact_email: EmailStr | None = None
@@ -88,7 +135,7 @@ class ProfileUpdate(BaseModel):
         return normalized
 
 
-class ProfileRead(BaseModel):
+class ProfileRead(ApplicationDetails):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID

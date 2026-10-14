@@ -127,6 +127,28 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     audit_logs: Mapped[list[AuditLog]] = relationship(back_populates="actor")
 
 
+class RevokedAccessToken(Base):
+    __tablename__ = "revoked_access_tokens"
+    digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    expires_at: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class ExtensionGrant(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "extension_grants"
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    parent_digest: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    client_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    challenge: Mapped[str] = mapped_column(String(43), nullable=False)
+    code_digest: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    token_digest: Mapped[str | None] = mapped_column(String(64), unique=True)
+    code_expires_at: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[int] = mapped_column(Integer, nullable=False)
+    consumed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
 class UserProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "user_profiles"
     __table_args__ = (UniqueConstraint("user_id"),)
@@ -137,6 +159,10 @@ class UserProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     full_name: Mapped[str | None] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(40))
     contact_email: Mapped[str | None] = mapped_column(String(320))
+    resume_summary: Mapped[str | None] = mapped_column(Text)
+    availability_period: Mapped[str | None] = mapped_column(String(500))
+    nationality: Mapped[str | None] = mapped_column(String(2))
+    study_country: Mapped[str | None] = mapped_column(String(2))
     education: Mapped[str | None] = mapped_column(Text)
     experience: Mapped[str | None] = mapped_column(Text)
     skills: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
@@ -218,9 +244,7 @@ class JobPosting(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(30), default="active", nullable=False, index=True)
 
     source: Mapped[JobSource] = relationship(back_populates="jobs")
-    tags: Mapped[list[JobTag]] = relationship(
-        secondary=job_posting_tags, back_populates="jobs"
-    )
+    tags: Mapped[list[JobTag]] = relationship(secondary=job_posting_tags, back_populates="jobs")
     favorites: Mapped[list[Favorite]] = relationship(
         back_populates="job", cascade="all, delete-orphan"
     )
@@ -243,9 +267,7 @@ class JobTag(UUIDPrimaryKeyMixin, Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     category: Mapped[str] = mapped_column(String(80), default="general", nullable=False)
 
-    jobs: Mapped[list[JobPosting]] = relationship(
-        secondary=job_posting_tags, back_populates="tags"
-    )
+    jobs: Mapped[list[JobPosting]] = relationship(secondary=job_posting_tags, back_populates="tags")
 
 
 class Favorite(UUIDPrimaryKeyMixin, Base):
@@ -402,7 +424,9 @@ class JobExtractionRun(UUIDPrimaryKeyMixin, Base):
 
     __tablename__ = "job_extraction_runs"
     __table_args__ = (
-        CheckConstraint("status IN ('running', 'needs_review', 'failed')", name="extraction_status"),
+        CheckConstraint(
+            "status IN ('running', 'needs_review', 'failed')", name="extraction_status"
+        ),
         CheckConstraint(
             "(status = 'running' AND active_key IS NOT NULL AND finished_at IS NULL) OR "
             "(status <> 'running' AND active_key IS NULL AND finished_at IS NOT NULL)",

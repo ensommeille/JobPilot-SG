@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(min_length=32)
     jwt_algorithm: Literal["HS256"] = "HS256"
     jwt_access_token_minutes: int = Field(default=60, ge=5, le=1440)
+    extension_client_ids: list[str] = Field(default_factory=list)
+    extension_web_origins: list[str] = Field(
+        default_factory=lambda: ["http://127.0.0.1:5173", "http://localhost:5173"]
+    )
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
     )

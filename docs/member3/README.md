@@ -29,3 +29,7 @@ python -m app.job_extraction.cli --input tests/job_extraction/fixtures/jobs.json
 The example command is Mock fixture replay. It makes no live LLM call and does not establish model accuracy. Every successful extraction remains `needs_review`.
 
 See `HANDOFF_MEMBER4.md`, `PROVIDER_CONTRACT.md`, and `REVIEW_READINESS.md` in this directory.
+
+For the current platform-owned application preview and confirmed filling workflow,
+see [Platform application bridge v1](PLATFORM_APPLICATION_BRIDGE.md). It documents
+the extension protocol, update/permission steps and no-submission boundary.

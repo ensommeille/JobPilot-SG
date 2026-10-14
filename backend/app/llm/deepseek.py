@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import httpx
 
+from .contracts import StructuredGenerationRequest
 from .openai_compatible import OpenAICompatibleChatProvider
 
 
@@ -20,6 +23,7 @@ class DeepSeekProvider(OpenAICompatibleChatProvider):
         max_retries: int = 2,
         retry_backoff_seconds: float = 0.25,
         client: httpx.AsyncClient | None = None,
+        thinking: Literal["enabled", "disabled"] | None = None,
     ) -> None:
         super().__init__(
             name="deepseek",
@@ -31,3 +35,10 @@ class DeepSeekProvider(OpenAICompatibleChatProvider):
             retry_backoff_seconds=retry_backoff_seconds,
             client=client,
         )
+        self.thinking = thinking
+
+    def _build_payload(self, request: StructuredGenerationRequest) -> dict:
+        payload = super()._build_payload(request)
+        if self.thinking is not None:
+            payload["thinking"] = {"type": self.thinking}
+        return payload

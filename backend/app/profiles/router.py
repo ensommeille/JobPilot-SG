@@ -2,15 +2,22 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import CurrentUser
+from app.auth.dependencies import BrowserUser, CurrentUser
 from app.db.session import get_db
-from app.profiles.schemas import ProfileRead, ProfileUpdate, ResumeCreate, ResumeRead
+from app.profiles.schemas import (
+    LocalProfileImport,
+    ProfileRead,
+    ProfileUpdate,
+    ResumeCreate,
+    ResumeRead,
+)
 from app.profiles.service import (
     add_resume_metadata,
     get_profile,
+    import_local_profile,
     list_resume_metadata,
     update_profile,
 )
@@ -19,15 +26,24 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
+@router.post("/import-local")
+def import_local(
+    payload: LocalProfileImport, db: DatabaseSession, current_user: BrowserUser
+) -> dict:
+    return import_local_profile(db, user=current_user, payload=payload)
+
+
 @router.get("", response_model=ProfileRead)
-def read_profile(db: DatabaseSession, current_user: CurrentUser) -> ProfileRead:
+def read_profile(response: Response, db: DatabaseSession, current_user: CurrentUser) -> ProfileRead:
+    response.headers["Cache-Control"] = "no-store"
     return ProfileRead.model_validate(get_profile(db, user=current_user))
 
 
 @router.put("", response_model=ProfileRead)
 def replace_profile(
-    payload: ProfileUpdate, db: DatabaseSession, current_user: CurrentUser
+    payload: ProfileUpdate, response: Response, db: DatabaseSession, current_user: CurrentUser
 ) -> ProfileRead:
+    response.headers["Cache-Control"] = "no-store"
     return ProfileRead.model_validate(update_profile(db, user=current_user, payload=payload))
 
 
@@ -35,16 +51,9 @@ def replace_profile(
 def create_resume_metadata(
     payload: ResumeCreate, db: DatabaseSession, current_user: CurrentUser
 ) -> ResumeRead:
-    return ResumeRead.model_validate(
-        add_resume_metadata(db, user=current_user, payload=payload)
-    )
+    return ResumeRead.model_validate(add_resume_metadata(db, user=current_user, payload=payload))
 
 
 @router.get("/resumes", response_model=list[ResumeRead])
-def read_resume_metadata(
-    db: DatabaseSession, current_user: CurrentUser
-) -> list[ResumeRead]:
-    return [
-        ResumeRead.model_validate(item)
-        for item in list_resume_metadata(db, user=current_user)
-    ]
+def read_resume_metadata(db: DatabaseSession, current_user: CurrentUser) -> list[ResumeRead]:
+    return [ResumeRead.model_validate(item) for item in list_resume_metadata(db, user=current_user)]

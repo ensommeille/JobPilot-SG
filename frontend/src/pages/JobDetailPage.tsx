@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
+import JobMatchAnalysis from '../components/JobMatchAnalysis'
+import JobApplicationActions from '../components/JobApplicationActions'
 import { fetchJobById, addFavorite, removeFavorite, formatSalary } from '../services/jobs'
 import { getToken, watchSession } from '../services/auth'
 
 interface Job {
   id: string
+  status: string
   title: string
   company: string
   city: string | null
@@ -123,7 +126,7 @@ const SessionJobDetail = ({ id, token }: { id: string; token: string | null }) =
   )
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+    <div className="job-detail-page" style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
       <Navbar backTo="/jobs" backLabel="← Back to Jobs" />
       <div style={{ maxWidth: '800px', margin: '32px auto', padding: '0 24px' }}>
         <div style={{ backgroundColor: 'white', borderRadius: '8px',
@@ -167,6 +170,7 @@ const SessionJobDetail = ({ id, token }: { id: string; token: string | null }) =
           </div>
 
           {/* Description */}
+          <JobMatchAnalysis key={`match-${job.id}`} jobId={job.id} />
           {job.description && (
             <div style={{ marginBottom: '24px' }}>
               <h3 style={{ marginBottom: '8px' }}>Job Description</h3>
@@ -192,35 +196,7 @@ const SessionJobDetail = ({ id, token }: { id: string; token: string | null }) =
           )}
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: '12px' }}>
-            {job.source_url && job.source_url !== job.apply_url && (
-              <a href={job.source_url} target="_blank" rel="noopener noreferrer"
-                style={{ padding: '10px 24px', backgroundColor: 'white',
-                  border: '1px solid #1a73e8', color: '#1a73e8',
-                  borderRadius: '4px', textDecoration: 'none', fontSize: '14px' }}>
-                View Original Posting ↗
-              </a>
-            )}
-            {job.assistant_form_available ? (
-              <button onClick={() => navigate(`/jobs/${job.id}/apply`)}
-                style={{ padding: '10px 24px', backgroundColor: '#1a73e8',
-                  color: 'white', border: 'none', borderRadius: '4px',
-                  cursor: 'pointer', fontSize: '14px' }}>
-                Apply with AI Assistant
-              </button>
-            ) : job.apply_url ? (
-              <a href={job.apply_url} target="_blank" rel="noopener noreferrer"
-                style={{ padding: '10px 24px', backgroundColor: '#1a73e8',
-                  color: 'white', borderRadius: '4px', textDecoration: 'none',
-                  fontSize: '14px' }}>
-                Apply on Original Site ↗
-              </a>
-            ) : (
-              <span style={{ alignSelf: 'center', color: '#666', fontSize: '13px' }}>
-                No application link is available for this job.
-              </span>
-            )}
-          </div>
+          <JobApplicationActions key={`actions-${job.id}`} job={job} />
         </div>
       </div>
     </div>

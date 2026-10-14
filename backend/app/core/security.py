@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import jwt
 from jwt import InvalidTokenError
@@ -35,6 +35,7 @@ def create_access_token(*, user_id: UUID, role: str, now: datetime | None = None
         "iat": issued_at,
         "exp": expires_at,
         "type": "access",
+        "jti": str(uuid4()),
     }
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 

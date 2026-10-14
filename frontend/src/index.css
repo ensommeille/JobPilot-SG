@@ -166,6 +166,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .user-chip { display: flex; align-items: center; gap: var(--s-2); padding: 4px 10px 4px 4px; border-radius: 999px; cursor: pointer; border: 0; background: transparent; font-size: 14px; font-weight: 500; }
 .user-chip:hover { background: var(--bg); }
+.user-name { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------------- 登录 / 注册 ---------------- */
 .auth-page { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; }
@@ -276,4 +277,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .navbar-inner { padding: 0 var(--s-4); }
   .searchbar-place { flex-basis: 100%; }
   .container { padding: var(--s-5) var(--s-4) var(--s-7); }
+}
+.external-application { gap: var(--s-4); }
+.external-actions { display: flex; gap: var(--s-3); flex-wrap: wrap; }
+.external-actions .btn { text-decoration: none; height: auto; min-height: 44px; white-space: normal; padding: 10px 16px; }
+.internsg-frame { display: block; width: 100%; height: 80vh; min-height: 600px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
+.external-warning { background: var(--warning-soft); color: #714700; padding: var(--s-4); border-radius: var(--radius-sm); }
+@media (max-width: 700px) {
+  .navbar-inner { flex-wrap: wrap; height: auto; padding-block: 12px; gap: 8px; }
+  .navbar-inner > .row, .nav-links { flex-wrap: wrap; }
 }

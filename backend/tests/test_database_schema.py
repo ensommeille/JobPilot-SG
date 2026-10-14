@@ -12,6 +12,8 @@ def test_all_planned_core_tables_are_created() -> None:
         "audit_logs",
         "crawl_runs",
         "favorites",
+        "extension_grants",
+        "revoked_access_tokens",
         "form_mapping_records",
         "job_posting_tags",
         "job_extraction_runs",
