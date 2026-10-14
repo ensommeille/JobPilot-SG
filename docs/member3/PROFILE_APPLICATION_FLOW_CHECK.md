@@ -164,3 +164,19 @@ and starts Vite with a fixture API URL, rather than silently skipping these suit
 No API keys or production backend are needed. Extension npm audit found zero
 vulnerabilities. This checkpoint is being submitted on a feature branch for review,
 not merged directly into main.
+
+## Clean deployment follow-up
+
+The subsequent clean-deployment pass verified a new PostgreSQL volume and actual
+HTTP routes in isolated Docker services, including persistent profile updates,
+recommendation states, PKCE connection, draft reuse and logout revocation. See
+[Clean deployment acceptance](CLEAN_DEPLOYMENT_ACCEPTANCE.md) for the exact fixes,
+test counts, deployment origins and reproducible commands. No model was called and
+no application was submitted to an employer.
+
+Installed Chrome acceptance is still incomplete. Computer Use stopped the browser
+part of this pass because it could not reliably determine the current browser URL.
+No later browser input was issued in that turn. The container/API checks do not
+prove extension loading, permission prompts, popup operation or live InternSG
+widget compatibility. Existing local user data and development services were not
+replaced by the disposable deployment.

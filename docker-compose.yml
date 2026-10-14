@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: jobpilot
       POSTGRES_DB: jobpilot
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${JOBPILOT_DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,12 +18,12 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${JOBPILOT_REDIS_PORT:-6379}:6379"
 
   backend:
     build: ./backend
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${JOBPILOT_API_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -31,16 +31,21 @@ services:
         condition: service_started
     environment:
       DATABASE_URL: postgresql+psycopg://jobpilot:jobpilot@db:5432/jobpilot
-      JWT_SECRET_KEY: jobpilot-dev-only-secret-change-me-in-production-123456
-      JOBPILOT_DEMO_ADMIN_PASSWORD: Demo@1234
-      CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-jobpilot-dev-only-secret-change-me-in-production-123456}
+      JOBPILOT_DEMO_ADMIN_PASSWORD: ${JOBPILOT_DEMO_ADMIN_PASSWORD:-Demo@1234}
+      CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:5173","http://127.0.0.1:5173"]}'
+      EXTENSION_CLIENT_IDS: '${EXTENSION_CLIENT_IDS:-[]}'
+      EXTENSION_WEB_ORIGINS: '${EXTENSION_WEB_ORIGINS:-["http://localhost:5173","http://127.0.0.1:5173"]}'
       # LLM_* intentionally left unset — the AI form runs deterministic mapping only.
       # To enable semantic drafting, add LLM_PROVIDER / LLM_API_KEY / LLM_MODEL / LLM_BASE_URL.
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
     ports:
-      - "5173:80"
+      - "127.0.0.1:${JOBPILOT_WEB_PORT:-5173}:80"
     depends_on:
       - backend
 

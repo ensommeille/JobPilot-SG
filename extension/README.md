@@ -1,6 +1,6 @@
 # JobPilot SG — Review & Fill (InternSG pilot)
 
-## Version 0.6.0: platform login and reusable profile
+## Version 0.6.1: platform login and reusable profile
 
 The platform profile is now the source for name, email, phone, user-written
 introduction, availability, nationality and study country. Each **Read page &
@@ -19,7 +19,7 @@ filled from an old device copy. There is no AI introduction generation.
    the account in the backend database.
 3. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**
    and select this directory. Existing users should reload the extension
-   (version 0.6.0), then reopen its popup. Keep the same directory and extension
+   (version 0.6.1), then reopen its popup. Keep the same directory and extension
    ID to preserve device copies. Register its 32-letter ID in the backend
    `EXTENSION_CLIENT_IDS=["your-installed-extension-id"]` environment setting.
    The default empty list intentionally rejects connections.
@@ -30,6 +30,10 @@ filled from an old device copy. There is no AI introduction generation.
    Local demo: `http://127.0.0.1:5173` → API `http://127.0.0.1:8001`;
    normal development: `http://localhost:5173` → API `http://localhost:8000`.
    These exact pairs are allowlisted. Other deployments need coordinated configuration.
+   Default Docker Compose uses the **localhost** pair; opening its frontend at
+   `127.0.0.1:5173` does not change the extension's fixed API port from 8001 to 8000.
+   Custom Compose ports are suitable for isolated API/deployment checks, but do not
+   automatically become supported extension deployments.
 5. Open a supported InternSG original application page, or use the local JobPilot
    embedded application route. Choose **Read page & load profile**, review each
    answer, then **Fill confirmed answers**. Countries require a separate explicit
@@ -109,15 +113,20 @@ npm run check
 npm test
 ```
 
-For all optional checks, set `FRONTEND_BASE_URL` to a running local Vite server
-and `WIDGET_ASSET_DIR` to the directory containing `jquery.js` (3.7.1),
-`country.js` (CountrySelect 2.1.0), and `froala.js` (4.0.7).
-45 browser tests passed with both enabled. Without them, nine tests skip.
+For frontend journeys, set `FRONTEND_BASE_URL` to a running local Vite server.
+CI sets it to `http://127.0.0.1:5197` and sets `PLAYWRIGHT_START_FRONTEND=1`
+to start the test server automatically after installing frontend dependencies.
+Set `WIDGET_ASSET_DIR` to the directory containing `jquery.js` (3.7.1),
+`country.js` (CountrySelect 2.1.0), and `froala.js` (4.0.7) for the three optional
+downloaded-widget-library cases. The PR publication checkpoint passed 99 cases
+with these three explicitly skipped; the earlier local run covered those three.
 Tests use intercepted pages and mocked Chrome APIs; they do not replace installed
 Chrome permission/child-frame acceptance. The real embedded form/editor/CAPTCHA
 previously loaded in read-only verification; no real submission is verified.
-Frontend build/lint and extension syntax checks passed. Existing frontend
-dependency audit warnings are separate and unchanged.
+See [the flow check](../docs/member3/PROFILE_APPLICATION_FLOW_CHECK.md) for detailed
+test evidence and remaining acceptance boundaries. The clean-deployment pass
+updates two vulnerable frontend build dependencies to compatible patched versions;
+it does not expand the extension's origin permissions or submission authority.
 
 ## Team contract
 

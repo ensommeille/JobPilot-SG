@@ -36,6 +36,16 @@ DevSecOps: GitHub Actions · pytest · Semgrep · pip-audit · Docker Compose
 
 ## Quick start
 
+For a complete local Docker deployment (frontend, API, PostgreSQL and Redis),
+copy the repository-root `.env.example` to `.env`, replace the two local secrets,
+then run `docker compose up -d --build`. Open `http://localhost:5173`.
+The root `.env` configures Compose; `backend/.env` configures a directly launched
+Python backend. Do not mix the two. This Compose file binds published ports to
+loopback and is not an internet-facing production configuration.
+
+See [clean deployment acceptance](docs/member3/CLEAN_DEPLOYMENT_ACCEPTANCE.md)
+for isolated-port testing, PostgreSQL verification and Chrome extension pairing.
+
 ```bash
 # 1. Infrastructure (PostgreSQL + Redis)
 docker compose up -d db redis
