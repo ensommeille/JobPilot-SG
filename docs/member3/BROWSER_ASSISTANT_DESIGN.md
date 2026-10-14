@@ -2,6 +2,32 @@
 
 Mode: Operate. User-approved flow on 2026-10-13. Inherit frontend/src/index.css.
 
+## Version 0.8 interaction refinement — 2026-10-14
+
+The user requested fewer popup buttons and no repeated per-field confirmation.
+This amendment supersedes the historical per-answer approval flow below without
+changing the existing visual identity or backend contracts.
+
+Normal popup use has one primary action: **Connect through JobPilot** when
+disconnected, or **Open JobPilot** when connected. Host-access authorization is
+shown only when missing. Connection settings, account/device management and
+original-site fallback tools are collapsed. The legacy final-send flow remains
+separately authorized inside the nested advanced section; it is not a normal
+preparation step and is never called by filling.
+
+On the platform, **Fill application form** replaces the separate inspect button
+and per-field checkboxes. That click captures the displayed answers, inspects the
+current form and fills eligible fields. Adjacent copy discloses nationality and
+study-country replacement. Existing text is preserved, missing or unsupported
+answers receive reasons, and editing is disabled during the operation. Original
+page loading remains explicit. An interrupted attempt is never automatically
+retried or reported as a successful submission.
+
+This reduces competing actions without deleting recovery, device-data migration
+or permission management. No new colors, fonts, image assets or dependencies are
+introduced. Verification evidence for this version is recorded in
+[the bridge contract](PLATFORM_APPLICATION_BRIDGE.md).
+
 Version 0.5 (2026-10-14): existing ProfilePage layout is preserved with one reusable
 application-details section. Optional countries have no inferred defaults. Failed
 initial loading blocks saving; failed writes retain user input. Desktop and 390px

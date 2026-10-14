@@ -3,9 +3,10 @@ import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
-async function setup(page, {expired = false, unsupported = false, skipped = false, widgetsReady = false} = {}) {
-  await page.addInitScript(({expired, unsupported, skipped, widgetsReady}) => {
+async function setup(page, {expired = false, unsupported = false, skipped = false, widgetsReady = false, embeddedAccess = true} = {}) {
+  await page.addInitScript(({expired, unsupported, skipped, widgetsReady, embeddedAccess}) => {
     window.operations = []; window.drafts = []; window.stored = {};
+    window.embeddedAccess = embeddedAccess; window.permissionAllowed = true; window.permissionRequests = [];
     window.applicationUrl = 'https://www.internsg.com/job-apply/123';
     window.connect = email => {
       window.stored = {jobpilotSession: {api: 'http://localhost:8000', site: 'http://localhost:5173', token: 'jpx_fixture', userId: email, email}};
@@ -13,7 +14,14 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
     };
     window.chrome = {
       runtime: {id: 'a'.repeat(32), sendMessage: async () => ({ok: true})},
-      permissions: {request: async () => true},
+      permissions: {contains: async () => window.embeddedAccess,
+        onAdded: {addListener: listener => { window.permissionsAdded = listener; }},
+        onRemoved: {addListener: listener => { window.permissionsRemoved = listener; }},
+        request: async request => {
+          window.permissionRequests.push(request);
+          if (request.origins.some(origin => origin.includes('internsg.com')) && window.permissionAllowed) window.embeddedAccess = true;
+          return window.permissionAllowed;
+        }},
       storage: {onChanged: {addListener: listener => { window.storageListener = listener; }}, local: {setAccessLevel: async () => {}, get: async () => window.localSaved || {}, set: async value => { window.localSaved = {...window.localSaved, ...value}; }, remove: async key => { delete window.localSaved?.[key]; }}, session: {setAccessLevel: async () => {}, get: async () => window.stored,
         set: async value => { window.stored = value; }, remove: async () => { window.stored = {}; }}},
       tabs: {query: async () => [{id: 7}]},
@@ -32,7 +40,7 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
           return [{result: {state: 'unverified', messages: []}}];
         }
         if (request.world === 'MAIN') {
-          if (request.args[0] === 'fill') { window.widgetFill = request.args; return [{result: {filled: request.args[2].map(x => x.id), skipped: [], reasons: {}}}]; }
+          if (request.args[0] === 'fill') { window.widgetFill = request.args; return [{result: {filled: request.args[2].map(x => x.id), skipped: [], reasons: {}, submitted: false}}]; }
           return [{documentId: 'document-1', result: {richReady: widgetsReady, countryState: widgetsReady ? {nationality: 'sg', campus: 'sg', same: true, nationalityText: 'Singapore', campusText: 'Singapore'} : null, countries: [{code: 'cn', name: 'China'}, {code: 'sg', name: 'Singapore'}], countryReason: 'Country widgets unavailable.'}}];
         }
         window.operations.push(request.args);
@@ -41,7 +49,8 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
           ? {url: window.applicationUrl, title: 'Fictional Intern', fields: [
             {id: 'applicant_name', label: 'Full name', maxLength: 200, occupied: false},
             {id: 'applicant_summary', label: 'Resume summary', maxLength: 3000, occupied: false}]}
-          : {filled: skipped ? [] : request.args[2].map(x => x.id), skipped: skipped ? request.args[2].map(x => x.id) : [], submitted: false}}];
+          : {filled: request.args[2].map(x => x.id).filter(id => !skipped && !window.skippedIds?.includes(id)),
+            skipped: request.args[2].map(x => x.id).filter(id => skipped || window.skippedIds?.includes(id)), submitted: false}}];
       }},
     };
     window.fetch = async (url, options) => {
@@ -65,7 +74,7 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
       const profile = window.platformValues || {};
       return new Response(JSON.stringify({profile_source: 'jobpilot', countries: {nationality: profile.nationality, campus: profile.study_country}, values: {applicant_name: 'Fictional Applicant', applicant_summary: profile.resume_summary || '', applicant_period: profile.availability_period || ''}, summary_status: 'manual_only'}));
     };
-  }, {expired, unsupported, skipped, widgetsReady});
+  }, {expired, unsupported, skipped, widgetsReady, embeddedAccess});
   await page.route('https://popup.test/**', async route => {
     const name = new URL(route.request().url()).pathname.slice(1);
     if (!['popup.html', 'popup.css', 'popup.js', 'page.js', 'widgets.js', 'submission.js', 'frames.js', 'connection.js'].includes(name)) return route.abort();
@@ -73,19 +82,23 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
   });
   await page.goto('https://popup.test/popup.html');
 }
-async function login(page, email = 'fictional@example.test') {
+async function login(page, email = 'fictional@example.test', {expand = true} = {}) {
   await page.getByRole('button', {name: 'Connect through JobPilot', exact: true}).click();
   await page.evaluate(email => window.connect(email), email);
-  await expect(page.getByRole('button', {name: 'Read page & load profile'})).toBeVisible();
+  await expect(page.getByRole('link', {name: 'Open JobPilot'})).toBeVisible();
+  if (expand) {
+    await page.locator('#original-tools > summary').click();
+    await page.locator('#advanced-submission > summary').click();
+    await page.locator('#settings > summary').click();
+  }
 }
 
 test('sign in, inspect, approve and fill without automatic model call', async ({page}) => {
   await setup(page); await login(page);
   await expect(page.locator('#password, #email')).toHaveCount(0);
   await page.getByRole('button', {name: 'Read page & load profile'}).click();
-  const fill = page.getByRole('button', {name: 'Fill confirmed answers'});
-  await expect(fill).toBeDisabled();
-  await page.getByLabel('I reviewed this answer.', {exact: false}).first().check();
+  const fill = page.getByRole('button', {name: 'Fill application form', exact: true});
+  await expect(fill).toBeEnabled();
   await fill.click();
   await expect(page.locator('#status')).toContainText('Nothing was submitted');
   const calls = await page.evaluate(() => window.drafts);
@@ -93,12 +106,14 @@ test('sign in, inspect, approve and fill without automatic model call', async ({
   const operations = await page.evaluate(() => window.operations);
   expect(operations[1][2]).toEqual([{id: 'applicant_name', value: 'Fictional Applicant', confirmed: true}]);
 });
-test('edits invalidate confirmation and generation controls are absent', async ({page}) => {
+test('the fill click approves the current edited answer without individual checkboxes or generation controls', async ({page}) => {
   await setup(page); await login(page);
   await page.getByRole('button', {name: 'Read page & load profile'}).click();
-  await page.getByLabel('I reviewed this answer.', {exact: false}).first().check();
   await page.getByLabel('Full name', {exact: true}).fill('Edited Applicant');
-  await expect(page.getByRole('button', {name: 'Fill confirmed answers'})).toBeDisabled();
+  await expect(page.locator('#fields input[type=checkbox]')).toHaveCount(0);
+  await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
+  await expect.poll(() => page.evaluate(() => window.operations.filter(x => x[0] === 'fill').length)).toBe(1);
+  expect(await page.evaluate(() => window.operations.find(x => x[0] === 'fill')[2])).toEqual([{id: 'applicant_name', value: 'Edited Applicant', confirmed: true}]);
   await expect(page.locator('#generate, #ai-consent')).toHaveCount(0);
 });
 test('expired login clears session and form', async ({page}) => {
@@ -126,9 +141,9 @@ test('logout clears session and private draft', async ({page}) => {
 test('revocation between review and fill prevents page writes', async ({page}) => {
   await setup(page); await login(page);
   await page.getByRole('button', {name: 'Read page & load profile'}).click();
-  await page.getByLabel('I reviewed this answer.', {exact: false}).first().check();
+  await expect(page.locator('#fill')).toBeEnabled();
   await page.evaluate(() => { window.expired = true; });
-  await page.getByRole('button', {name: 'Fill confirmed answers'}).click();
+  await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
   await expect(page.locator('#status')).toContainText('expired or revoked');
   expect(await page.evaluate(() => window.operations.some(x => x[0] === 'fill'))).toBe(false);
 });
@@ -142,41 +157,47 @@ test('offline validation blocks sending an already reviewed application', async 
   await expect(page.locator('#status')).toContainText('Network unavailable');
   expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
 });
-test('partial fill preserves unconfirmed draft and marks successful field', async ({page}) => {
+test('partial fill preserves the skipped draft and marks successful fields without automatic retry', async ({page}) => {
   await setup(page); await login(page);
   await page.getByRole('button', {name: 'Read page & load profile'}).click();
-  await page.getByLabel('Resume summary', {exact: true}).fill('My unconfirmed draft');
-  await page.getByLabel('I reviewed this answer.', {exact: false}).first().check();
-  await page.getByRole('button', {name: 'Fill confirmed answers'}).click();
+  await page.getByLabel('Resume summary', {exact: true}).fill('My skipped draft');
+  await page.evaluate(() => { window.skippedIds = ['applicant_summary']; });
+  await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
+  await expect(page.locator('#status')).toContainText('Filled 1. Skipped Resume summary');
   await expect(page.getByLabel('Full name', {exact: true})).toBeDisabled();
-  await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('My unconfirmed draft');
-  await expect(page.getByRole('button', {name: 'Fill confirmed answers'})).toBeDisabled();
-  await page.getByLabel('I reviewed this answer.', {exact: false}).check();
-  await expect(page.getByRole('button', {name: 'Fill confirmed answers'})).toBeEnabled();
+  await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('My skipped draft');
+  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toBeDisabled();
+  expect(await page.evaluate(() => window.operations.filter(x => x[0] === 'fill').length)).toBe(1);
 });
 test('skipped fields preserve drafts and require review again', async ({page}) => {
   await setup(page, {skipped: true}); await login(page);
   await page.getByRole('button', {name: 'Read page & load profile'}).click();
-  await page.getByLabel('I reviewed this answer.', {exact: false}).first().check();
-  await page.getByRole('button', {name: 'Fill confirmed answers'}).click();
+  await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
   await expect(page.locator('#status')).toContainText('Skipped Full name');
   await expect(page.getByLabel('Full name', {exact: true})).toHaveValue('Fictional Applicant');
-  await expect(page.getByLabel('I reviewed this answer.', {exact: false}).first()).not.toBeChecked();
+  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toBeDisabled();
 });
 test('manual summary editing and filling remain available', async ({page}) => {
   await setup(page); await login(page);
   await page.getByRole('button', {name: 'Read page & load profile'}).click();
   await page.getByLabel('Resume summary', {exact: true}).fill('My reviewed manual summary.');
-  await page.getByLabel('I reviewed this answer.', {exact: false}).last().check();
-  await expect(page.getByRole('button', {name: 'Fill confirmed answers'})).toBeEnabled();
+  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toBeEnabled();
 });
-test('capture login and review states at the shipped popup width', async ({page}) => {
-  await setup(page);
-  await page.screenshot({path: '../output/browser-assistant-login.png', fullPage: true});
-  await login(page);
+test('capture disconnected, ready, permission and fallback states at the shipped popup width', async ({page}) => {
+  await page.setViewportSize({width: 420, height: 700});
+  await setup(page, {widgetsReady: true});
+  await page.screenshot({path: '../output/popup-disconnected.png', fullPage: true});
+  await login(page, undefined, {expand: false});
+  await page.screenshot({path: '../output/popup-ready.png', fullPage: true});
+  await page.evaluate(() => { window.embeddedAccess = false; window.permissionsRemoved({origins: ['https://www.internsg.com/*']}); });
+  await expect(page.locator('#enable-embedded')).toBeVisible();
+  await page.screenshot({path: '../output/popup-permission.png', fullPage: true});
+  await page.locator('#enable-embedded').click();
+  await expect(page.locator('#enable-embedded')).toBeHidden();
+  await page.locator('#original-tools > summary').click();
   await page.getByRole('button', {name: 'Read page & load profile'}).click();
   await expect(page.getByLabel('Full name', {exact: true})).toHaveValue('Fictional Applicant');
-  await page.screenshot({path: '../output/browser-assistant-review.png', fullPage: true});
+  await page.screenshot({path: '../output/popup-fallback.png', fullPage: true});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
@@ -196,6 +217,7 @@ test('supplementary details are isolated by API and account and can be deleted',
   await page.getByRole('button', {name: 'Disconnect'}).click();
   await login(page);
   await expect(page.getByLabel('Reusable summary (plain text)')).toHaveValue('My local summary');
+  await page.locator('#local-profile summary').click();
   await page.getByRole('button', {name: 'Read page & load profile'}).click();
   await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('');
   await page.getByLabel('I confirm importing', {exact: false}).check();
@@ -215,7 +237,7 @@ test('platform values refresh across applications and cleared values never fall 
   await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('Platform introduction');
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('cn');
   await expect(page.getByLabel('Country of study / graduation')).toHaveValue('sg');
-  await expect(page.getByRole('button', {name: 'Fill confirmed answers'})).toBeDisabled();
+  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toBeEnabled();
   await page.locator('#local-profile summary').click();
   await page.getByLabel('Reusable summary (plain text)').fill('Old device introduction');
   await page.getByRole('button', {name: 'Save on this device'}).click();
@@ -228,16 +250,15 @@ test('platform values refresh across applications and cleared values never fall 
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('');
 });
 
-test('country defaults are not assumed and explicit replacement is required', async ({page}) => {
+test('country defaults are not assumed and the fill click explicitly approves both selected countries', async ({page}) => {
   await setup(page, {widgetsReady: true}); await login(page);
   await page.getByRole('button', {name: 'Read page & load profile'}).click();
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('');
   await page.getByLabel('Nationality', {exact: true}).selectOption('cn');
   await page.getByLabel('Country of study / graduation').selectOption('sg');
-  await expect(page.getByRole('button', {name: 'Fill confirmed answers'})).toBeDisabled();
-  await page.getByLabel('Replace the website country selections', {exact: false}).check();
-  await page.screenshot({path: '../output/browser-assistant-countries.png', fullPage: true});
-  await page.getByRole('button', {name: 'Fill confirmed answers'}).click();
+  await expect(page.locator('#fields')).toContainText('will replace both website country selections');
+  await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
+  await expect(page.locator('#status')).toContainText('Filled 2.');
   await expect(page.getByLabel('Nationality', {exact: true})).toBeDisabled();
   const operation = await page.evaluate(() => window.widgetFill);
   expect(operation[2][0].expectedState.nationality).toBe('sg');
@@ -252,7 +273,6 @@ test('submission requires separate confirmation and blocks a second attempt', as
   const send = page.getByRole('button', {name: 'Confirm & send this application'});
   await expect(send).toBeDisabled();
   await page.getByLabel('I reviewed this recipient', {exact: false}).check();
-  await page.screenshot({path: '../output/browser-assistant-submit-review.png', fullPage: true});
   await send.click();
   await expect(page.locator('#submission-status')).toContainText('delivery is unverified');
   expect(await page.evaluate(() => window.submitCalls)).toBe(1);
@@ -295,7 +315,7 @@ test('a delayed draft body cannot expose the previous account after reconnecting
   await page.evaluate(() => window.connect('account-b@example.test'));
   await expect(page.locator('#account')).toContainText('account-b@example.test');
   await page.evaluate(() => window.releaseOldDraft());
-  await expect(page.getByRole('button', {name: 'Read page & load profile'})).toBeEnabled();
+  await expect(page.locator('#inspect')).toBeEnabled();
   await expect(page.locator('#fields')).toBeEmpty();
   await expect(page.locator('#status')).not.toContainText('Loaded your JobPilot profile');
   await expect(page.locator('#account')).toContainText('account-b@example.test');
@@ -306,7 +326,6 @@ test('account switch stops later widget writes after a normal fill was already d
   await page.evaluate(() => { window.platformValues = {resume_summary: 'Account A introduction'}; });
   await page.getByRole('button', {name: 'Read page & load profile'}).click();
   await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('Account A introduction');
-  for (const checkbox of await page.getByLabel('I reviewed this answer.', {exact: false}).all()) await checkbox.check();
   await page.evaluate(() => {
     const execute = window.chrome.scripting.executeScript;
     window.chrome.scripting.executeScript = async request => {
@@ -317,12 +336,12 @@ test('account switch stops later widget writes after a normal fill was already d
       return result;
     };
   });
-  await page.getByRole('button', {name: 'Fill confirmed answers'}).click();
+  await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
   await expect.poll(() => page.evaluate(() => typeof window.releaseNormalFill)).toBe('function');
   await page.evaluate(() => window.connect('account-b@example.test'));
   await expect(page.locator('#account')).toContainText('account-b@example.test');
   await page.evaluate(() => window.releaseNormalFill());
-  await expect(page.getByRole('button', {name: 'Read page & load profile'})).toBeEnabled();
+  await expect(page.locator('#inspect')).toBeEnabled();
   expect(await page.evaluate(() => window.operations.filter(x => x[0] === 'fill'))).toHaveLength(1);
   expect(await page.evaluate(() => window.widgetFill)).toBeUndefined();
   await expect(page.locator('#fields')).toBeEmpty();
@@ -395,7 +414,7 @@ test('profile updates and explicit clearing are reloaded for a different job wit
   await expect(page.locator('#target')).toContainText('/456');
   await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('Updated introduction');
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('sg');
-  await expect(page.getByRole('button', {name: 'Fill confirmed answers'})).toBeDisabled();
+  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toBeEnabled();
   await page.evaluate(() => {
     window.applicationUrl = 'https://www.internsg.com/job-apply/789';
     window.platformValues = {resume_summary: '', nationality: null, study_country: null};
@@ -406,5 +425,161 @@ test('profile updates and explicit clearing are reloaded for a different job wit
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('');
   const drafts = await page.evaluate(() => window.drafts.filter(x => x.url.endsWith('/browser-assistant/draft')));
   expect(drafts.map(x => x.payload.page_url)).toEqual(['123', '456', '789'].map(id => `https://www.internsg.com/job-apply/${id}`));
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+});
+
+test('default popup exposes only connection or platform navigation and never reads or fills a form', async ({page}) => {
+  await setup(page);
+  await expect(page.locator('button:visible')).toHaveCount(1);
+  await expect(page.locator('#platform')).toBeHidden();
+  await expect(page.locator('#extension-id')).toBeHidden();
+  await login(page, undefined, {expand: false});
+  await expect(page.locator('button:visible')).toHaveCount(0);
+  await expect(page.locator('a.primary-action:visible')).toHaveCount(1);
+  await expect(page.locator('#open-jobpilot')).toHaveAttribute('href', 'http://localhost:5173/jobs');
+  await expect(page.locator('#original-tools')).not.toHaveAttribute('open');
+  await expect(page.locator('#settings')).not.toHaveAttribute('open');
+  await expect(page.locator('#embedded-status')).toContainText('Ready for InternSG');
+  expect(await page.evaluate(() => window.operations)).toEqual([]);
+  expect(await page.evaluate(() => window.drafts)).toEqual([]);
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+});
+
+test('missing permission can be denied, granted and revoked without automatic page actions', async ({page}) => {
+  await setup(page, {embeddedAccess: false});
+  await login(page, undefined, {expand: false});
+  await expect(page.locator('button:visible')).toHaveCount(1);
+  const enable = page.getByRole('button', {name: 'Enable embedded InternSG access'});
+  await page.evaluate(() => { window.permissionAllowed = false; });
+  await enable.click();
+  await expect(page.locator('#status')).toContainText('not granted');
+  await expect(enable).toBeVisible();
+  await page.evaluate(() => { window.permissionAllowed = true; });
+  await enable.click();
+  await expect(enable).toBeHidden();
+  await expect(page.locator('#embedded-status')).toContainText('Ready for InternSG');
+  expect(await page.evaluate(() => window.permissionRequests.at(-1))).toEqual({origins: [
+    'https://www.internsg.com/*', 'https://internsg.com/*', 'http://localhost:5173/*',
+  ]});
+  await page.evaluate(() => { window.embeddedAccess = false; window.permissionsRemoved({origins: ['https://www.internsg.com/*']}); });
+  await expect(enable).toBeVisible();
+  await expect(page.locator('#embedded-status')).toContainText('access is needed');
+  expect(await page.evaluate(() => window.operations)).toEqual([]);
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+});
+
+test('permission revocation invalidates an open fallback review instead of retaining a fill action', async ({page}) => {
+  await setup(page); await login(page);
+  await page.locator('#inspect').click();
+  await expect(page.locator('#fill')).toBeEnabled();
+  await page.evaluate(() => { window.embeddedAccess = false; window.permissionsRemoved({origins: ['https://www.internsg.com/*']}); });
+  await expect(page.locator('#fields')).toBeEmpty();
+  await expect(page.locator('#fill')).toBeDisabled();
+  expect(await page.evaluate(() => window.operations.filter(item => item[0] === 'fill'))).toEqual([]);
+});
+
+test('one click captures text and countries before asynchronous validation and never approves later edits', async ({page}) => {
+  await setup(page, {widgetsReady: true}); await login(page);
+  await page.evaluate(() => { window.platformValues = {resume_summary: 'Reviewed summary', nationality: 'cn', study_country: 'sg'}; });
+  await page.locator('#inspect').click();
+  await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('cn');
+  await page.evaluate(() => {
+    const fetcher = window.fetch;
+    window.fetch = async (url, options) => {
+      if (url.endsWith('/auth/extension/session')) await new Promise(resolve => { window.releaseFillValidation = resolve; });
+      return fetcher(url, options);
+    };
+  });
+  await page.locator('#fill').click();
+  await expect.poll(() => page.evaluate(() => typeof window.releaseFillValidation)).toBe('function');
+  await expect(page.getByLabel('Full name', {exact: true})).toBeDisabled();
+  await expect(page.getByLabel('Nationality', {exact: true})).toBeDisabled();
+  await page.evaluate(() => {
+    document.getElementById('edit-applicant_name').value = 'Unreviewed later edit';
+    const nationality = document.getElementById('country-nationality');
+    nationality.value = 'sg'; nationality.dispatchEvent(new Event('change'));
+    window.releaseFillValidation();
+  });
+  await expect(page.locator('#status')).toContainText('Nothing was submitted');
+  expect(await page.evaluate(() => window.operations.find(item => item[0] === 'fill')[2])).toEqual([
+    {id: 'applicant_name', value: 'Fictional Applicant', confirmed: true},
+  ]);
+  const countries = await page.evaluate(() => window.widgetFill[2].find(item => item.id === 'applicant_countries'));
+  expect(JSON.parse(countries.value)).toEqual({nationality: 'cn', campus: 'sg'});
+  expect(countries.expectedState.nationality).toBe('sg');
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+});
+
+test('missing country selections stay skipped and original occupied fields have no replacement editor', async ({page}) => {
+  await setup(page, {widgetsReady: true}); await login(page);
+  await page.evaluate(() => {
+    const execute = window.chrome.scripting.executeScript;
+    window.chrome.scripting.executeScript = async request => {
+      const result = await execute(request);
+      if (request.func.name === 'interactWithPage' && request.args[0] === 'inspect') result[0].result.fields[0].occupied = true;
+      return result;
+    };
+    window.platformValues = {resume_summary: 'My introduction'};
+  });
+  await page.locator('#inspect').click();
+  await expect(page.locator('#edit-applicant_name')).toHaveCount(0);
+  await expect(page.locator('#fields')).toContainText('Already filled on the website');
+  await page.getByLabel('Nationality', {exact: true}).selectOption('cn');
+  await expect(page.locator('#fields')).toContainText('Incomplete country details are skipped');
+  await page.locator('#fill').click();
+  await expect(page.locator('#status')).toContainText('Nothing was submitted');
+  expect(await page.evaluate(() => window.widgetFill[2].map(item => item.id))).toEqual(['applicant_summary']);
+  expect(await page.evaluate(() => window.operations.filter(item => item[0] === 'fill'))).toEqual([]);
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+});
+
+test('interrupted dispatched fills keep the draft, warn about partial changes and cannot retry the same review', async ({page}) => {
+  await setup(page); await login(page);
+  await page.locator('#inspect').click();
+  await expect(page.locator('#fill')).toBeEnabled();
+  await page.evaluate(() => {
+    const execute = window.chrome.scripting.executeScript;
+    window.chrome.scripting.executeScript = async request => {
+      const result = await execute(request);
+      if (request.func.name === 'interactWithPage' && request.args[0] === 'fill') throw new Error('Document navigated');
+      return result;
+    };
+  });
+  await page.locator('#fill').click();
+  await expect(page.locator('#status')).toContainText('Some answers may already be filled');
+  await expect(page.locator('#status')).toContainText('will not retry automatically');
+  await expect(page.locator('#fill')).toBeDisabled();
+  await expect(page.getByLabel('Full name', {exact: true})).toHaveValue('Fictional Applicant');
+  expect(await page.evaluate(() => window.operations.filter(item => item[0] === 'fill'))).toHaveLength(1);
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+});
+
+test('malformed fill reports never claim success or trigger a second fill', async ({page}) => {
+  await setup(page); await login(page);
+  await page.evaluate(() => {
+    const execute = window.chrome.scripting.executeScript;
+    window.chrome.scripting.executeScript = async request => {
+      const result = await execute(request);
+      if (request.func.name === 'interactWithPage' && request.args[0] === 'fill') result[0].result = window.invalidReport;
+      return result;
+    };
+  });
+  for (const invalidReport of [
+    {filled: [], skipped: [], submitted: false},
+    {filled: ['applicant_name', 'applicant_name'], skipped: [], submitted: false},
+    {filled: ['unknown_field'], skipped: [], submitted: false},
+    {filled: ['applicant_name'], skipped: [], submitted: true},
+    {filled: ['applicant_name'], skipped: []},
+    {filled: ['applicant_name'], skipped: [], submitted: 'false'},
+  ]) {
+    await page.locator('#inspect').click();
+    await expect(page.locator('#fill')).toBeEnabled();
+    await page.evaluate(report => { window.invalidReport = report; }, invalidReport);
+    await page.locator('#fill').click();
+    await expect(page.locator('#status')).toContainText('Some answers may already be filled');
+    await expect(page.locator('#status')).not.toContainText('Filled 1');
+    await expect(page.locator('#fill')).toBeDisabled();
+  }
+  expect(await page.evaluate(() => window.operations.filter(item => item[0] === 'fill'))).toHaveLength(6);
   expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
 });

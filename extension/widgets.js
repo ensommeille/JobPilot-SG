@@ -1,5 +1,5 @@
 // Runs in MAIN world only to access the site's own widget APIs. No credentials enter here.
-export function interactWithWidgets(command, expectedUrl = null, approved = []) {
+export function interactWithWidgets(command, expectedUrl = null, approved = [], deadline = null) {
   const url = new URL(location.href);
   if (url.protocol !== 'https:' || !['internsg.com', 'www.internsg.com'].includes(url.hostname)
       || url.port || url.username || url.password || url.search || url.hash
@@ -60,6 +60,7 @@ export function interactWithWidgets(command, expectedUrl = null, approved = []) 
   }
   const filled = [], skipped = [], reasons = {};
   for (const item of approved) {
+    if (deadline !== null && (!Number.isFinite(deadline) || Date.now() >= deadline)) throw new Error('Fill deadline expired. Inspect again before any retry.');
     try {
       if (item.id === 'applicant_summary') {
         if (!richReady) throw new Error('Rich-text editor is not ready. Reload the page and read fields again.');

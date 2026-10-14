@@ -98,6 +98,26 @@ test.describe('actual InternSG widget libraries in an isolated form', () => {
     expect((await fill(page, [{id: 'applicant_summary', value: 'Overwrite', confirmed: true}])).reasons.applicant_summary).toContain('not overwritten');
     expect(await page.evaluate(() => window.submits)).toBe(0);
   });
+  test('filling summary leaves an original-site license warning outside the editable content untouched', async ({page}) => {
+    const warning = 'Unlicensed copy of the Froala Editor. Use it legally by purchasing a license.';
+    await page.evaluate(text => {
+      // A synthetic original-site notice verifies the adapter's mutation boundary.
+      const notice = document.createElement('div');
+      notice.dataset.siteLicenseNotice = 'fixture';
+      notice.textContent = text;
+      notice.style.cssText = 'background: rgb(210, 50, 50); color: white; padding: 12px;';
+      document.querySelector('.fr-box').prepend(notice);
+    }, warning);
+    const notice = page.locator('[data-site-license-notice="fixture"]');
+    const before = await notice.evaluate(node => node.outerHTML);
+    const result = await fill(page, [{id: 'applicant_summary', value: 'User-written fictional application summary.', confirmed: true}]);
+    expect(result.filled).toEqual(['applicant_summary']);
+    await expect(page.locator('.fr-element')).toContainText('User-written fictional application summary.');
+    await expect(notice).toBeVisible();
+    await expect(notice).toHaveText(warning);
+    expect(await notice.evaluate(node => node.outerHTML)).toBe(before);
+    expect(await page.evaluate(() => window.submits)).toBe(0);
+  });
   test('sets both countries and hidden codes, restores campus after nationality change', async ({page}) => {
     const before = await inspect(page);
     const result = await fill(page, [{id: 'applicant_countries', value: JSON.stringify({nationality: 'cn', campus: 'sg'}), expectedState: before.countryState, confirmed: true}]);

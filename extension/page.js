@@ -1,5 +1,5 @@
 // Self-contained: Chrome serializes this function into an isolated content world.
-export function interactWithPage(command, expectedUrl = null, approved = []) {
+export function interactWithPage(command, expectedUrl = null, approved = [], deadline = null) {
   const url = new URL(location.href);
   if (url.protocol !== 'https:' || !['www.internsg.com', 'internsg.com'].includes(url.hostname)
       || url.port || url.username || url.password || url.search || url.hash
@@ -43,6 +43,7 @@ export function interactWithPage(command, expectedUrl = null, approved = []) {
   });
   const filled = [], skipped = [], reasons = {};
   for (const {item, def} of plan) {
+    if (deadline !== null && (!Number.isFinite(deadline) || Date.now() >= deadline)) throw new Error('Fill deadline expired. Inspect again before any retry.');
     const node = getNode(def);
     if (!node || node.value !== '' || (node.maxLength > 0 && item.value.length > node.maxLength)) {
       skipped.push(item.id);

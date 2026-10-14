@@ -48,13 +48,13 @@ function ApplicationOptions({ job }: { job: ApplicationJob }) {
   const external = publicUrl(job.apply_url)
   return <section aria-label="Application options">
     {!active ? <p role="status">This job is not active. Check the original listing before applying.</p>
-      : embedded ? <p>Reuse your saved profile in the original InternSG form. Review every answer and complete CAPTCHA yourself. Filling does not submit an application.</p>
+      : embedded ? <p>Prepare and confirm your saved details in JobPilot, then fill the original InternSG form. Complete CAPTCHA and final submission yourself.</p>
         : formState === 'configured' ? <p>Review and save an application record in JobPilot. This does not send it to an external employer.</p>
           : formState === 'loading' ? <p role="status">Checking available application options…</p>
             : formState === 'failed' ? <p role="alert">Could not check the JobPilot form. <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setLegacyFormState('loading'); setRetry(value => value + 1) }}>Retry form check</button></p>
               : <p>No in-platform application form is configured for this job. Follow the original listing's application instructions.</p>}
     <div className="row" style={{gap: 12, flexWrap: 'wrap'}}>
-      {active && embedded && <Link className="btn btn-primary" to={`/jobs/${job.id}/apply-external`}>Apply on InternSG within JobPilot</Link>}
+      {active && embedded && <Link className="btn btn-primary" to={`/jobs/${job.id}/apply-external`}>Prepare application</Link>}
       {active && !embedded && formState === 'configured' && <Link className="btn btn-primary" to={`/jobs/${job.id}/apply`}>Apply with AI Assistant</Link>}
       {active && !embedded && external && external !== original && <a className="btn btn-secondary" href={external} target="_blank" rel="noopener noreferrer">Open original application ↗</a>}
       {original && <a className="btn btn-secondary" href={original} target="_blank" rel="noopener noreferrer">View Original Posting ↗</a>}

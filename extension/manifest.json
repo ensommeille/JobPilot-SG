@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "JobPilot SG — Review & Fill",
-  "version": "0.6.1",
+  "version": "0.8.0",
   "description": "Review and fill InternSG forms; send only after explicit confirmation and manual CAPTCHA.",
   "minimum_chrome_version": "106",
   "permissions": ["activeTab", "scripting", "storage"],

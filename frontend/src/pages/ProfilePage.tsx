@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { fetchProfile, updateProfile } from '../services/profile'
 import ApplicationProfileFields, { type ApplicationDetails } from '../components/ApplicationProfileFields'
@@ -75,6 +75,9 @@ const SkillSelector = ({ selected, onChange }: { selected: string[], onChange: (
 interface LinkItem { label: string; url: string }
 
 const ProfilePage = () => {
+  const [searchParams] = useSearchParams()
+  const requestedReturn = searchParams.get('returnTo') || ''
+  const returnTo = /^\/jobs\/[A-Za-z0-9-]{1,80}\/apply-external$/.test(requestedReturn) ? requestedReturn : null
   const loadedToken = useRef<string | null>(null)
   const pending = useRef<AbortController | null>(null)
   const savingRef = useRef(false)
@@ -194,6 +197,7 @@ const ProfilePage = () => {
       <Navbar />
       <div style={{ maxWidth: '720px', margin: '32px auto', padding: '0 24px' }}>
 
+        {returnTo && <p><Link to={returnTo}>Back to application</Link>. Save your changes before returning to reuse them.</p>}
         {loadFailed && <p role="alert">{error} <button onClick={() => window.location.reload()}>Reload profile</button></p>}
         <form ref={form} onSubmit={event => { event.preventDefault(); void save() }}>
         <fieldset disabled={loading || saving || loadFailed} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} onChange={() => setSaved(false)}>
@@ -252,7 +256,7 @@ const ProfilePage = () => {
               backgroundColor: saving ? '#ccc' : '#1a73e8', cursor: saving ? 'not-allowed' : 'pointer' }}>
             {saving ? 'Saving...' : 'Save Profile'}
           </button>
-          {saved && <p role="status" style={{ color: '#26713c', margin: '8px 0 0 0' }}>Profile saved. Your application details will be reused when you read the next application form. <Link to="/jobs">Find jobs for me</Link></p>}
+          {saved && <p role="status" style={{ color: '#26713c', margin: '8px 0 0 0' }}>Profile saved. Your application details will be reused when you read the next application form. <Link to={returnTo || '/jobs'}>{returnTo ? 'Return to application' : 'Find jobs for me'}</Link></p>}
           {error && !loadFailed && <p role="alert" style={{ color: '#dc2626', margin: '8px 0 0 0' }}>{error}</p>}
         </div>
 

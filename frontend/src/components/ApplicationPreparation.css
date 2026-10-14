@@ -1,0 +1,30 @@
+.application-preparation { display: grid; gap: var(--s-7); min-width: 0; }
+.application-review { display: grid; gap: var(--s-4); background: var(--surface); padding: var(--s-6); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.application-review p { max-width: 74ch; overflow-wrap: anywhere; }
+.application-review a { color: var(--primary); text-underline-offset: 3px; }
+.application-review form { display: grid; gap: var(--s-4); min-width: 0; }
+.preparation-fields { margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-5); min-width: 0; }
+.preparation-legend { font-weight: 600; padding: var(--s-4) 0; }
+.preparation-field { display: grid; gap: var(--s-2); align-content: start; min-width: 0; }
+.preparation-field-wide { grid-column: 1 / -1; }
+.preparation-field > label { font-weight: 500; }
+.preparation-field :is(input:not([type='checkbox']), textarea, select) { width: 100%; min-width: 0; min-height: 44px; font-size: 16px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); caret-color: var(--primary); }
+.preparation-field textarea { resize: vertical; line-height: 1.6; }
+.application-review :is(input, textarea, select, summary, a):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.application-review ::selection { background: var(--primary-soft); color: var(--text); }
+.preparation-hint { font-size: 14px; line-height: 1.6; }
+.preparation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+.preparation-actions .btn { min-height: 44px; height: auto; padding-block: 10px; white-space: normal; text-align: center; }
+.preparation-actions > span { font-size: 14px; }
+.preparation-loading { padding-block: var(--s-4); color: var(--text-muted); }
+.preparation-result { padding: var(--s-4); background: var(--primary-soft); color: var(--text); border-radius: var(--radius-sm); display: grid; gap: var(--s-2); }
+.preparation-result ul { margin: 0; padding-inline-start: var(--s-5); overflow-wrap: anywhere; }
+.preparation-setup { padding-top: var(--s-4); border-top: 1px solid var(--border); }
+.preparation-setup summary { color: var(--primary); cursor: pointer; min-height: 32px; }
+.preparation-setup ol { padding-inline-start: var(--s-5); max-width: 74ch; }
+.preparation-setup li + li { margin-top: var(--s-2); }
+@media (max-width: 640px) {
+  .application-review { padding: var(--s-4); }
+  .preparation-fields { grid-template-columns: 1fr; }
+  .preparation-actions .btn { width: 100%; }
+}

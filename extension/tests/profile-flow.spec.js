@@ -31,6 +31,10 @@ async function signIn(page) {
   await page.addInitScript(token => {
     if (!localStorage.getItem('jobpilot_token')) localStorage.setItem('jobpilot_token', token);
   }, tokenA);
+  await page.route('**/browser-assistant/draft', route => route.fulfill({json: {
+    values: {}, countries: {nationality: null, campus: null}, profile_source: 'jobpilot',
+    summary_status: 'manual_only', requires_review: true, submission_supported: false,
+  }}));
 }
 
 async function switchAccount(page) {
@@ -62,6 +66,15 @@ async function setupProfile(page, initial = {}, onSave) {
 test('saved natural skills lead to evidence and the correct explicit InternSG entry', async ({page}) => {
   await page.setViewportSize({width: 1280, height: 900});
   const currentProfile = await setupProfile(page);
+  await page.route('**/browser-assistant/draft', route => {
+    const profile = currentProfile();
+    return route.fulfill({json: {
+      values: {applicant_name: profile.full_name, applicant_email: profile.contact_email, applicant_contact: profile.phone,
+        applicant_period: profile.availability_period, applicant_summary: profile.resume_summary},
+      countries: {nationality: profile.nationality, campus: profile.study_country}, profile_source: 'jobpilot',
+      summary_status: 'manual_only', requires_review: true, submission_supported: false,
+    }});
+  });
   let recommendationCalls = 0, externalPosts = 0;
   await page.route(/\/jobs(\?.*)?$/, route => route.request().resourceType() === 'document'
     ? route.continue() : route.fulfill({json: {items: [], total: 0}}));
@@ -125,13 +138,15 @@ test('saved natural skills lead to evidence and the correct explicit InternSG en
     await page.screenshot({path: `../output/profile-flow-job-${name}.png`, fullPage: true});
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
-  await page.getByRole('link', {name: 'Apply on InternSG within JobPilot'}).click();
+  await page.getByRole('link', {name: 'Prepare application'}).click();
   await expect(page).toHaveURL(`${base}/jobs/${job.id}/apply-external`);
   await expect(page.locator('iframe')).toHaveCount(0);
+  await expect(page.getByLabel('Full name', {exact: true})).toHaveValue('Fictional Maintained Applicant');
+  await expect(page.getByLabel('Personal introduction', {exact: true})).toHaveValue('My own reusable introduction.');
   await expect(page.getByRole('link', {name: 'Open original application'})).toHaveAttribute('href', job.apply_url);
   await page.getByRole('button', {name: 'Load InternSG application here'}).click();
   await expect(page.frameLocator('iframe').locator('#applicant_name')).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('does not mean an application was sent');
+  await expect(page.getByRole('status').filter({hasText: 'does not mean an application was sent'})).toBeVisible();
   expect(externalPosts).toBe(0);
   expect(recommendationCalls).toBe(1);
 });
@@ -266,7 +281,7 @@ test('a configured sandbox form offers the platform flow without claiming employ
   const options = await applicationOptions(page, {apply_url: null}, [{id: 'fixture-form', job_id: job.id, is_fixture: true}]);
   await expect(options.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveAttribute('href', `/jobs/${job.id}/apply`);
   await expect(options).toContainText('does not send it to an external employer');
-  await expect(options.getByRole('link', {name: 'Apply on InternSG within JobPilot'})).toHaveCount(0);
+  await expect(options.getByRole('link', {name: 'Prepare application'})).toHaveCount(0);
 });
 
 test('authoritative form availability true offers the platform record without a bootstrap lookup', async ({page}) => {
@@ -310,10 +325,10 @@ test('InternSG remains available through its original embedded flow when no plat
     lookups++;
     return route.fulfill({json: {forms: []}});
   });
-  await expect(options.getByRole('link', {name: 'Apply on InternSG within JobPilot'})).toHaveAttribute('href', `/jobs/${job.id}/apply-external`);
+  await expect(options.getByRole('link', {name: 'Prepare application'})).toHaveAttribute('href', `/jobs/${job.id}/apply-external`);
   await expect(options.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveCount(0);
   await expect(options.getByRole('link', {name: /View Original Posting/})).toHaveAttribute('href', job.source_url);
-  await expect(options).toContainText('Filling does not submit an application');
+  await expect(options).toContainText('Complete CAPTCHA and final submission yourself');
   expect(lookups).toBe(0);
 });
 
@@ -323,7 +338,7 @@ test('inactive jobs suppress all application entries even when a platform form i
     status: 'closed', apply_url: 'https://employer.example.test/apply', assistant_form_available: true,
   }, [], route => { lookups++; return route.fulfill({json: {forms: []}}); });
   await expect(options).toContainText('This job is not active');
-  await expect(options.getByRole('link', {name: /Apply on InternSG|Apply with AI|Open original application/})).toHaveCount(0);
+  await expect(options.getByRole('link', {name: /Prepare application|Apply with AI|Open original application/})).toHaveCount(0);
   await expect(options.getByRole('link', {name: /View Original Posting/})).toHaveAttribute('href', job.source_url);
   expect(lookups).toBe(0);
 });
@@ -359,7 +374,7 @@ test('changing jobs clears a previous configured form while the new compatibilit
 test('closed jobs do not offer an application entry', async ({page}) => {
   const options = await applicationOptions(page, {status: 'closed'}, [{id: 'fixture-form', job_id: job.id}]);
   await expect(options).toContainText('This job is not active');
-  await expect(options.getByRole('link', {name: /Apply on InternSG|Apply with AI|Open original application/})).toHaveCount(0);
+  await expect(options.getByRole('link', {name: /Prepare application|Apply with AI|Open original application/})).toHaveCount(0);
   await expect(options.getByRole('link', {name: /View Original Posting/})).toHaveAttribute('href', job.source_url);
 });
 
@@ -414,7 +429,7 @@ test('changing accounts closes an embedded form and requires a fresh explicit lo
     expect(route.request().headers().authorization).toBeUndefined();
     return route.fulfill({contentType: 'text/html', body: '<!doctype html><title>Account isolation fixture</title><form><label>Name<input id="applicant_name"></label><p>Fixture only. No submission.</p></form>'});
   });
-  await page.getByRole('link', {name: 'Apply on InternSG within JobPilot'}).click();
+  await page.getByRole('link', {name: 'Prepare application'}).click();
   await page.getByRole('button', {name: 'Load InternSG application here'}).click();
   const applicant = page.frameLocator('iframe').locator('#applicant_name');
   await expect(applicant).toBeVisible();

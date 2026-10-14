@@ -8,6 +8,20 @@ const $ = id => document.getElementById(id);
 let session = null, snapshot = null, busy = false;
 let supplements = {};
 let submissionReview = null;
+let permissionVersion = 0;
+const embeddedOrigins = current => ['https://www.internsg.com/*', 'https://internsg.com/*', current.site + '/*'];
+async function refreshEmbeddedAccess() {
+  const current = session, version = ++permissionVersion;
+  $('enable-embedded').hidden = true; $('embedded-help').hidden = true;
+  $('embedded-status').textContent = 'Checking InternSG access…'; $('embedded-status').classList.remove('ready');
+  if (!current) return;
+  let granted = false;
+  try { granted = await chrome.permissions.contains({origins: embeddedOrigins(current)}); } catch { /* Remain unready when permissions cannot be checked. */ }
+  if (session !== current || version !== permissionVersion) return;
+  $('enable-embedded').hidden = granted; $('embedded-help').hidden = granted;
+  $('embedded-status').textContent = granted ? 'Ready for InternSG applications.' : 'InternSG access is needed to fill embedded forms.';
+  $('embedded-status').classList.toggle('ready', granted);
+}
 const attemptKey = url => `jobpilotAttempt:${JSON.stringify([session.api, session.userId, new URL(url).pathname.match(/[0-9]+/)[0]])}`;
 function resetSubmission() {
   submissionReview = null; $('submit-consent').checked = false;
@@ -20,14 +34,28 @@ async function loadLocal() {
   if (session !== current) throw new Error('Account connection changed. Read the page again.');
   supplements = data[key] || {};
   for (const key of ['phone', 'period', 'summary']) $('local-' + key).value = typeof supplements[key] === 'string' ? supplements[key] : '';
-  $('account').textContent = `Account: ${session.email || session.userId} · ${session.api}`;
+  $('account').textContent = session.email || session.userId;
+  $('connection-info').textContent = `Platform: ${session.site} · API: ${session.api}`;
   $('import-countries').textContent = `Saved device country codes: nationality ${supplements.countries?.nationality || 'not saved'}; study country ${supplements.countries?.campus || 'not saved'}.`;
   $('import-consent').checked = false;
 }
 const editors = new Map();
+function checkedFillResult(result, items) {
+  const expected = new Set(items.map(item => item.id));
+  if (!result || !Array.isArray(result.filled) || !Array.isArray(result.skipped) || result.submitted !== false) throw new Error('Invalid fill report.');
+  const all = [...result.filled, ...result.skipped];
+  if (all.length !== expected.size || new Set(all).size !== all.length || all.some(id => !expected.has(id))) throw new Error('Incomplete fill report.');
+  const reasons = result.reasons || {};
+  if (typeof reasons !== 'object' || Array.isArray(reasons) || Object.entries(reasons).some(([id, reason]) => !result.skipped.includes(id) || typeof reason !== 'string')) throw new Error('Invalid fill reasons.');
+  return {filled: [...result.filled], skipped: [...result.skipped], reasons};
+}
 const status = (message, error = false) => { $('status').textContent = message; $('status').classList.toggle('error', error); };
 function refresh() {
-  $('fill').disabled = busy || !snapshot || ![...editors.values()].some(e => e.confirm.checked && e.input.value.trim());
+  $('fill').disabled = busy || !snapshot || ![...editors.values()].some(e => !e.blocked && e.input.value.trim());
+  for (const editor of editors.values()) {
+    editor.input.disabled = busy || !!editor.blocked;
+    if (editor.selects) for (const select of Object.values(editor.selects)) select.disabled = busy || !!editor.blocked;
+  }
   $('inspect').disabled = busy;
   $('logout').disabled = busy;
   $('login').querySelector('button').disabled = busy;
@@ -91,18 +119,21 @@ async function validateSession() {
 function clearDeviceView() {
   supplements = {}; for (const key of ['phone', 'period', 'summary']) $('local-' + key).value = '';
   $('account').textContent = '';
+  $('connection-info').textContent = ''; $('open-jobpilot').removeAttribute('href');
   $('import-countries').textContent = ''; $('import-consent').checked = false;
 }
 async function signOut(message = 'Signed out.') {
-  session = null; clearDraft(); clearDeviceView();
+  permissionVersion++; session = null; clearDraft(); clearDeviceView();
   $('login').hidden = false; $('workspace').hidden = true; status(message);
   await chrome.storage.session.remove('jobpilotSession');
 }
 $('extension-id').textContent = 'Extension ID: ' + chrome.runtime.id;
 $('login').addEventListener('submit', event => {
   event.preventDefault();
+  if (busy) return;
   const site = $('platform').value;
-  const permission = chrome.permissions.request({origins: [DEPLOYMENTS[site] + '/*']});
+  if (!Object.hasOwn(DEPLOYMENTS, site)) { status('Choose a supported JobPilot platform.', true); return; }
+  const permission = chrome.permissions.request({origins: [site + '/*', DEPLOYMENTS[site] + '/*']});
   run(async () => {
     if (!await permission) throw new Error('API access was not granted.');
     const result = await chrome.runtime.sendMessage({kind: 'begin', site});
@@ -119,13 +150,23 @@ $('logout').addEventListener('click', () => run(async () => {
 }, false));
 $('enable-embedded').addEventListener('click', () => {
   // Request directly from the click gesture, before asynchronous discovery.
-  const request = chrome.permissions.request({origins: ['https://www.internsg.com/*', 'https://internsg.com/*']});
+  if (busy || !session || DEPLOYMENTS[session.site] !== session.api) return;
+  const request = chrome.permissions.request({origins: embeddedOrigins(session)});
   run(async unchanged => {
-    if (!await request) throw new Error('InternSG access was not granted. Use the original application page instead.');
+    const granted = await request;
+    unchanged(); await refreshEmbeddedAccess(); unchanged();
+    if (!granted) throw new Error('InternSG access was not granted. You can enable it here when ready.');
     unchanged();
-    status('Embedded InternSG access enabled. Load the form in local JobPilot, then read its fields.');
+    status('Access enabled. Continue your application in JobPilot.');
   });
 });
+const permissionsChanged = () => {
+  clearDraft();
+  refreshEmbeddedAccess().catch(() => {});
+  refresh();
+};
+chrome.permissions.onAdded?.addListener(permissionsChanged);
+chrome.permissions.onRemoved?.addListener(permissionsChanged);
 $('save-local').addEventListener('click', () => run(async unchanged => {
   if (!session?.userId) throw new Error('Sign in again before saving.');
   const saved = {};
@@ -175,14 +216,10 @@ function render(fields, values) {
       input.id = label.htmlFor; input.maxLength = field.maxLength;
       input.value = typeof values[field.id] === 'string' ? values[field.id] : '';
       const note = document.createElement('p'); note.className = 'field-reason'; note.id = `reason-${field.id}`;
-      const updateReason = () => { note.textContent = input.value.trim() ? 'Not filled yet — review and confirm this answer.' : 'No saved answer is available. Enter it here or add supplementary profile details.'; };
+      const updateReason = () => { note.textContent = input.value.trim() ? 'Ready to fill when you click Fill application form.' : 'No saved answer. Enter it here or update your JobPilot profile; otherwise this field is skipped.'; };
       input.setAttribute('aria-describedby', note.id); updateReason();
-      const checkLabel = document.createElement('label'); checkLabel.className = 'check';
-      const confirm = document.createElement('input'); confirm.type = 'checkbox';
-      checkLabel.append(confirm, document.createTextNode('I reviewed this answer. Fill it on the original page.'));
-      input.addEventListener('input', () => { confirm.checked = false; updateReason(); refresh(); });
-      confirm.addEventListener('change', refresh);
-      editors.set(field.id, {input, confirm, note, widget: field.widget}); row.append(input, note, checkLabel);
+      input.addEventListener('input', () => { updateReason(); refresh(); });
+      editors.set(field.id, {input, note, widget: field.widget}); row.append(input, note);
     }
     $('fields').append(row);
   }
@@ -194,10 +231,10 @@ function renderCountries(widgets, countries) {
   if (!widgets.countryState) { note.textContent = widgets.countryReason; return; }
   note.textContent = `Website currently shows ${widgets.countryState.nationalityText}; study country ${widgets.countryState.same ? widgets.countryState.nationalityText : widgets.countryState.campusText}. These may be defaults, not your details.`;
   const input = {value: ''}, selects = {};
-  const confirm = document.createElement('input'); confirm.type = 'checkbox';
   const update = () => {
     input.value = selects.nationality.value && selects.campus.value ? JSON.stringify({nationality: selects.nationality.value, campus: selects.campus.value}) : '';
-    confirm.checked = false; refresh();
+    countryHelp.textContent = input.value ? 'Fill application form will replace both website country selections, including the study-country checkbox.' : 'Choose both countries to replace the website defaults. Incomplete country details are skipped.';
+    refresh();
   };
   for (const [key, text] of [['nationality', 'Nationality'], ['campus', 'Country of study / graduation']]) {
     const label = document.createElement('label'); label.textContent = text; label.htmlFor = `country-${key}`;
@@ -208,10 +245,8 @@ function renderCountries(widgets, countries) {
     if (countries?.[key] && !select.value) note.textContent += ' A saved country is not supported by this website; select it manually.';
     selects[key] = select; row.append(label, select);
   }
-  const label = document.createElement('label'); label.className = 'check';
-  label.append(confirm, document.createTextNode('Replace the website country selections with these two countries, including the study-country checkbox.'));
-  confirm.addEventListener('change', refresh); row.append(label);
-  editors.set('applicant_countries', {input, confirm, note, widget: true, selects}); update();
+  const countryHelp = document.createElement('p'); countryHelp.className = 'field-reason'; row.append(countryHelp);
+  editors.set('applicant_countries', {input, note, widget: true, selects}); update();
 }
 $('inspect').addEventListener('click', () => run(async unchanged => {
   clearDraft(); status('Reading the current page…');
@@ -236,23 +271,44 @@ $('inspect').addEventListener('click', () => run(async unchanged => {
   }
   snapshot = current; $('target').textContent = `${snapshot.title} — ${snapshot.url}`;
   const values = {...data.values};
-  render(snapshot.fields, values); renderCountries(widgets, data.countries); status('Loaded your JobPilot profile for this review. After changing your platform profile, choose Read page & load profile again. Review each answer before filling.');
+  render(snapshot.fields, values); renderCountries(widgets, data.countries); status('Loaded your JobPilot profile for this review. After changing your platform profile, choose Read page & load profile again. Review the shown answers, then click Fill application form.');
 }));
-$('fill').addEventListener('click', () => run(async unchanged => {
+$('fill').addEventListener('click', () => {
+  if (busy || !snapshot) return;
+  // The click approves only this visible draft, never later edits during session validation.
+  const current = snapshot;
+  const approved = [...editors].filter(([, e]) => !e.blocked && e.input.value.trim()).map(([id, e]) => ({id, value: e.input.value, confirmed: true, widget: !!e.widget}));
+  run(async unchanged => {
+  let dispatched = false;
+  try {
   resetSubmission();
-  if (!snapshot) return;
-  await assertApplicationContext(chrome, snapshot);
+  if (snapshot !== current) throw new Error('The form review changed. Read the page again.');
+  await assertApplicationContext(chrome, current);
   unchanged();
-  const approved = [...editors].filter(([, e]) => e.confirm.checked && e.input.value.trim()).map(([id, e]) => ({id, value: e.input.value, confirmed: true}));
-  if (!approved.length) throw new Error('Confirm at least one answer.');
-  const normal = approved.filter(item => !editors.get(item.id).widget);
-  const widgetItems = approved.filter(item => editors.get(item.id).widget).map(item => item.id === 'applicant_countries' ? {...item, expectedState: snapshot.widgets.countryState} : item);
-  const target = {tabId: snapshot.tabId, documentIds: [snapshot.documentId]};
-  const [result] = normal.length ? await chrome.scripting.executeScript({target, func: interactWithPage, args: ['fill', snapshot.url, normal]}) : [{result: {filled: [], skipped: [], reasons: {}}}];
+  if (snapshot !== current) throw new Error('The form review changed. Read the page again.');
+  if (!approved.length) throw new Error('Enter at least one answer before filling.');
+  const normal = approved.filter(item => !item.widget).map(({widget, ...item}) => item);
+  const widgetItems = approved.filter(item => item.widget).map(({widget, ...item}) => item.id === 'applicant_countries' ? {...item, expectedState: current.widgets.countryState} : item);
+  const target = {tabId: current.tabId, documentIds: [current.documentId]};
+  for (const item of approved) {
+    const editor = editors.get(item.id);
+    if (editor) { editor.blocked = true; editor.note.textContent = 'Fill attempt started. If interrupted, inspect the original page before reading it again.'; }
+  }
+  const executeFill = async (request, items) => {
+    dispatched = true;
+    const [response] = await chrome.scripting.executeScript(request);
+    unchanged();
+    if (snapshot !== current) throw new Error('The form review changed.');
+    return checkedFillResult(response?.result, items);
+  };
+  const result = {result: normal.length ? await executeFill({target, func: interactWithPage, args: ['fill', current.url, normal]}, normal) : {filled: [], skipped: [], reasons: {}}};
   unchanged();
   if (!result?.result) throw new Error('Page changed or closed. Read it again.');
   if (widgetItems.length) {
-    const [widgetResult] = await chrome.scripting.executeScript({target, world: 'MAIN', func: interactWithWidgets, args: ['fill', snapshot.url, widgetItems]});
+    if (snapshot !== current) throw new Error('The form review changed. Check the original page before reading it again.');
+    await assertApplicationContext(chrome, current); unchanged();
+    if (snapshot !== current) throw new Error('The form review changed. Check the original page before reading it again.');
+    const widgetResult = {result: await executeFill({target, world: 'MAIN', func: interactWithWidgets, args: ['fill', current.url, widgetItems]}, widgetItems)};
     unchanged();
     if (!widgetResult?.result) throw new Error('Widget operation interrupted. Check the original page before retrying.');
     result.result.filled.push(...widgetResult.result.filled); result.result.skipped.push(...widgetResult.result.skipped);
@@ -265,19 +321,21 @@ $('fill').addEventListener('click', () => run(async unchanged => {
       editor.input.disabled = true;
       if (editor.selects) for (const select of Object.values(editor.selects)) select.disabled = true;
       editor.note.textContent = 'Filled. Verify the result on the original page.';
-      editor.confirm.checked = false;
-      editor.confirm.disabled = true;
-      editor.confirm.parentElement.lastChild.textContent = 'Filled on the original page. Review it there.';
       editors.delete(id);
     }
   }
   for (const id of result.result.skipped) {
     const editor = editors.get(id);
-    if (editor) { editor.confirm.checked = false; editor.note.textContent = result.result.reasons?.[id] || 'Website field changed, already contains text, is unavailable or rejects this length. Check it and read the page again.'; }
+    if (editor) { editor.blocked = true; editor.note.textContent = result.result.reasons?.[id] || 'Website field changed, already contains text, is unavailable or rejects this length. Check it and read the page again.'; }
   }
   const skipped = result.result.skipped.map(id => id === 'applicant_countries' ? 'Nationality / study country' : snapshot.fields.find(f => f.id === id)?.label || id).join(', ');
   status(`Filled ${result.result.filled.length}. ${skipped ? `Skipped ${skipped}: the page changed or already has an answer. Your draft is retained; check the original page.` : 'Remaining drafts are retained.'} Nothing was submitted. Complete CAPTCHA yourself, then review the website answers before sending.`);
-}));
+  } catch (error) {
+    if (dispatched) throw new Error('Some answers may already be filled. Check the original page before reading it again; this attempt will not retry automatically. Your draft is retained. Nothing was submitted.');
+    throw error;
+  }
+  });
+});
 $('submit-consent').addEventListener('change', refresh);
 $('prepare-submit').addEventListener('click', () => run(async unchanged => {
   resetSubmission();
@@ -351,6 +409,7 @@ $('check-result').addEventListener('click', () => run(async unchanged => {
 let restoreVersion = 0;
 async function restoreConnection() {
   const version = ++restoreVersion;
+  for (const id of ['settings', 'local-profile', 'original-tools', 'advanced-submission']) $(id).open = false;
   clearDraft();
   const saved = (await chrome.storage.session.get('jobpilotSession')).jobpilotSession;
   if (version !== restoreVersion) return;
@@ -362,7 +421,10 @@ async function restoreConnection() {
       if (version !== restoreVersion) return;
       await loadLocal();
       if (version !== restoreVersion) return;
-      $('workspace').hidden = false; status('Connected to JobPilot. Read the application to reuse your saved profile.');
+      $('open-jobpilot').href = session.site + '/jobs';
+      await refreshEmbeddedAccess();
+      if (version !== restoreVersion) return;
+      $('workspace').hidden = false; status('Filling never submits an application.');
     }
     catch (error) { if (version === restoreVersion) await signOut(error.message || 'Reconnect through JobPilot.'); }
   } else {

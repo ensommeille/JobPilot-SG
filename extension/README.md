@@ -1,12 +1,20 @@
 # JobPilot SG — Review & Fill (InternSG pilot)
 
-## Version 0.6.1: platform login and reusable profile
+## Version 0.8.0: a compact companion and one-click filling
 
 The platform profile is now the source for name, email, phone, user-written
 introduction, availability, nationality and study country. Each **Read page &
 load profile** refreshes from the authenticated account. Application-specific
 edits are not silently saved back. Missing or cleared platform values are never
 filled from an old device copy. There is no AI introduction generation.
+
+The popup now prioritizes connection status and returning to JobPilot. Host
+access is requested only when missing; settings, old-device import and original-site
+fallback tools are progressively disclosed rather than all shown at once.
+On the platform, **Fill application form** checks the original form and fills
+the displayed eligible answers in one explicit action. There are no per-answer
+confirmation checkboxes. The action also approves the displayed nationality and
+study-country replacement; it does not authorize submission.
 
 ## Local setup and use
 
@@ -19,12 +27,13 @@ filled from an old device copy. There is no AI introduction generation.
    the account in the backend database.
 3. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**
    and select this directory. Existing users should reload the extension
-   (version 0.6.1), then reopen its popup. Keep the same directory and extension
+   (version 0.8.0), then reopen its popup. Keep the same directory and extension
    ID to preserve device copies. Register its 32-letter ID in the backend
    `EXTENSION_CLIENT_IDS=["your-installed-extension-id"]` environment setting.
    The default empty list intentionally rejects connections.
-4. Choose your deployment and **Connect through JobPilot** in the extension.
-   Grant API access; the opened platform tab asks you to confirm the current account.
+4. Choose **Connect through JobPilot** in the extension. The local demo is the
+   default; change deployment under **Connection settings** only when needed.
+   Grant platform and API access; the opened platform tab asks you to confirm the current account.
    If needed, sign in ON THE PLATFORM. There is no extension password form.
    Return to the application and reopen the popup after confirmation.
    Local demo: `http://127.0.0.1:5173` → API `http://127.0.0.1:8001`;
@@ -34,10 +43,11 @@ filled from an old device copy. There is no AI introduction generation.
    `127.0.0.1:5173` does not change the extension's fixed API port from 8001 to 8000.
    Custom Compose ports are suitable for isolated API/deployment checks, but do not
    automatically become supported extension deployments.
-5. Open a supported InternSG original application page, or use the local JobPilot
-   embedded application route. Choose **Read page & load profile**, review each
-   answer, then **Fill confirmed answers**. Countries require a separate explicit
-   replacement confirmation, including the linked study-country checkbox.
+5. Open an active job in JobPilot and choose **Prepare application**. Review or
+   edit its reusable answers, load the original application explicitly, and choose
+   **Fill application form** once. The form check runs automatically before filling.
+   This approves the displayed country choices together with the text answers;
+   missing or unsupported details receive reasons instead of invented values.
 6. Repeat on another job: saved platform details are loaded again, not re-entered.
    CAPTCHA, attachments and consent remain manual. Test data must never be
    submitted to a real employer.
@@ -50,7 +60,7 @@ backend `apply_url`. No URL is guessed from a job ID.
 
 ## Importing previous device details
 
-Expand **Previous device details — review and import**. Review the visible text
+Within the popup settings, expand **Previous device details — review and import**. Review the visible text
 and stored country codes, check the import confirmation, then choose
 **Import reviewed details to JobPilot**. The backend only writes empty fields;
 existing platform values are preserved and listed as skipped. Import is authenticated,
@@ -81,6 +91,48 @@ frame-protection stripping or CAPTCHA bypass is used. The iframe is sandboxed
 without top navigation, and **Open original application** remains a fallback.
 An iframe load event is not proof of a ready form or successful delivery.
 
+## Platform-owned review bridge
+
+See the [platform application bridge contract](../docs/member3/PLATFORM_APPLICATION_BRIDGE.md)
+for the v1 message shapes, fingerprint algorithm and team acceptance checklist.
+
+On a real active job's `/jobs/<UUID>/apply-external` page, JobPilot can display
+saved profile answers, inspect the loaded original form, and fill eligible answers
+after one explicit **Fill application form** action. Grant **Enable embedded InternSG access** once in
+the connected popup to grant both the platform host and InternSG hosts. The
+development-only `internsg-preview` route is intentionally excluded from this bridge.
+The existing popup remains available; no backend API or database changes are required.
+
+Only version-1 `application-inspect` and `application-fill` messages are supported.
+The extension binds the request to the browser-supplied top document and tab, the
+exact deployment pair, the active backend job's application URL, and exactly one
+matching direct child document. It independently validates the restricted extension
+session and the platform account. A read-only function in the platform's isolated
+world sends its JWT only to that deployment's fixed API; only account identity and
+SHA-256 fingerprints leave that function. No JWT is passed to the background worker,
+the original site, or message responses.
+
+Inspection returns only supported field metadata and country options, never existing
+answers, raw HTML, CAPTCHA data or credentials. The request must carry the fingerprint
+of the platform draft being reviewed. The resulting review lasts five minutes, is
+single-use and is lost safely on service-worker restart. It binds platform and
+extension identity, saved details, job, parent document and child document. Changed
+details, logout, navigation, replacement frames and mismatched accounts require a
+fresh review. The platform obtains that review inside each explicit fill operation,
+using a snapshot of the answers displayed when the user clicked. It does not reuse
+the click to retry after failure. The country control snapshot stays private inside the extension;
+webpages cannot supply or override it.
+
+Filling uses the same fixed adapters as the popup, retains occupied-field protection
+and explicit country replacement, and revalidates before each adapter dispatch.
+Operations have an 18-second deadline; a late-injected fill is refused. A lost or
+interrupted reply may follow a partial fill: inspect the original form, never retry
+automatically, and never assume no changes occurred. This bridge has no submission
+command and never imports the submission helper. CAPTCHA, consent, attachments and
+the original site's final Submit action remain manual. Filling does not create an
+application record or prove delivery. Synthetic acceptance tests do not submit to
+real employers.
+
 ## Filling and submission boundaries
 
 Supported fields are name, email, contact, availability, Froala resume summary,
@@ -89,7 +141,9 @@ plain text with line breaks and backing-field synchronization. Existing text
 is preserved, including edits made after inspection. Missing, ambiguous, hidden,
 unsupported or changed controls fail closed or show a reason; re-read after navigation.
 
-Filling never submits. The separate **Review website answers before sending**
+Filling never submits. Under **Original-site tools**, the collapsed
+**Advanced: send from the original site** section retains the separate
+**Review website answers before sending**
 flow checks actual page contents and recipient, requires manual CAPTCHA and
 explicit authorization, and expires after two minutes. A SHA-256 fingerprint
 binds the review to form contents and destination. The site button is clicked
@@ -103,6 +157,22 @@ submission is outside this protection. Never assume an unknown result failed.
 **Check original page result** displays site text only; delivery remains unverified.
 Neither a URL change nor apparent success text creates a submitted JobPilot record.
 No real employer submission was performed for acceptance.
+
+## Red Froala notice on the original form
+
+An "Unlicensed copy of the Froala Editor" notice inside the InternSG frame is
+the original site's editor activation message, not a JobPilot validation error
+or a delivery result. JobPilot uses its own plain-text introduction editor; the
+extension accesses InternSG's already-created Froala instance without changing
+its license or hiding the notice. Public source confirms that InternSG supplies
+an activation key, but does not establish why activation is failing in the
+reported browser context. InternSG/Froala must verify that configuration.
+
+Keep the original notice visible. Use **Open original application** if the
+embedded editor cannot be used, then verify the actual page; opening it directly
+is not a guaranteed license fix. Do not submit test data, purchase a license for
+the user, or strip the warning. See the
+[investigation and evidence limits](../docs/member3/PLATFORM_APPLICATION_BRIDGE.md#original-site-froala-notice--investigated-2026-10-14).
 
 ## Verification
 
