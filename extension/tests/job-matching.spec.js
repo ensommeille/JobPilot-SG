@@ -16,6 +16,13 @@ const report = {
       job_evidence: 'SQL preferred.', profile_evidence: null, profile_field: null},
   ],
 };
+
+function deferred() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return {promise, resolve};
+}
+
 async function setup(page, handler, loggedIn = true, job = {}) {
   await page.addInitScript(loggedIn => { if (loggedIn) localStorage.setItem('jobpilot_token', 'test-account-token'); }, loggedIn);
   await page.route('**/profile', route => route.fulfill({json: {full_name: 'Fictional Applicant'}}));
@@ -73,19 +80,45 @@ test('logged-out users are asked to sign in without sending profile analysis', a
   expect(calls).toBe(0);
 });
 
-test('account change while request is pending cannot expose previous account results', async ({page}) => {
-  let release;
-  const pending = new Promise(resolve => { release = resolve; });
-  await setup(page, async route => { await pending; await route.fulfill({json: report}); });
-  await page.getByRole('button', {name: 'Analyze my match'}).click();
-  await expect(page.getByRole('button', {name: 'Analyzing…'})).toBeDisabled();
-  await page.evaluate(() => {
-    localStorage.setItem('jobpilot_token', 'another-account');
-    window.dispatchEvent(new StorageEvent('storage', {key: 'jobpilot_token', oldValue: 'test-account-token', newValue: 'another-account'}));
+test('account change while request is pending cannot expose previous account results', async ({page, context}) => {
+  const started = deferred(), release = deferred(), answered = deferred();
+  const credentials = [];
+  const privateA = 'Private account A evidence must never appear for B';
+  const evidenceB = 'Current account B evidence from a fresh explicit analysis';
+  await setup(page, async route => {
+    const authorization = route.request().headers().authorization;
+    credentials.push(authorization);
+    if (authorization === 'Bearer test-account-token') {
+      started.resolve();
+      await release.promise;
+      await route.fulfill({json: {...report, items: [{...report.items[0], profile_evidence: privateA}]}});
+      answered.resolve();
+    } else {
+      expect(authorization).toBe('Bearer another-account');
+      await route.fulfill({json: {...report, items: [{...report.items[0], profile_evidence: evidenceB}]}});
+    }
   });
-  release();
-  await expect(page.getByRole('alert')).toContainText('Account changed');
+  await page.getByRole('button', {name: 'Analyze my match'}).click();
+  await started.promise;
+  await expect(page.getByRole('button', {name: 'Analyzing…'})).toBeDisabled();
+  const other = await context.newPage();
+  await other.goto(base + '/');
+  await other.evaluate(() => {
+    localStorage.setItem('jobpilot_token', 'another-account');
+  });
+  await expect(page.getByRole('button', {name: 'Analyze my match'})).toBeEnabled();
+  release.resolve();
+  await answered.promise;
   await expect(page.locator('.job-match-group')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText(privateA);
+  expect(await page.evaluate(() => localStorage.getItem('jobpilot_token'))).toBe('another-account');
+  expect(credentials).toEqual(['Bearer test-account-token']);
+  await page.getByRole('button', {name: 'Analyze my match'}).click();
+  await expect(page.locator('.job-match-group')).toHaveCount(4);
+  await page.getByText('Compare evidence', {exact: true}).click();
+  await expect(page.locator('.job-match dd').last()).toHaveText(evidenceB);
+  await expect(page.locator('body')).not.toContainText(privateA);
+  expect(credentials).toEqual(['Bearer test-account-token', 'Bearer another-account']);
 });
 
 test('partial shared skills are separate from unconditional support and retain full evidence', async ({page}) => {
@@ -112,14 +145,27 @@ test('partial shared skills are separate from unconditional support and retain f
   }
 });
 
-test('clearing storage in another tab removes displayed private analysis', async ({page}) => {
-  await setup(page, route => route.fulfill({json: report}));
+test('clearing storage in another tab removes displayed private analysis', async ({page, context}) => {
+  let calls = 0;
+  const privateEvidence = 'Private signed-in profile evidence that must be cleared';
+  await setup(page, route => {
+    calls++;
+    return route.fulfill({json: {...report, items: [{...report.items[0], profile_evidence: privateEvidence}]}});
+  });
   await page.getByRole('button', {name: 'Analyze my match'}).click();
   await expect(page.locator('.job-match-group')).toHaveCount(4);
-  await page.evaluate(() => {
-    localStorage.clear();
-    window.dispatchEvent(new StorageEvent('storage', {key: null}));
-  });
-  await expect(page.getByRole('alert')).toContainText('Account changed');
+  await page.getByText('Compare evidence', {exact: true}).click();
+  await expect(page.locator('.job-match dd').last()).toHaveText(privateEvidence);
+  const other = await context.newPage();
+  await other.goto(base + '/');
+  await other.evaluate(() => localStorage.clear());
+  await expect(page.getByRole('button', {name: 'Analyze my match'})).toBeEnabled();
   await expect(page.locator('.job-match-group')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText(privateEvidence);
+  expect(await page.evaluate(() => localStorage.getItem('jobpilot_token'))).toBeNull();
+  expect(calls).toBe(1);
+  await page.getByRole('button', {name: 'Analyze my match'}).click();
+  await expect(page.getByRole('alert')).toContainText('Sign in to JobPilot');
+  await expect(page.locator('.job-match-group')).toHaveCount(0);
+  expect(calls).toBe(1);
 });

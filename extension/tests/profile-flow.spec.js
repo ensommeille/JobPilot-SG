@@ -243,12 +243,13 @@ test('a late 401 for account A cannot clear the newer account B token or navigat
   await expect(page).toHaveURL(`${base}/profile`);
 });
 
-async function applicationOptions(page, changes, forms = []) {
+async function applicationOptions(page, changes, forms = [], onBootstrap) {
   await signIn(page);
   await page.route('**/profile', route => route.fulfill({json: emptyProfile}));
   await page.route(`**/jobs/${job.id}`, route => route.request().resourceType() === 'document'
     ? route.continue() : route.fulfill({json: {...job, ...changes}}));
-  await page.route('**/assistant/bootstrap', route => route.fulfill({json: {forms, manual_fallback: true}}));
+  await page.route('**/assistant/bootstrap', route => onBootstrap
+    ? onBootstrap(route) : route.fulfill({json: {forms, manual_fallback: true}}));
   await page.goto(`${base}/jobs/${job.id}`);
   await expect(page.getByRole('heading', {name: job.title})).toBeVisible();
   return page.getByRole('region', {name: 'Application options'});
@@ -266,6 +267,93 @@ test('a configured sandbox form offers the platform flow without claiming employ
   await expect(options.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveAttribute('href', `/jobs/${job.id}/apply`);
   await expect(options).toContainText('does not send it to an external employer');
   await expect(options.getByRole('link', {name: 'Apply on InternSG within JobPilot'})).toHaveCount(0);
+});
+
+test('authoritative form availability true offers the platform record without a bootstrap lookup', async ({page}) => {
+  let lookups = 0;
+  const options = await applicationOptions(page, {
+    apply_url: 'https://employer.example.test/apply', assistant_form_available: true,
+  }, [], route => { lookups++; return route.fulfill({json: {forms: []}}); });
+  await expect(options.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveAttribute('href', `/jobs/${job.id}/apply`);
+  await expect(options).toContainText('does not send it to an external employer');
+  await expect(options.getByRole('link', {name: /Open original application/})).toHaveAttribute('href', 'https://employer.example.test/apply');
+  expect(lookups).toBe(0);
+});
+
+test('authoritative form availability false cannot be overridden by a bootstrap form', async ({page}) => {
+  let lookups = 0;
+  const options = await applicationOptions(page, {
+    apply_url: 'https://employer.example.test/apply', assistant_form_available: false,
+  }, [], route => {
+    lookups++;
+    return route.fulfill({json: {forms: [{id: 'stale-fixture-form', job_id: job.id}]}});
+  });
+  await expect(options).toContainText('No in-platform application form is configured');
+  await expect(options.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveCount(0);
+  await expect(options.getByRole('link', {name: /Open original application/})).toHaveAttribute('href', 'https://employer.example.test/apply');
+  expect(lookups).toBe(0);
+});
+
+test('missing form availability retains the compatibility bootstrap lookup', async ({page}) => {
+  let lookups = 0;
+  const options = await applicationOptions(page, {apply_url: null}, [], route => {
+    lookups++;
+    return route.fulfill({json: {forms: [{id: 'legacy-fixture-form', job_id: job.id}]}});
+  });
+  await expect(options.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveAttribute('href', `/jobs/${job.id}/apply`);
+  expect(lookups).toBeGreaterThan(0);
+});
+
+test('InternSG remains available through its original embedded flow when no platform form exists', async ({page}) => {
+  let lookups = 0;
+  const options = await applicationOptions(page, {assistant_form_available: false}, [], route => {
+    lookups++;
+    return route.fulfill({json: {forms: []}});
+  });
+  await expect(options.getByRole('link', {name: 'Apply on InternSG within JobPilot'})).toHaveAttribute('href', `/jobs/${job.id}/apply-external`);
+  await expect(options.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveCount(0);
+  await expect(options.getByRole('link', {name: /View Original Posting/})).toHaveAttribute('href', job.source_url);
+  await expect(options).toContainText('Filling does not submit an application');
+  expect(lookups).toBe(0);
+});
+
+test('inactive jobs suppress all application entries even when a platform form is available', async ({page}) => {
+  let lookups = 0;
+  const options = await applicationOptions(page, {
+    status: 'closed', apply_url: 'https://employer.example.test/apply', assistant_form_available: true,
+  }, [], route => { lookups++; return route.fulfill({json: {forms: []}}); });
+  await expect(options).toContainText('This job is not active');
+  await expect(options.getByRole('link', {name: /Apply on InternSG|Apply with AI|Open original application/})).toHaveCount(0);
+  await expect(options.getByRole('link', {name: /View Original Posting/})).toHaveAttribute('href', job.source_url);
+  expect(lookups).toBe(0);
+});
+
+test('changing jobs clears a previous configured form while the new compatibility lookup is pending', async ({page}) => {
+  const started = deferred(), release = deferred(), answered = deferred();
+  let phase = 'first';
+  await applicationOptions(page, {apply_url: null}, [], async route => {
+    if (phase === 'first') return route.fulfill({json: {forms: [{id: 'first-fixture-form', job_id: job.id}]}});
+    started.resolve();
+    await release.promise;
+    await route.fulfill({json: {forms: []}});
+    answered.resolve();
+  });
+  await expect(page.getByRole('link', {name: 'Apply with AI Assistant'})).toBeVisible();
+  phase = 'second';
+  const nextJob = {...job, id: 'next-options-fixture', title: 'Next fictional job', apply_url: null};
+  await page.route(`**/jobs/${nextJob.id}`, route => route.request().resourceType() === 'document'
+    ? route.continue() : route.fulfill({json: nextJob}));
+  await page.evaluate(id => {
+    history.pushState({}, '', `/jobs/${id}`);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, nextJob.id);
+  await started.promise;
+  await expect(page.getByRole('heading', {name: nextJob.title})).toBeVisible();
+  await expect(page.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveCount(0);
+  await expect(page.getByRole('region', {name: 'Application options'})).toContainText('Checking available application options');
+  release.resolve();
+  await answered.promise;
+  await expect(page.getByRole('region', {name: 'Application options'})).toContainText('No in-platform application form is configured');
 });
 
 test('closed jobs do not offer an application entry', async ({page}) => {

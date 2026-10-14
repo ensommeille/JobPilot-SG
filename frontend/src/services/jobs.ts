@@ -1,4 +1,5 @@
 import api from './api'
+import type { AxiosRequestConfig } from 'axios'
 
 export type JobId = number | string
 
@@ -8,11 +9,11 @@ export const fetchJobs = (params?: {
   page?: number; page_size?: number
 }) => api.get('/jobs', { params })
 
-export const fetchJobById = (id: JobId) => api.get(`/jobs/${id}`)
+export const fetchJobById = (id: JobId, config?: AxiosRequestConfig) => api.get(`/jobs/${id}`, config)
 
-export const addFavorite = (id: JobId) => api.post(`/jobs/${id}/favorite`)
+export const addFavorite = (id: JobId, config?: AxiosRequestConfig) => api.post(`/jobs/${id}/favorite`, undefined, config)
 
-export const removeFavorite = (id: JobId) => api.delete(`/jobs/${id}/favorite`)
+export const removeFavorite = (id: JobId, config?: AxiosRequestConfig) => api.delete(`/jobs/${id}/favorite`, config)
 
 export const fetchFavorites = () => api.get('/favorites')
 

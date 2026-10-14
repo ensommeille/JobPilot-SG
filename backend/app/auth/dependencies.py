@@ -14,6 +14,7 @@ from app.db.models import RevokedAccessToken, User, UserRole
 from app.db.session import get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
@@ -25,7 +26,7 @@ def _credentials_error() -> HTTPException:
     )
 
 
-def get_current_user(db: DatabaseSession, token: Annotated[str, Depends(oauth2_scheme)]) -> User:
+def _user_from_token(db: Session, token: str) -> User:
     try:
         payload = decode_access_token(token)
         user_id = UUID(payload["sub"])
@@ -38,7 +39,21 @@ def get_current_user(db: DatabaseSession, token: Annotated[str, Depends(oauth2_s
     return user
 
 
+def get_current_user(db: DatabaseSession, token: Annotated[str, Depends(oauth2_scheme)]) -> User:
+    return _user_from_token(db, token)
+
+
+def get_optional_current_user(
+    db: DatabaseSession,
+    token: Annotated[str | None, Depends(optional_oauth2_scheme)],
+) -> User | None:
+    if token is None:
+        return None
+    return _user_from_token(db, token)
+
+
 CurrentUser = Annotated[User, Depends(get_current_user)]
+OptionalCurrentUser = Annotated[User | None, Depends(get_optional_current_user)]
 
 
 def get_browser_user(db: DatabaseSession, token: Annotated[str, Depends(oauth2_scheme)]) -> User:

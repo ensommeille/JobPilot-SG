@@ -20,13 +20,18 @@ def _normalized_values(values: list[str] | None) -> list[str]:
 
 
 def _job_load_options() -> tuple[object, ...]:
-    return (joinedload(JobPosting.source), selectinload(JobPosting.tags))
+    return (
+        joinedload(JobPosting.source),
+        selectinload(JobPosting.tags),
+        selectinload(JobPosting.forms),
+    )
 
 
 def _favorite_load_options() -> tuple[object, ...]:
     return (
         joinedload(Favorite.job).joinedload(JobPosting.source),
         joinedload(Favorite.job).selectinload(JobPosting.tags),
+        joinedload(Favorite.job).selectinload(JobPosting.forms),
     )
 
 
@@ -146,6 +151,14 @@ def remove_favorite(db: Session, *, user: User, job_id: UUID) -> None:
     if favorite is not None:
         db.delete(favorite)
         db.commit()
+
+
+def is_favorited(db: Session, *, user: User, job_id: UUID) -> bool:
+    statement = select(Favorite.id).where(
+        Favorite.user_id == user.id,
+        Favorite.job_id == job_id,
+    )
+    return db.scalar(statement) is not None
 
 
 def list_favorites(

@@ -180,3 +180,39 @@ No later browser input was issued in that turn. The container/API checks do not
 prove extension loading, permission prompts, popup operation or live InternSG
 widget compatibility. Existing local user data and development services were not
 replaced by the disposable deployment.
+
+## PR 25 integration verification (14 October 2026)
+
+PR #25 was reviewed, received a scoped favorite-session fix, and merged through
+normal approval and eight successful CI checks as main commit `f7b394e`. PR #28
+then merged that main history without rebasing or force-pushing. The three
+conflicts were resolved in authentication dependencies, frontend session helpers,
+and job details; both PRs' functionality was retained.
+
+Job details now refresh account-specific favorite state after a session or route
+change. Requests retain their original credentials, stale responses cannot replace
+the new account's state, and failures remain retryable. The authoritative
+`assistant_form_available` flag controls the configured platform form, with a
+compatibility lookup only when the field is missing. A false flag does not disable
+the distinct InternSG original-form flow. Closed jobs remain blocked.
+
+Optional job-detail authentication uses the same active-user and revoked-token
+checks as required authentication. Restricted extension credentials remain limited
+to their browser-assistant endpoints. Platform logout still revokes extension
+grants. No additional migration or provider-contract change was introduced by this
+integration; PR #28's already-proposed profile and extension-auth migrations remain.
+
+Local verification passed 570 backend tests with 92.67% branch-enabled coverage,
+117 isolated Chromium tests (including the three downloaded widget-library cases),
+frontend build and ESLint, backend Ruff, extension syntax checks, and both npm
+audits with zero reported vulnerabilities. New regression coverage includes
+cross-tab account changes, delayed responses, anonymous access, restricted-token
+scope, logout revocation, nested job serialization, and application availability.
+Two old UI assertions expected an account-change banner that is now cleared by
+the page remount; they were replaced with stronger checks for removal of unique
+private evidence and the credentials used by a fresh explicit analysis.
+
+Desktop/mobile fixture inspection confirmed the existing #28 responsive navigation
+was retained. This was a scoped integration review, not a full security audit.
+These browser tests do not establish installed Chrome extension acceptance or
+real employer delivery. No paid model request or real application was sent.
