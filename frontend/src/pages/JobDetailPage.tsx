@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { fetchJobById, addFavorite, removeFavorite, formatSalary } from '../services/jobs'
+import { getToken, watchSession } from '../services/auth'
 
 interface Job {
   id: string
@@ -26,45 +27,77 @@ interface Job {
 
 const JobDetailPage = () => {
   const { id } = useParams()
+  const token = useSyncExternalStore(watchSession, getToken, getToken)
+  return <SessionJobDetail key={`${id}:${token ?? ''}`} id={String(id)} token={token} />
+}
+
+const SessionJobDetail = ({ id, token }: { id: string; token: string | null }) => {
   const navigate = useNavigate()
   const [job, setJob] = useState<Job | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [isFavorited, setIsFavorited] = useState(false)
   const [favLoading, setFavLoading] = useState(false)
+  const [favError, setFavError] = useState('')
+  const generation = useRef(0)
+  const favoriteRequest = useRef<AbortController | null>(null)
 
   useEffect(() => {
+    const current = ++generation.current
+    const request = new AbortController()
+    const isCurrent = () => !request.signal.aborted && generation.current === current && getToken() === token
     const load = async () => {
       setLoading(true)
       setError('')
       try {
-        const res = await fetchJobById(String(id))
+        const res = await fetchJobById(id, {
+          signal: request.signal, timeout: 15000,
+          headers: { Authorization: token ? `Bearer ${token}` : '' },
+        })
+        if (!isCurrent()) return
         setJob(res.data)
-        setIsFavorited(res.data.is_favorited)
+        setIsFavorited(Boolean(token && res.data.is_favorited))
       } catch {
-        setError('Job not found or failed to load.')
+        if (isCurrent()) setError('Job not found or failed to load.')
       } finally {
-        setLoading(false)
+        if (isCurrent()) setLoading(false)
       }
     }
     load()
-  }, [id])
+    return () => {
+      generation.current = current + 1
+      request.abort()
+      favoriteRequest.current?.abort()
+      favoriteRequest.current = null
+    }
+  }, [id, token])
 
   const toggleFavorite = async () => {
-    if (!job || favLoading) return
+    if (!job || favoriteRequest.current || String(job.id) !== id || getToken() !== token) return
+    if (!token) {
+      setFavError('Sign in to JobPilot to save this job to your favorites.')
+      return
+    }
+    const request = new AbortController()
+    const current = generation.current
+    const wasFavorited = isFavorited
+    favoriteRequest.current = request
+    const isCurrent = () => !request.signal.aborted && generation.current === current && getToken() === token
+    const config = { signal: request.signal, timeout: 15000, headers: { Authorization: `Bearer ${token}` } }
     setFavLoading(true)
+    setFavError('')
     try {
-      if (isFavorited) {
-        await removeFavorite(job.id)
-        setIsFavorited(false)
+      if (wasFavorited) {
+        await removeFavorite(job.id, config)
       } else {
-        await addFavorite(job.id)
-        setIsFavorited(true)
+        await addFavorite(job.id, config)
       }
+      if (isCurrent()) setIsFavorited(!wasFavorited)
     } catch {
-      // 静默失败
+      if (isCurrent()) setFavError('Could not update your favorites. Check your connection and try again.')
     } finally {
-      setFavLoading(false)
+      if (favoriteRequest.current === request) favoriteRequest.current = null
+      if (isCurrent()) setFavLoading(false)
     }
   }
 
@@ -121,13 +154,15 @@ const JobDetailPage = () => {
               <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#999' }}>
                 Deadline: {job.deadline ?? 'Not specified'}
               </p>
-              <button onClick={toggleFavorite} disabled={favLoading}
+              <button onClick={toggleFavorite} disabled={favLoading} aria-pressed={isFavorited}
+                aria-describedby={favError ? 'favorite-error' : undefined}
                 style={{ padding: '6px 16px', borderRadius: '4px', cursor: 'pointer',
                   backgroundColor: isFavorited ? '#fef3c7' : 'white',
                   border: `1px solid ${isFavorited ? '#f59e0b' : '#ddd'}`,
                   color: isFavorited ? '#f59e0b' : '#666' }}>
                 {isFavorited ? '★ Favorited' : '☆ Add to Favorites'}
               </button>
+              {favError && <p id="favorite-error" role="alert" style={{ color: '#b91c1c', fontSize: '14px', maxWidth: '260px' }}>{favError}</p>}
             </div>
           </div>
 
