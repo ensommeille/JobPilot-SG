@@ -70,6 +70,7 @@ def test_profile_requires_auth_and_can_be_replaced(client: TestClient) -> None:
     headers = auth_headers(client)
     initial = client.get("/profile", headers=headers)
     assert initial.status_code == 200
+    assert initial.headers["cache-control"] == "no-store"
     assert initial.json()["contact_email"] == "profile@example.com"
 
     update = client.put(
@@ -86,6 +87,7 @@ def test_profile_requires_auth_and_can_be_replaced(client: TestClient) -> None:
         },
     )
     assert update.status_code == 200
+    assert update.headers["cache-control"] == "no-store"
     assert update.json()["full_name"] == "Example Student"
     assert update.json()["skills"] == ["Python", "SQL"]
     assert client.get("/profile", headers=headers).json() == update.json()

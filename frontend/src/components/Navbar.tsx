@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { removeToken } from '../services/auth'
+import { getToken, logoutPlatform, watchSession } from '../services/auth'
 import api from '../services/api'
 
 interface NavbarProps {
@@ -18,18 +18,32 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
   const navigate = useNavigate()
   const location = useLocation()
   const [userName, setUserName] = useState('')
+  const [logoutError, setLogoutError] = useState('')
+  const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
-    let active = true
-    api.get('/profile')
-      .then(res => { if (active) setUserName(res.data.full_name ?? res.data.contact_email ?? 'Account') })
-      .catch(() => { if (active) setUserName('Account') })
-    return () => { active = false }
+    let pending: AbortController | null = null
+    const load = () => {
+      pending?.abort()
+      setUserName('')
+      const token = getToken()
+      if (!token) return
+      const request = new AbortController()
+      pending = request
+      api.get('/profile', {signal: request.signal, headers: {Authorization: `Bearer ${token}`}, timeout: 15000})
+        .then(res => { if (!request.signal.aborted && getToken() === token) setUserName(res.data.full_name ?? res.data.contact_email ?? 'Account') })
+        .catch(() => { if (!request.signal.aborted && getToken() === token) setUserName('Account') })
+    }
+    load()
+    const unwatch = watchSession(load)
+    return () => { pending?.abort(); unwatch() }
   }, [])
 
-  const handleLogout = () => {
-    removeToken()
-    navigate('/')
+  const handleLogout = async () => {
+    setLoggingOut(true); setLogoutError('')
+    try { await logoutPlatform(); if (!getToken()) navigate('/') }
+    catch (error) { setLogoutError(error instanceof Error ? error.message : 'Logout failed. Please retry.') }
+    finally { setLoggingOut(false) }
   }
 
   return (
@@ -53,6 +67,7 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
           {NAV_ITEMS.map(item => (
             <button
               key={item.path}
+              aria-label={item.label}
               className={`nav-link ${location.pathname === item.path ? 'active' : ''}`}
               onClick={() => navigate(item.path)}
             >
@@ -62,16 +77,17 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
 
           <div className="nav-divider" />
 
-          <button className="user-chip" onClick={() => navigate('/profile')}>
+          <button className="user-chip" aria-label={userName ? `Your profile: ${userName}` : 'Your profile'} onClick={() => navigate('/profile')}>
             <span className="avatar">{userName.charAt(0) || '?'}</span>
             <span className="user-name">{userName || 'Account'}</span>
           </button>
 
-          <button className="btn btn-ghost btn-sm" onClick={handleLogout}>
-            Logout
+          <button className="btn btn-ghost btn-sm" onClick={handleLogout} disabled={loggingOut}>
+            {loggingOut ? 'Signing out…' : 'Logout'}
           </button>
         </nav>
       </div>
+      {logoutError && <p role="alert" className="alert alert-error">{logoutError}</p>}
     </header>
   )
 }

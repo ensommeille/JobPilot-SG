@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JobPilot — Review & Fill</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+<header><h1>JobPilot <span>Review, Fill & Confirm</span></h1><p>You stay in control. Complete CAPTCHA yourself; sending requires a separate confirmation.</p></header>
+<main>
+<form id="login">
+  <h2>Connect through JobPilot</h2>
+  <p>Sign in on the platform and approve this extension once. No password is entered or stored here.</p>
+  <label for="platform">JobPilot platform</label>
+  <select id="platform"><option value="http://127.0.0.1:5173">Local demo (127.0.0.1)</option><option value="http://localhost:5173">Local development (localhost)</option></select>
+  <p id="extension-id"></p>
+  <button type="submit">Connect through JobPilot</button>
+</form>
+<section id="workspace" hidden>
+  <div class="section-heading"><h2>Review your answers</h2><button id="logout" class="secondary" type="button">Disconnect</button></div>
+  <p id="target">Open an InternSG application page, then read its fields.</p>
+  <details id="local-profile">
+    <summary>Previous device details — review and import</summary>
+    <p id="account"></p>
+    <p>Saved only for this API and account in this Chrome profile, not synced or encrypted as a vault. Sign out does not delete saved details. Deleting details does not erase submission-attempt protection. Do not save on a shared computer.</p>
+    <label for="local-phone">Fallback contact number</label><input id="local-phone" maxlength="40" type="tel">
+    <label for="local-period">Availability period</label><input id="local-period" maxlength="500" placeholder="Enter your actual start and end dates">
+    <label for="local-summary">Reusable summary (plain text)</label><textarea id="local-summary" maxlength="3000" aria-describedby="summary-help"></textarea>
+    <p id="summary-help">Write your own introduction and save it to reuse in future applications. No AI generation is used.</p>
+    <p>Country selections below are saved with these details after you read a supported page. Nothing is inferred from your resume.</p>
+    <button id="save-local" class="secondary" type="button">Save on this device</button>
+    <button id="clear-local" class="secondary" type="button">Delete saved details</button>
+    <p>Applications now use your JobPilot profile, not this device copy. Review the text above and the saved countries below before importing. Existing platform values are never replaced. Afterwards, maintain your details in JobPilot.</p>
+    <p id="import-countries"></p>
+    <label class="check"><input id="import-consent" type="checkbox">I confirm importing these device details into this JobPilot account, only where the platform has no saved value.</label>
+    <button id="import-local" class="secondary" type="button" disabled>Import reviewed details to JobPilot</button>
+  </details>
+  <button id="inspect" class="secondary" type="button">Read page & load profile</button>
+  <p>Your JobPilot profile is the source for each application. Update it once on the platform, then read the form again. Edits below apply to this application only.</p>
+  <button id="enable-embedded" class="secondary" type="button">Enable embedded InternSG access</button>
+  <p class="field-reason">Embedded pilot: use the local JobPilot application page. Explicit InternSG access is required for the child frame; unrelated frames are not read.</p>
+  <div id="fields"></div>
+  <p class="notice">Filling alone never submits. Country defaults change only with explicit confirmation. Files, consent boxes and CAPTCHA remain manual.</p>
+  <button id="fill" type="button" disabled>Fill confirmed answers</button>
+  <section class="submission" aria-labelledby="submission-heading">
+    <h2 id="submission-heading">Send this application</h2>
+    <p>First finish filling and complete CAPTCHA on InternSG. Then review the actual website answers below. This sends a real application, not a test.</p>
+    <button id="prepare-submit" class="secondary" type="button">Review website answers before sending</button>
+    <div id="submission-preview" hidden>
+      <p id="submission-target"></p>
+      <dl id="submission-values"></dl>
+      <label class="check"><input id="submit-consent" type="checkbox">I reviewed this recipient and all answers, agree to the site's terms shown on InternSG, and authorize sending this single application now.</label>
+      <button id="send-application" type="button" disabled>Confirm & send this application</button>
+    </div>
+    <button id="check-result" class="secondary" type="button">Check original page result</button>
+    <p id="submission-status" role="status" aria-live="polite">No application has been sent by this action. Sending does not prove delivery.</p>
+    <p>Attempt protection is local to this browser and account. An uncertain attempt is blocked from retrying here, even after reopening. It cannot detect submissions made manually or on another device.</p>
+  </section>
+</section>
+<p id="status" role="status" aria-live="polite">Ready to connect.</p>
+</main>
+<script type="module" src="popup.js"></script>
+</body></html>

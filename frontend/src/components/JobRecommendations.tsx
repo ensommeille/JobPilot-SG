@@ -1,0 +1,150 @@
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import api from '../services/api'
+import { getToken, watchSession } from '../services/auth'
+import './JobRecommendations.css'
+
+interface Evidence {
+  requirement: string
+  importance: string
+  reason: string
+  job_evidence: string
+  profile_evidence: string | null
+  skill_overlaps?: {skill_id: string; label: string; kind: 'specific' | 'general'; profile_evidence: string}[]
+}
+interface Suggestion {
+  job_id: string
+  title: string
+  company: string
+  city: string | null
+  job_type: string | null
+  supported: Evidence[]
+  gaps: Evidence[]
+  unknown: Evidence[]
+  overlaps?: Evidence[]
+}
+interface Report {
+  status: 'ready' | 'profile_needed' | 'no_candidates' | 'no_evidence' | 'no_matches'
+  scanned: number
+  evaluated: number
+  truncated: boolean
+  matched: number
+  excluded: Record<string, number>
+  items: Suggestion[]
+}
+const messages = {
+  profile_needed: 'Add specific tools or domain skills to your saved profile, such as Excel, AutoCAD or Python. Short descriptions are supported. General traits or learning goals alone do not generate suggestions; uploaded resumes are not read.',
+  no_candidates: 'No active, unexpired jobs fit these filters. Clear a filter or browse all jobs below.',
+  no_evidence: 'Jobs were found, but their requirements are not ready for reliable comparison. You can still browse them below; updated, non-mock extraction is needed.',
+  no_matches: 'No explicit tool or domain-skill overlaps were found in the jobs evaluated. Recognition is limited to named skills, not every possible meaning. This is not a rejection: review your saved skills or browse all jobs.',
+  ready: 'Suggestions to investigate — not an assessment of eligibility.',
+}
+
+function sharedSkills(job: Suggestion): string[] {
+  const labels = [...job.supported, ...(job.overlaps || [])].flatMap(item =>
+    item.skill_overlaps
+      ? item.skill_overlaps.filter(skill => skill.kind === 'specific').map(skill => skill.label)
+      : [item.requirement])
+  return Array.from(new Set(labels))
+}
+const exclusions: Record<string, string> = {
+  missing_extraction: 'Requirements not extracted', stale_extraction: 'Requirements out of date',
+  invalid_extraction: 'Requirements could not be verified', extraction_running: 'Extraction in progress',
+  extraction_failed: 'Extraction failed', no_requirements: 'No comparable requirements',
+  mock_extraction: 'Mock data excluded',
+}
+
+export default function JobRecommendations() {
+  const [filters, setFilters] = useState({keyword: '', city: '', job_type: ''})
+  const [report, setReport] = useState<Report | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const controller = useRef<AbortController | null>(null)
+  useEffect(() => {
+    const unwatch = watchSession(() => {
+        controller.current?.abort(); setReport(null); setBusy(false)
+        setError('Account changed. Sign in and find jobs again.')
+    })
+    return () => { controller.current?.abort(); unwatch() }
+  }, [])
+
+  function changeFilter(key: keyof typeof filters, value: string) {
+    controller.current?.abort(); setBusy(false); setReport(null); setError('')
+    setFilters(previous => ({...previous, [key]: value}))
+  }
+
+  async function findJobs(event: React.FormEvent) {
+    event.preventDefault()
+    const token = getToken()
+    if (!token) { setReport(null); setError('Sign in to JobPilot to get suggestions from your profile.'); return }
+    controller.current?.abort()
+    const request = new AbortController()
+    controller.current = request
+    setBusy(true); setReport(null); setError('')
+    try {
+      const response = await api.post<Report>('/jobs/recommendations', {...filters, limit: 10},
+        {signal: request.signal, timeout: 15000, headers: {Authorization: `Bearer ${token}`}})
+      if (request.signal.aborted) return
+      if (getToken() !== token) { setError('Account changed. Find jobs again.'); return }
+      setReport(response.data)
+    } catch {
+      if (!request.signal.aborted) setError('Could not load suggestions. Check your connection and try again.')
+    } finally {
+      if (controller.current === request) setBusy(false)
+    }
+  }
+
+  return <section className="job-recommendations" aria-labelledby="recommendations-title" aria-busy={busy}>
+    <h2 id="recommendations-title">For you</h2>
+    <p>Find tools and domain skills shared by your saved profile and real job descriptions. Shared terms are a reason to investigate, not proof that you meet every requirement.</p>
+    <form onSubmit={findJobs}>
+      <div className="recommendation-filters">
+        <label>Role or company (optional)<input className="input" maxLength={200} value={filters.keyword} onChange={e => changeFilter('keyword', e.target.value)} /></label>
+        <label>City, exact name (optional)<input className="input" maxLength={120} placeholder="Singapore" value={filters.city} onChange={e => changeFilter('city', e.target.value)} /></label>
+        <label>Job type, exact name (optional)<input className="input" maxLength={80} placeholder="internship" value={filters.job_type} onChange={e => changeFilter('job_type', e.target.value)} /></label>
+      </div>
+      <div className="recommendation-actions">
+        <button className="btn btn-primary" disabled={busy}>{busy ? 'Finding jobs…' : 'Find jobs for me'}</button>
+        <Link to="/profile">Update my profile</Link>
+      </div>
+    </form>
+    <p className="muted">These filters apply only to For you and are not saved. After editing your profile, find jobs again.</p>
+    {busy && <p role="status">Comparing your saved skills with current job requirements…</p>}
+    {error && <p role="alert">{error}</p>}
+    {report && <div>
+      <p role="status"><strong>{messages[report.status]}</strong></p>
+      {report.status !== 'profile_needed' && <>
+        <p>{report.evaluated} of {report.scanned} candidate jobs evaluated. {report.matched} with explicit skill overlaps; showing {report.items.length}.</p>
+        {report.truncated && <p>Only the newest 500 candidates were scanned. Narrow your filters to explore others.</p>}
+        {Object.keys(report.excluded).length > 0 && <details>
+          <summary>Why some jobs were not evaluated</summary>
+          <ul>{Object.entries(report.excluded).map(([reason, count]) => <li key={reason}>{exclusions[reason] || 'Requirements unavailable'}: {count}</li>)}</ul>
+        </details>}
+      </>}
+      {report.status === 'ready' && <>
+        <p className="recommendation-caveat">Preliminary: extraction is not human-verified. Order: no explicit gaps first, then more distinct tool or domain-skill overlaps, then newest postings. Generic traits and model-assigned priorities do not improve rank. Proficiency, years, alternatives, education and other conditions still need review.</p>
+        <ol className="recommendation-list">
+          {report.items.map(job => <li key={job.job_id}>
+            <h3><Link to={'/jobs/' + job.job_id}>{job.title}</Link></h3>
+            <p className="muted">{job.company} · {job.city || 'City unspecified'} · {job.job_type || 'Type unspecified'}</p>
+            <p><strong>Why shown:</strong> {sharedSkills(job).join(', ')} named in both the JD and your saved skills.</p>
+            <p>{job.gaps.length} explicit gaps · {job.unknown.length} requirements still need more information or manual review.</p>
+            <details>
+              <summary>Review reasons and evidence</summary>
+              {([['Exact skill entry', job.supported], ['Skill overlap — conditions unverified', job.overlaps || []], ['Explicit gap', job.gaps], ['Unknown', job.unknown.filter(i => !job.overlaps?.length || !i.skill_overlaps?.length)]] as const).map(([label, items]) =>
+                items.map((item, index) => <div className="recommendation-evidence" key={label + index}>
+                  <h4>{label}: {item.requirement}</h4>
+                  <p className="muted">Model-labelled priority: {item.importance} · not verified or used for ordering.</p>
+                  {!!item.skill_overlaps?.length && <p>Shared mentions: {item.skill_overlaps.map(skill => skill.label + (skill.kind === 'general' ? ' (general trait; not ranked)' : '')).join(', ')}.</p>}
+                  <p>{item.reason}</p>
+                  <dl><dt>Job description</dt><dd>{item.job_evidence}</dd>
+                    <dt>Your profile</dt><dd>{item.profile_evidence || 'No comparable explicit evidence used.'}</dd></dl>
+                </div>))}
+            </details>
+            <Link to={'/jobs/' + job.job_id}>View job and full analysis</Link>
+          </li>)}
+        </ol>
+      </>}
+    </div>}
+  </section>
+}

@@ -3,11 +3,11 @@
 from pathlib import PurePath
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import ResumeDocument, User, UserProfile
-from app.profiles.schemas import ProfileUpdate, ResumeCreate
+from app.profiles.schemas import APPLICATION_FIELDS, LocalProfileImport, ProfileUpdate, ResumeCreate
 
 
 def get_profile(db: Session, *, user: User) -> UserProfile:
@@ -29,14 +29,33 @@ def get_profile(db: Session, *, user: User) -> UserProfile:
 def update_profile(db: Session, *, user: User, payload: ProfileUpdate) -> UserProfile:
     profile = get_profile(db, user=user)
     for field, value in payload.model_dump(mode="python").items():
+        # Preserve new fields when an older full-replacement client omits them.
+        if field in APPLICATION_FIELDS and field not in payload.model_fields_set:
+            continue
         setattr(profile, field, value)
     db.commit()
     return get_profile(db, user=user)
 
 
-def add_resume_metadata(
-    db: Session, *, user: User, payload: ResumeCreate
-) -> ResumeDocument:
+def import_local_profile(db: Session, *, user: User, payload: LocalProfileImport) -> dict:
+    profile = get_profile(db, user=user)
+    imported, skipped = [], []
+    # Conditional writes preserve values saved by another client before each update.
+    for field, value in payload.model_dump(exclude={"confirmed"}, exclude_unset=True).items():
+        if not value or not value.strip():
+            continue
+        column = getattr(UserProfile, field)
+        result = db.execute(
+            update(UserProfile)
+            .where(UserProfile.id == profile.id, column.is_(None))
+            .values({field: value.strip()})
+        )
+        (imported if result.rowcount else skipped).append(field)
+    db.commit()
+    return {"imported": imported, "skipped": skipped}
+
+
+def add_resume_metadata(db: Session, *, user: User, payload: ResumeCreate) -> ResumeDocument:
     profile = get_profile(db, user=user)
     suffix = PurePath(payload.filename).suffix.casefold()
     document = ResumeDocument(

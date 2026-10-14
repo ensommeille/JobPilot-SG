@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
+import JobRecommendations from '../components/JobRecommendations'
 import { fetchJobs, addFavorite, removeFavorite, normalizeJobList } from '../services/jobs'
 import type { JobId, JobView } from '../services/jobs'
 
@@ -194,7 +195,7 @@ const JobListPage = () => {
   ].filter(g => g.options.length > 0)
 
   return (
-    <div className="page">
+    <div className="page job-discovery-page">
       <Navbar />
       <main className="container">
         <div className="page-header">
@@ -202,6 +203,8 @@ const JobListPage = () => {
           <p>Internships and graduate roles across Singapore, in one place.</p>
         </div>
 
+        <JobRecommendations />
+        <h2 style={{marginBottom: 'var(--s-4)'}}>Browse all jobs</h2>
         <form className="searchbar" onSubmit={e => e.preventDefault()} role="search">
           <label className="searchbar-field searchbar-main">
             <SearchIcon />

@@ -16,11 +16,12 @@ const LoginPage = () => {
     setError('')
     try {
       const data = await loginApi(email, password)
-      saveToken(data.access_token)
-      navigate('/jobs')
+      await saveToken(data.access_token)
+      const next = new URLSearchParams(window.location.search).get('next')
+      navigate(next?.startsWith('/connect-extension#') ? next : '/jobs')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(typeof msg === 'string' ? msg : 'Login failed. Please check your credentials.')
+      setError(typeof msg === 'string' ? msg : err instanceof Error ? err.message : 'Login failed. Please check your credentials.')
     } finally {
       setLoading(false)
     }

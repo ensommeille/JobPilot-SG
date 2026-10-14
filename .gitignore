@@ -8,6 +8,7 @@ venv/
 .pytest-*/
 .ruff_cache/
 .coverage
+.coverage.*
 coverage.xml
 htmlcov/
 
@@ -34,3 +35,5 @@ Thumbs.db
 *.log
 data/
 output/
+playwright-report/
+test-results/

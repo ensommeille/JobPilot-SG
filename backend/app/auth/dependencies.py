@@ -8,8 +8,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
+from app.auth.extension_tokens import digest, extension_grant
 from app.core.security import TokenValidationError, decode_access_token
-from app.db.models import User, UserRole
+from app.db.models import RevokedAccessToken, User, UserRole
 from app.db.session import get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -24,9 +25,7 @@ def _credentials_error() -> HTTPException:
     )
 
 
-def get_current_user(
-    db: DatabaseSession, token: Annotated[str, Depends(oauth2_scheme)]
-) -> User:
+def get_current_user(db: DatabaseSession, token: Annotated[str, Depends(oauth2_scheme)]) -> User:
     try:
         payload = decode_access_token(token)
         user_id = UUID(payload["sub"])
@@ -34,12 +33,21 @@ def get_current_user(
         raise _credentials_error() from exc
 
     user = db.get(User, user_id)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or db.get(RevokedAccessToken, digest(token)) is not None:
         raise _credentials_error()
     return user
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def get_browser_user(db: DatabaseSession, token: Annotated[str, Depends(oauth2_scheme)]) -> User:
+    if token.startswith("jpx_"):
+        return db.get(User, extension_grant(db, token).user_id)
+    return get_current_user(db, token)
+
+
+BrowserUser = Annotated[User, Depends(get_browser_user)]
 
 
 def require_roles(*allowed_roles: UserRole) -> Callable[[CurrentUser], User]:

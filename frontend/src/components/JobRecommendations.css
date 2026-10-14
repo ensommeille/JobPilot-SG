@@ -1,0 +1,32 @@
+.job-recommendations {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--s-5);
+  margin-bottom: var(--s-6);
+  overflow-wrap: anywhere;
+}
+.job-recommendations p { max-width: 74ch; margin-top: var(--s-3); }
+.job-recommendations a { color: var(--primary); text-underline-offset: 3px; }
+.job-recommendations :is(a, summary, input):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.job-recommendations input { caret-color: var(--primary); }
+.job-recommendations input::placeholder { color: var(--text-muted); opacity: 1; }
+.job-recommendations ::selection { background: var(--primary-soft); color: var(--text); }
+.recommendation-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); margin-top: var(--s-5); }
+.recommendation-filters label { display: grid; gap: var(--s-2); min-width: 0; }
+.recommendation-filters input { width: 100%; min-width: 0; }
+.recommendation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-4); margin-top: var(--s-4); }
+.job-recommendations summary { cursor: pointer; color: var(--primary); margin-top: var(--s-3); }
+.recommendation-caveat { background: var(--warning-soft); padding: var(--s-4); border-radius: var(--radius-sm); }
+.recommendation-list { list-style: none; margin: var(--s-5) 0 0; padding: 0; }
+.recommendation-list > li { padding: var(--s-5) 0; border-top: 1px solid var(--border); }
+.recommendation-list > li > a { display: inline-block; margin-top: var(--s-4); }
+.recommendation-evidence { margin-top: var(--s-5); }
+.recommendation-evidence dt { font-weight: 600; margin-top: var(--s-3); }
+.recommendation-evidence dd { margin: var(--s-1) 0 0; white-space: pre-wrap; }
+@media (max-width: 700px) {
+  .recommendation-filters { grid-template-columns: 1fr; }
+  .job-recommendations { padding: var(--s-4); }
+  .job-discovery-page .navbar-inner { flex-wrap: wrap; height: auto; padding-top: var(--s-3); padding-bottom: var(--s-3); gap: var(--s-3); }
+  .job-discovery-page .nav-links { flex-wrap: wrap; min-width: 0; }
+}

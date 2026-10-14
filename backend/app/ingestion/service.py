@@ -82,9 +82,7 @@ def get_crawl_run(db: Session, run_id: UUID) -> CrawlRun | None:
     return db.get(CrawlRun, run_id)
 
 
-def list_crawl_runs(
-    db: Session, *, page: int, page_size: int
-) -> tuple[list[CrawlRun], int, int]:
+def list_crawl_runs(db: Session, *, page: int, page_size: int) -> tuple[list[CrawlRun], int, int]:
     total = db.scalar(select(func.count()).select_from(CrawlRun)) or 0
     statement = (
         select(CrawlRun)
@@ -141,6 +139,7 @@ def run_source(
     adapter_factory: SourceAdapterFactory,
     max_links: int,
     max_details: int,
+    collected_external_ids: list[str] | None = None,
 ) -> CrawlRun:
     adapter = adapter_factory(source)
     started_at = datetime.now(UTC)
@@ -165,9 +164,7 @@ def run_source(
         crawl_run.items_new = stats.items_new
         crawl_run.items_updated = stats.items_updated
         crawl_run.items_failed = len(batch.failures)
-        crawl_run.error_summary = [
-            failure.model_dump(mode="json") for failure in batch.failures
-        ]
+        crawl_run.error_summary = [failure.model_dump(mode="json") for failure in batch.failures]
         source.status = {
             CrawlRunStatus.SUCCEEDED: "healthy",
             CrawlRunStatus.PARTIAL: "degraded",
@@ -175,6 +172,8 @@ def run_source(
         }[crawl_run.status]
         _add_run_audit(db, actor=actor, source=source, crawl_run=crawl_run)
         db.commit()
+        if collected_external_ids is not None:
+            collected_external_ids.extend(record.external_id for record in records)
     except Exception as exc:
         db.rollback()
         crawl_run = _reload_run(db, run_id)
@@ -194,9 +193,7 @@ def run_source(
             }
         ]
         persisted_source.status = "failed"
-        _add_run_audit(
-            db, actor=actor, source=persisted_source, crawl_run=crawl_run
-        )
+        _add_run_audit(db, actor=actor, source=persisted_source, crawl_run=crawl_run)
         db.commit()
     finally:
         close = getattr(adapter, "close", None)
@@ -218,9 +215,7 @@ def _reload_run(db: Session, run_id: UUID) -> CrawlRun:
     return crawl_run
 
 
-def _add_run_audit(
-    db: Session, *, actor: User, source: JobSource, crawl_run: CrawlRun
-) -> None:
+def _add_run_audit(db: Session, *, actor: User, source: JobSource, crawl_run: CrawlRun) -> None:
     db.add(
         AuditLog(
             actor_id=actor.id,
