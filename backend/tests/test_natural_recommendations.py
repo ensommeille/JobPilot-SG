@@ -261,6 +261,8 @@ def test_hallucinated_label_or_quote_cannot_borrow_unrelated_evidence(
         ["I use Python in projects.", "No experience with Python"],
         ["Python", "Currently learning Python"],
         ["Currently learning Python"],
+        ["想学 Python"],
+        ["我正在学 Python"],
     ],
 )
 def test_profile_negation_learning_and_contradictions_suppress_overlap(

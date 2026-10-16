@@ -52,7 +52,7 @@ test('failure, retry and filter edits invalidate previous result', async ({page}
   let body;
   await setup(page, route => { body = route.request().postDataJSON(); return route.fulfill(fail ? {status: 503, json: {}} : {json: report}); });
   await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  await expect(page.getByRole('alert')).toContainText('Could not load');
+  await expect(page.locator('.job-recommendations').getByRole('alert')).toContainText('Could not load');
   fail = false;
   await page.getByRole('button', {name: 'Find jobs for me'}).click();
   await expect(page.locator('.recommendation-list')).toBeVisible();
@@ -66,7 +66,7 @@ test('signed out does not send a request', async ({page}) => {
   let calls = 0;
   await setup(page, route => { calls++; return route.fulfill({json: report}); }, false);
   await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  await expect(page.getByRole('alert')).toContainText('Sign in');
+  await expect(page.locator('.job-recommendations').getByRole('alert')).toContainText('Sign in');
   expect(calls).toBe(0);
 });
 test('account switch aborts in-flight data', async ({page}) => {
@@ -80,7 +80,7 @@ test('account switch aborts in-flight data', async ({page}) => {
     window.dispatchEvent(new StorageEvent('storage', {key: null}));
   });
   release();
-  await expect(page.getByRole('alert')).toContainText('Account changed');
+  await expect(page.locator('.job-recommendations').getByRole('alert')).toContainText('Account changed');
   await expect(page.locator('.recommendation-list')).toHaveCount(0);
 });
 

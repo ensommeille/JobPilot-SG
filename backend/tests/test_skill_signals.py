@@ -291,6 +291,10 @@ def test_job_alternatives_still_produce_lexical_mentions():
     "entry,skill",
     [
         ("不会 Python", "Python"),
+        ("想学 Python", "Python"),
+        ("想學 Python", "Python"),
+        ("我正在学 Python", "Python"),
+        ("我正在學 Python", "Python"),
         ("正在学习 Python", "Python"),
         ("没有 Excel 经验", "Excel"),
         ("不會 Python", "Python"),

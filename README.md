@@ -2,23 +2,23 @@
 
 **Job Aggregation & AI-Assisted Application Platform (Singapore)**
 
-Aggregates Singapore job/internship postings (InternSG as the primary source, plus a sandbox fixture source) into one searchable repository, and assists job seekers with an in-platform AI Application Form Assistant (Phase 1) — mapping a maintained user profile to job-specific application forms under human confirmation. The same engine may be extended to a browser extension in Phase 2 (stretch goal).
+Aggregates Singapore job/internship postings (InternSG as the primary source, plus a sandbox fixture source) into one searchable repository, and assists job seekers with profile reuse, evidence-backed job analysis and human-reviewed form filling. A Chrome extension supports controlled filling of the original InternSG form; final external submission remains with the user. Saving a JobPilot application record does not verify employer receipt.
 
 > Course: SWE5006 Designing Modern Software Systems – Practice Module Project (Aug–Nov 2026)
-> Status: Proposal submitted (28 Aug 2026) · Project conduct from 1 Sep 2026
+> Status: Course project in progress. Historical proposal and development plans are preserved; see the [course closeout baseline](docs/deliverables/COURSE_CLOSEOUT_BASELINE.md) for the 15 October 2026 implementation snapshot and remaining verification.
 
 ## Architecture
 
 ```
-React + TypeScript UI (browse/filter/favorites/profile, application form + confirmation panel)
-        │ REST/JSON over HTTPS
+React + TypeScript UI (jobs/recommendations/favorites/profile/application history)
+        │ REST/JSON (localhost HTTP; external deployment needs HTTPS)
 FastAPI Modular Monolith: Auth/RBAC · Job Query · Profile · Application Form/Assistant
                           · Ingestion Orchestrator · Source Adapters · LLM Services · Audit
         │
 PostgreSQL (users / profiles / jobs / tags / form schemas / applications / crawl runs / audit)
         ▲
-External: InternSG · sandbox/mock · approved public RSS/static sources
-          LLM API (Qwen or DeepSeek, TBD) behind a provider interface
+External: InternSG · local sandbox fixtures · optional Qwen/DeepSeek via provider interface
+          Chrome extension assists with original-site filling under user review
 DevSecOps: GitHub Actions · pytest · Semgrep · pip-audit · Docker Compose
 ```
 
@@ -28,8 +28,8 @@ DevSecOps: GitHub Actions · pytest · Semgrep · pip-audit · Docker Compose
 ├─ docs/          Architecture, API contract, ADRs, deliverables (proposal, dev doc)
 ├─ agile/         Product backlog, user stories, sprint plans/reviews/retros, burndown
 ├─ backend/       FastAPI modular monolith (Python 3.13)
-├─ frontend/      React + TypeScript + Vite (Phase 1 UI shell)
-├─ extension/     Chrome extension (Phase 2, placeholder)
+├─ frontend/      React + TypeScript + Vite web UI
+├─ extension/     Chrome extension for controlled original-form assistance
 ├─ scripts/       Pipeline / validation scripts
 └─ .github/       CI workflows, issue & PR templates
 ```
@@ -95,3 +95,4 @@ We used Hermes Agent to produce drafts based on our discussed idea, format parag
 - Project Proposal (v2.1): [docs/deliverables](docs/deliverables/)
 - Development Document (v0.2): [docs/deliverables](docs/deliverables/)
 - API contract draft: [docs/api-contract.md](docs/api-contract.md)
+- Course closeout: [baseline](docs/deliverables/COURSE_CLOSEOUT_BASELINE.md), [requirements trace](docs/deliverables/REQUIREMENTS_TRACE.md), [demo acceptance](docs/deliverables/DEMO_ACCEPTANCE.md), [process evidence](agile/PROCESS_EVIDENCE_INDEX.md)
