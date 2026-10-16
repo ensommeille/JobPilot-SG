@@ -13,8 +13,9 @@ skills inside `kind: skill` conditions contribute an intersection. Traits,
 learning interest, language and qualifications cannot supply the concrete-skill
 gate or improve rank. A job needs at least one such intersection; no minimum
 recommendation count is manufactured. Skill IDs remain deduplicated across
-groups/aliases. Repeated language conditions are displayed once, while different
-language qualifications remain separate unverified conditions.
+groups/aliases. Only duplicate standalone language claims from the same source
+quote are collapsed; distinct compound groups retain every language condition.
+Different language qualifications remain separate unverified conditions.
 
 Each MatchItem adds `group_operator` and `conditions`, as specified in
 [the matching contract](MATCH_ANALYSIS_CONTRACT.md). Every compound group remains
@@ -32,6 +33,8 @@ are retained where present, without asserting a person's availability. Unknown
 facts are not filled with assumed Singapore location or hours. They do not
 increase rank or the applicant-requirement count. This endpoint does not perform
 an availability/eligibility assessment for project members or other users.
+Contradictory or unsupported work-mode allowance wording is displayed as a
+review-needed extraction, not as a confirmed remote/hybrid/onsite policy.
 
 This contract does not claim semantic accuracy from quote coverage. A model
 classification with a locatable quote can still be wrong; live extractions stay

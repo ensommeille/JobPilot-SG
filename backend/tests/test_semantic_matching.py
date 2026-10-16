@@ -183,6 +183,7 @@ def test_language_aliases_and_cross_field_duplicates_have_no_extra_row_or_rank()
     items = compare_data(data, source, ["Python", "Mandarin"])
     assert len(items) == 2
     assert specific_overlap_ids(items) == {"python"}
+    assert items[1].conditions[0].kind == "language"
     assert (
         len(
             [
@@ -194,6 +195,31 @@ def test_language_aliases_and_cross_field_duplicates_have_no_extra_row_or_rank()
         )
         == 1
     )
+
+
+def test_repeated_language_in_distinct_compound_groups_keeps_each_condition():
+    source = "English or Mandarin accepted.\nEnglish and Python required."
+    data = schema(
+        group(
+            atom("English", kind="language", evidence="English or Mandarin accepted."),
+            atom("Mandarin", kind="language", evidence="English or Mandarin accepted."),
+            operator="any_of",
+            evidence="English or Mandarin accepted.",
+        ),
+        group(
+            atom("English", kind="language", evidence="English and Python required."),
+            atom("Python", evidence="English and Python required."),
+            evidence="English and Python required.",
+        ),
+    )
+
+    items = compare_data(data, source, ["Python"])
+
+    assert len(items) == 2
+    assert [condition.requirement for condition in items[0].conditions] == ["English", "Mandarin"]
+    assert [condition.requirement for condition in items[1].conditions] == ["English", "Python"]
+    assert items[0].group_operator == "any_of"
+    assert items[1].group_operator == "all_of"
 
 
 def test_distinct_skill_ids_deduplicate_across_groups_and_aliases():
@@ -296,6 +322,73 @@ def test_model_days_per_week_cannot_be_displayed_as_verified_hours():
     assert data.work_constraints.hours.minimum == 4.0  # Raw result is not rewritten.
 
 
+@pytest.mark.parametrize(
+    "source,allowed",
+    [
+        ("No remote work.", True),
+        ("Remote work is allowed.", False),
+    ],
+)
+def test_contradictory_work_mode_polarity_is_not_displayed_as_a_source_fact(source, allowed):
+    data = schema(
+        constraints={
+            "work_modes": [
+                {"value": "remote", "allowed": allowed, "evidence": source, "condition": None}
+            ]
+        }
+    )
+
+    item = compare_work_constraints(data, source)[3]
+
+    assert item.requirement == "Work mode: extracted allowance requires review"
+    assert "source quote" in item.reason
+    assert item.job_evidence == source
+
+
+@pytest.mark.parametrize(
+    "source,allowed",
+    [
+        ("Remote work is allowed.", True),
+        ("No remote work.", False),
+        ("Remote work is not allowed.", False),
+    ],
+)
+def test_explicit_work_mode_direction_stays_visible_but_unverified(source, allowed):
+    data = schema(
+        constraints={
+            "work_modes": [
+                {"value": "remote", "allowed": allowed, "evidence": source, "condition": None}
+            ]
+        }
+    )
+
+    item = compare_work_constraints(data, source)[3]
+
+    assert item.requirement == f"remote: {'allowed' if allowed else 'not allowed'}"
+    assert "not been human-verified" in item.reason
+
+
+def test_unbacked_work_mode_condition_is_not_displayed_as_supported_allowance():
+    source = "Remote work is allowed."
+    data = schema(
+        constraints={
+            "work_modes": [
+                {
+                    "value": "remote",
+                    "allowed": True,
+                    "evidence": source,
+                    "condition": {"value": "after probation", "evidence": "after probation"},
+                }
+            ]
+        }
+    )
+
+    item = compare_work_constraints(data, source)[3]
+
+    assert item.requirement == "Work mode: extracted allowance requires review"
+    assert "after probation" in item.job_evidence
+
+
 def test_model_duration_unit_mismatch_is_flagged_without_rewriting_raw_result():
     source = "Commit at least 3 weeks."
     data = schema(
@@ -375,6 +468,61 @@ def test_v2_http_exposes_conditions_duties_and_constraints_without_mutation(
     assert len(suggestion["items"][0]["work_constraints"]) == 5
     assert suggestion["items"][0]["supported"] == []
     assert fixture[2].result_json == before
+
+
+def test_v2_http_preserves_language_conditions_across_compound_groups(client, db, matching_sample):
+    source = "English or Mandarin accepted.\nEnglish and Python required."
+    data = schema(
+        group(
+            atom("English", kind="language", evidence="English or Mandarin accepted."),
+            atom("Mandarin", kind="language", evidence="English or Mandarin accepted."),
+            operator="any_of",
+            evidence="English or Mandarin accepted.",
+        ),
+        group(
+            atom("English", kind="language", evidence="English and Python required."),
+            atom("Python", evidence="English and Python required."),
+            evidence="English and Python required.",
+        ),
+    )
+    upgrade_fixture(db, matching_sample, data, source)
+
+    response = client.post(
+        f"/jobs/{matching_sample[1].id}/match-analysis", headers=matching_sample[0], json={}
+    )
+
+    assert response.status_code == 200
+    assert [condition["requirement"] for condition in response.json()["items"][1]["conditions"]] == [
+        "English",
+        "Python",
+    ]
+
+
+def test_v2_http_masks_contradictory_work_mode_allowance(client, db, matching_sample):
+    source = "Python required. No remote work."
+    data = schema(
+        group(atom("Python", evidence="Python required."), evidence="Python required."),
+        constraints={
+            "work_modes": [
+                {
+                    "value": "remote",
+                    "allowed": True,
+                    "evidence": "No remote work.",
+                    "condition": None,
+                }
+            ]
+        },
+    )
+    upgrade_fixture(db, matching_sample, data, source)
+
+    response = client.post(
+        f"/jobs/{matching_sample[1].id}/match-analysis", headers=matching_sample[0], json={}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["work_constraints"][3]["requirement"] == (
+        "Work mode: extracted allowance requires review"
+    )
 
 
 @pytest.mark.parametrize("kind", ["interest", "trait", "language"])
