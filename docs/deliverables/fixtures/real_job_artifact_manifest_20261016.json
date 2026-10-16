@@ -1,0 +1,97 @@
+{
+  "run": "output\\semantics-acceptance-20261016\\20261016T060330247717Z",
+  "retrieved_at": "2026-10-16T06:03:30.249233+00:00",
+  "provider_calls": 3,
+  "baseline": "e2fe853",
+  "model": "deepseek-flash",
+  "human_review": "pending",
+  "cases": [
+    {
+      "id": "wovenstack_software_data_automation",
+      "source_url": "https://www.internsg.com/job/wovenstack-software-engineering-intern-data-automation-ai-systems/",
+      "source_status": "no_closed_marker_observed",
+      "input_hash": "395db60fed081d2fa62e8773d871a2e68fe85de93b90755034ab36b08ff646d7",
+      "model_status": "needs_review",
+      "files": {
+        "extraction_result.json": "482db7f8d353d6f0735ccd43c60ff250484af0aec20947ced75e5748589c1cd7",
+        "model_input.json": "580189cb49b6f58f6f36c53a05cd3f212ed6366edd89e18838b96c7c6071d5d1",
+        "source_provenance.json": "0cff1e7bdd0239bd690deb982bb9d94de8aa95305c4ebfdbbe014ce9a68045f6",
+        "source_record.json": "d737214f0fcecb65f071f856de41ed403da747df231c1f9b57519c27c46df3e3"
+      },
+      "result_id": "9b660a93-6ec1-477b-ad4c-3266b6ac7d39",
+      "schema_version": "job-extraction-v2",
+      "usage": [
+        {
+          "input_tokens": 3011,
+          "output_tokens": 4032
+        }
+      ]
+    },
+    {
+      "id": "cynapse_ml_computer_vision_11",
+      "source_url": "https://www.internsg.com/job/cynapse-pte-ltd-machine-learning-engineer-intern-computer-vision-ai-11/",
+      "source_status": "closed",
+      "input_hash": "68650ca565abcef871f000759972826308260d38fda5714c84f1dd25e2805d07",
+      "model_status": "skipped_source_ineligible",
+      "files": {
+        "model_input.json": "4aa6552ce4947fcb2e781bf895a2f02cc9cc89e313994ffda461ef0ad2e6d3da",
+        "source_provenance.json": "22f6f2c9b60c2226567761cdc072e520a60cff1de8e7da020557915da8001b4d",
+        "source_record.json": "f9010da68313b6f340cf0a0352b29059238bdb9dfc75d471c177cd1ef52c4adb"
+      }
+    },
+    {
+      "id": "cynapse_ai_evaluation_quality_2",
+      "source_url": "https://www.internsg.com/job/cynapse-pte-ltd-ai-evaluation-quality-intern-2/",
+      "source_status": "no_closed_marker_observed",
+      "input_hash": "cc92b07458b2107df581f3b3f921e03f21bd51de0618db46ace7b38d28416b38",
+      "model_status": "needs_review",
+      "files": {
+        "extraction_result.json": "eec90a23863936b16439e36c8e1615aebca441e1d4e65559974f9f7969afb054",
+        "model_input.json": "8e27d58e8dce7b8628208799ef8b354c36b29c1f172f38c6190250b5145874c7",
+        "source_provenance.json": "be076928bbb89ef3da982396fc5e9a44ffafe2a5155f6857e76220ed6f9dccc7",
+        "source_record.json": "eabe7afb5657ed7678288ba6d847ed73b4d9e61a202b768bee61a28ecfed3345"
+      },
+      "result_id": "d23bc79c-0cb9-40fa-893b-1d06485bafec",
+      "schema_version": "job-extraction-v2",
+      "usage": [
+        {
+          "input_tokens": 2845,
+          "output_tokens": 2383
+        }
+      ]
+    },
+    {
+      "id": "strides_ai_closed",
+      "source_url": "https://www.internsg.com/job/strides-digital-artificial-intelligence-ai-intern/",
+      "source_status": "closed",
+      "input_hash": "9325fdbc8bc7196c553e59fda7b8acbde4ea7dd7c0ad6ad6a97eee3fd36db506",
+      "model_status": "skipped_source_ineligible",
+      "files": {
+        "model_input.json": "d204e19bd23a13fbe292f0dc21692ed44b202be451f283f1e97954363e2bd91a",
+        "source_provenance.json": "05fe6a8ebb857e58cf0c3da5b0d019e0d58968281e13463c786f713edad71a49",
+        "source_record.json": "c5c3dc482c836fc61b21447bcaf74ff84d2c60755c2478abae608a9722ce26cd"
+      }
+    },
+    {
+      "id": "ilodia_retail",
+      "source_url": "https://www.internsg.com/job/ilodia-labs-pte-ltd-retail-e-commerce-operations-intern/",
+      "source_status": "no_closed_marker_observed",
+      "input_hash": "b7de88f7837c6675a319982bd02c2c212057d72cb4044ff1bbfa097acb0aa7f8",
+      "model_status": "needs_review",
+      "files": {
+        "extraction_result.json": "6e8aa8a9f3e81c8678a557c500cdb4da214ccebe51600d5b7b99563d065d67e6",
+        "model_input.json": "a6d4e2b0fec8d9d360c4677bdb1b8419b8c616c44cd28c65b176c0fb4d27bd54",
+        "source_provenance.json": "78555a0bc469511352146c8326b32831c30b08858ca8ee9005a57fe23ab64d30",
+        "source_record.json": "62a65d74fb0bfad34a3be901ff3cf6c5bfd9595d666e97aab02ff1db26239c2f"
+      },
+      "result_id": "fb6a7f4d-022c-4dcb-bb32-be7b16213c6c",
+      "schema_version": "job-extraction-v2",
+      "usage": [
+        {
+          "input_tokens": 2964,
+          "output_tokens": 2899
+        }
+      ]
+    }
+  ]
+}

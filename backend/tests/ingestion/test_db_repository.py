@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import JobPosting, JobSource
 from app.ingestion.db_repository import SqlAlchemyJobRepository
-from app.ingestion.models import JobRecord, SourceType
+from app.ingestion.models import JobRecord, JobStatus, SourceType
 
 
 def make_record(**overrides: object) -> JobRecord:
@@ -134,12 +134,43 @@ def test_cross_source_duplicate_preserves_canonical_identity(db: Session) -> Non
     db.commit()
     SqlAlchemyJobRepository(db, first).upsert([make_record()])
     db.commit()
-    stats = SqlAlchemyJobRepository(db, second).upsert([make_record(
-        external_id="other-id", raw_hash="2" * 64, source_url="https://other.example.test/job/other-id",
-    )])
+    stats = SqlAlchemyJobRepository(db, second).upsert(
+        [
+            make_record(
+                external_id="other-id",
+                raw_hash="2" * 64,
+                source_url="https://other.example.test/job/other-id",
+            )
+        ]
+    )
     db.commit()
     job = db.scalar(select(JobPosting))
     assert stats.items_unchanged == 1
     assert job.source_id == first.id
     assert job.external_id == "job-1"
     assert job.source_url == "https://jobs.example.test/job/job-1"
+
+
+def test_recrawl_updates_closed_status_even_when_content_hash_is_unchanged(db: Session):
+    source = JobSource(
+        name="Status recrawl", source_type="html", base_url="https://jobs.example.test"
+    )
+    db.add(source)
+    db.commit()
+    repository = SqlAlchemyJobRepository(db, source)
+    active = make_record()
+    repository.upsert([active])
+    db.commit()
+    closed = active.model_copy(update={"status": JobStatus.CLOSED})
+    stats = repository.upsert([closed])
+    db.commit()
+    row = db.scalar(select(JobPosting))
+    assert stats.items_updated == 1
+    assert stats.items_unchanged == 0
+    assert row.status == "closed"
+    assert row.raw_hash == active.raw_hash
+    assert repository.upsert([closed]).items_unchanged == 1
+    # An explicit later source observation may reopen the canonical row, not duplicate it.
+    assert repository.upsert([active]).items_updated == 1
+    db.commit()
+    assert row.status == "active"

@@ -1,7 +1,7 @@
 """Evidence-aware job extraction; model clients are supplied by the shared LLM layer."""
 
 from .inputs import input_from_job, input_from_raw_item
-from .models import ExtractionInput, ExtractionResult, JobExtractionSchema
+from .models import ExtractionInput, ExtractionResult, JobExtractionSchema, JobExtractionSchemaV2
 from .service import ExtractionConfig, JobExtractionService
 
 __all__ = [
@@ -9,6 +9,7 @@ __all__ = [
     "ExtractionInput",
     "ExtractionResult",
     "JobExtractionSchema",
+    "JobExtractionSchemaV2",
     "JobExtractionService",
     "input_from_job",
     "input_from_raw_item",

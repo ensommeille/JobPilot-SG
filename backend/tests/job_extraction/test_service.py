@@ -33,12 +33,12 @@ def test_success_records_versions_usage_and_review(job, response):
     assert result.execution_mode == "mock"
     assert result.input_hash == job.input_hash
     assert result.quality.score == 1.0
-    assert result.schema_version == "job-extraction-v1"
-    assert result.prompt_version == "job-extraction-prompt-v1"
+    assert result.schema_version == "job-extraction-v2"
+    assert result.prompt_version == "job-extraction-prompt-v2"
     assert result.contract_version == "0.1.0"
     assert result.attempts[0].usage.input_tokens == 100
     assert result.attempts[0].provider_request_id == "vendor-request-42"
-    assert provider.requests[0].schema_name == "job_extraction_v1"
+    assert provider.requests[0].schema_name == "job_extraction_v2"
 
 
 def test_actual_response_provider_is_audited(job, response):
@@ -50,7 +50,7 @@ def test_actual_response_provider_is_audited(job, response):
 
 def test_schema_repair_once(job, response):
     broken = response.model_copy(deep=True)
-    broken.data.pop("languages")
+    broken.data.pop("requirement_groups")
     provider = MockProvider([broken, response])
     result = extract(provider, job)
     assert result.status == "needs_review"

@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app.ingestion.internsg_adapter import AdapterPolicyError, DetailParseError, InternSGAdapter
-from app.ingestion.models import RunStatus
+from app.ingestion.models import JobStatus, RunStatus
 
 
 def client_for(handler: Callable[[httpx.Request], httpx.Response]) -> httpx.Client:
@@ -49,7 +49,7 @@ def test_collect_satisfies_contract_and_normalizes_fields(fixture_text) -> None:
     assert record.posted_at.isoformat() == "2026-08-24"
     assert record.job_type == ["internship", "temporary"]
     assert len(record.raw_hash) == len(record.dedup_hash) == 64
-    assert record.parser_version == "internsg-2026-08-v2"
+    assert record.parser_version == "internsg-2026-10-v3"
 
 
 def test_robots_denial_fails_closed_before_listing(fixture_text) -> None:
@@ -164,3 +164,98 @@ def test_title_change_changes_raw_hash(fixture_text) -> None:
 
     assert original.raw_hash != changed.raw_hash
     assert original.dedup_hash != changed.dedup_hash
+
+
+def closed_header(html: str, text: str = "This position is <strong>already closed</strong>") -> str:
+    return html.replace(
+        '<div class="isg-job-header">',
+        '<div class="isg-job-header"><div class="isg-job-action"><span class="isg-job-closed">'
+        + text
+        + "</span></div>",
+        1,
+    )
+
+
+@pytest.mark.parametrize("position", ["header", "application_notice"])
+def test_explicit_source_status_marks_job_closed_and_changes_hash(fixture_text, position):
+    original_html = fixture_text("detail_complete.html")
+    html = (
+        closed_header(original_html)
+        if position == "header"
+        else original_html.replace(
+            '<div class="isg-apply-card">',
+            '<div class="isg-detail-apply">This position is <strong>already closed</strong> and no longer available.</div><div class="isg-apply-card">',
+        )
+    )
+    adapter = InternSGAdapter(
+        client=client_for(lambda request: response(request, "")), sleep=lambda _: None
+    )
+    original = adapter.parse_job_detail(original_html, "https://www.internsg.com/job/example/")
+    record = adapter.parse_job_detail(html, "https://www.internsg.com/job/example/")
+    assert original.status is JobStatus.ACTIVE
+    assert record.status is JobStatus.CLOSED
+    assert record.raw_hash != original.raw_hash
+    assert record.dedup_hash == original.dedup_hash
+    assert record.description == original.description
+    raw = adapter.to_raw_item(html, "https://www.internsg.com/job/example/")
+    assert raw.known_fields.status is JobStatus.CLOSED
+    assert "already closed" in raw.raw_text
+
+
+@pytest.mark.parametrize("change", ["jd_prose", "jd_fake_class", "outside_container", "not_closed"])
+def test_job_prose_and_unrelated_closed_text_do_not_close_job(fixture_text, change):
+    html = fixture_text("detail_complete.html")
+    if change == "jd_prose":
+        html = html.replace("Build and test", "This position is already closed. Build and test")
+    elif change == "jd_fake_class":
+        html = html.replace(
+            "Build and test",
+            '<span class="isg-job-closed">This position is already closed</span> Build and test',
+        )
+    elif change == "outside_container":
+        html = html.replace(
+            "</body>", '<div class="isg-detail-apply">This position is already closed</div></body>'
+        )
+    else:
+        html = closed_header(html, "This position is not closed")
+    adapter = InternSGAdapter(
+        client=client_for(lambda request: response(request, "")), sleep=lambda _: None
+    )
+    assert (
+        adapter.parse_job_detail(html, "https://www.internsg.com/job/example/").status
+        is JobStatus.ACTIVE
+    )
+
+
+def test_source_closed_record_is_persisted_and_excluded_from_discovery(client, db, fixture_text):
+    from sqlalchemy import select
+
+    from app.db.models import JobPosting, JobSource
+    from app.ingestion.db_repository import SqlAlchemyJobRepository
+    from tests.test_ingestion_admin import auth_headers
+
+    source = JobSource(
+        name="InternSG source status", source_type="html", base_url="https://www.internsg.com"
+    )
+    db.add(source)
+    db.commit()
+    adapter = InternSGAdapter(
+        client=client_for(lambda request: response(request, "")), sleep=lambda _: None
+    )
+    record = adapter.parse_job_detail(
+        closed_header(fixture_text("detail_complete.html")), "https://www.internsg.com/job/example/"
+    )
+    stats = SqlAlchemyJobRepository(db, source).upsert([record])
+    db.commit()
+    row = db.scalar(select(JobPosting))
+    assert stats.items_new == 1
+    assert row.status == "closed"
+    assert client.get("/jobs").json()["total"] == 0
+    assert client.get(f"/jobs/{row.id}").status_code == 404
+    headers = auth_headers(client, db, "closed-source-test@example.com", admin=False)
+    assert client.put("/profile", headers=headers, json={"skills": ["Python"]}).status_code == 200
+    recommendation = client.post("/jobs/recommendations", headers=headers, json={})
+    assert recommendation.status_code == 200
+    assert recommendation.json()["status"] == "no_candidates"
+    assert recommendation.json()["scanned"] == 0
+    assert recommendation.json()["items"] == []

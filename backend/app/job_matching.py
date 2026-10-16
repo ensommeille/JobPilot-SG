@@ -13,9 +13,19 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import CurrentUser
 from app.db.models import JobExtractionRun, JobPosting, UserProfile
 from app.db.session import get_db
-from app.job_extraction.models import ExtractionResult
+from app.job_extraction.models import (
+    ExtractionResult,
+    JobExtractionSchemaV2,
+    RequirementAtom,
+    RequirementGroup,
+    TextFact,
+)
 from app.job_extraction.persistence import ExtractionRequestError, job_input
-from app.job_extraction.quality import normalized
+from app.job_extraction.quality import (
+    duration_evidence_supported,
+    hours_evidence_supported,
+    normalized,
+)
 from app.jobs.service import get_job
 from app.skill_signals import is_uncertain_or_negative, mentions, positive_profile
 
@@ -34,6 +44,18 @@ class SkillOverlap(BaseModel):
     profile_evidence: str
 
 
+class MatchCondition(BaseModel):
+    kind: Literal["skill", "language", "trait", "interest", "qualification"]
+    requirement: str
+    qualifier: str | None = None
+    qualifier_evidence: str | None = None
+    outcome: Literal["supported", "gap", "unknown"]
+    reason: str
+    job_evidence: str
+    profile_evidence: str | None = None
+    skill_overlaps: list[SkillOverlap] = Field(default_factory=list)
+
+
 class MatchItem(BaseModel):
     category: str
     requirement: str
@@ -44,6 +66,15 @@ class MatchItem(BaseModel):
     profile_evidence: str | None = None
     profile_field: str | None = None
     skill_overlaps: list[SkillOverlap] = Field(default_factory=list)
+    group_operator: Literal["all_of", "any_of", "unspecified"] | None = None
+    conditions: list[MatchCondition] = Field(default_factory=list)
+
+
+class MatchResponsibility(BaseModel):
+    value: str
+    evidence: str
+    priority: Literal["primary", "secondary", "conditional", "unspecified"] = "unspecified"
+    condition: TextFact | None = None
 
 
 class MatchAnalysis(BaseModel):
@@ -54,6 +85,9 @@ class MatchAnalysis(BaseModel):
     extraction_id: UUID | None = None
     warnings: list[str] = Field(default_factory=list)
     items: list[MatchItem] = Field(default_factory=list)
+    work_constraints: list[MatchItem] = Field(default_factory=list)
+    summary: TextFact | None = None
+    responsibilities: list[MatchResponsibility] = Field(default_factory=list)
 
 
 # Only a closed set of atomic skill labels is comparable. Compound requirements,
@@ -219,7 +253,7 @@ def atomic_skill_context(label: str, context: str) -> bool:
     )
 
 
-def compare(
+def _compare_legacy(
     result: ExtractionResult, description: str, profile: UserProfile | None
 ) -> list[MatchItem]:
     data = result.extraction
@@ -314,6 +348,307 @@ def compare(
     return items
 
 
+def _source_present(evidence: str, description: str) -> bool:
+    return bool(normalized(evidence)) and normalized(evidence) in normalized(description)
+
+
+def _language_identity(value: str) -> str:
+    """Deduplicate language aliases without erasing written/spoken qualifications."""
+    value = clean(value)
+    if value in {"mandarin", "mandarin chinese", "putonghua", "普通话", "普通話"}:
+        return "mandarin"
+    if value in {"english", "英语", "英語"}:
+        return "english"
+    return value
+
+
+def _narrow_atomic_group(group: RequirementGroup, description: str) -> bool:
+    """One model atom does not prove the source group has only one condition."""
+    if len(group.requirements) != 1 or group.operator != "all_of":
+        return False
+    atom = group.requirements[0]
+    if atom.kind != "skill" or atom.qualifier is not None:
+        return False
+    contexts = quote_contexts(description, group.evidence)
+    return (
+        atomic_skill_context(atom.value, group.value)
+        and atomic_skill_context(atom.value, group.evidence)
+        and bool(contexts)
+        and all(atomic_skill_context(atom.value, text) for text in contexts)
+    )
+
+
+def _compare_group_atom(
+    atom: RequirementAtom, group: RequirementGroup, description: str, skills: list[str]
+) -> MatchCondition:
+    qualifier = atom.qualifier.value if atom.qualifier else None
+    condition = MatchCondition(
+        kind=atom.kind,
+        requirement=atom.value,
+        qualifier=qualifier,
+        qualifier_evidence=atom.qualifier.evidence if atom.qualifier else None,
+        outcome="unknown",
+        reason="This condition requires manual comparison; it does not establish suitability.",
+        job_evidence=atom.evidence,
+    )
+    if not _source_present(group.evidence, description) or not _source_present(
+        atom.evidence, description
+    ):
+        condition.reason = "Extraction evidence is not present in the current job description."
+        return condition
+    if atom.qualifier and not _source_present(atom.qualifier.evidence, description):
+        condition.reason = "The extracted qualifier is not supported by a current source quote."
+        return condition
+    if atom.kind != "skill":
+        condition.reason = (
+            "Language, traits, interests and qualifications are not established by saved skill "
+            "mentions and do not contribute to the recommendation rank."
+        )
+        return condition
+    if any(is_uncertain_or_negative(text) for text in (group.value, group.evidence)):
+        condition.reason = (
+            "The complete requirement group contains negative, uncertain or learning-only "
+            "wording. A clipped child quote cannot establish affirmative skill evidence."
+        )
+        return condition
+    # Only explicit concrete skills contribute. A model labelling a general trait
+    # as a skill does not turn it into a concrete skill, nor does a language field.
+    condition.skill_overlaps = [
+        item
+        for item in skill_overlaps(atom.value, atom.evidence, description, positive_profile(skills))
+        if item.kind == "specific"
+    ]
+    outcome, reason, proof = compare_skill(atom.value, atom.evidence, skills)
+    contexts = quote_contexts(description, atom.evidence)
+    if (
+        _narrow_atomic_group(group, description)
+        and contexts
+        and all(atomic_skill_context(atom.value, text) for text in contexts)
+        and (outcome == "gap" or condition.skill_overlaps)
+    ):
+        # Preserve the original narrow meaning: matching an exact named entry
+        # still verifies neither proficiency nor the employer's complete needs.
+        affirmed = {skill_id for entry in skills for skill_id in positive_profile([entry])}
+        contradictory = outcome == "gap" and any(
+            item.skill_id in affirmed for item in mentions(atom.value)
+        )
+        if not contradictory:
+            condition.outcome, condition.reason, condition.profile_evidence = outcome, reason, proof
+    if condition.skill_overlaps and condition.outcome != "supported":
+        condition.outcome = "unknown"
+        condition.reason = (
+            "Shared concrete skill names only. The qualifier, proficiency and complete "
+            "compound requirement remain unverified."
+        )
+        condition.profile_evidence = " | ".join(
+            dict.fromkeys(item.profile_evidence for item in condition.skill_overlaps)
+        )
+    return condition
+
+
+def _compare_v2(data: JobExtractionSchemaV2, description: str, profile) -> list[MatchItem]:
+    skills = profile.skills if profile else []
+    items = []
+    seen_languages: set[tuple[str, str]] = set()
+    for group in data.requirement_groups:
+        conditions = []
+        for atom in group.requirements:
+            if atom.kind == "language" or _language_identity(atom.value) in {"mandarin", "english"}:
+                key = (
+                    _language_identity(atom.value),
+                    clean(atom.qualifier.value) if atom.qualifier else "",
+                )
+                if key in seen_languages:
+                    continue
+                seen_languages.add(key)
+            conditions.append(_compare_group_atom(atom, group, description, skills))
+        if not conditions:
+            continue
+        overlaps = {
+            overlap.skill_id: overlap
+            for condition in conditions
+            for overlap in condition.skill_overlaps
+        }
+        # Even when all names overlap, AND/OR and qualifiers are not automatically
+        # satisfied. Keep the original group text and every separate condition.
+        narrow = _narrow_atomic_group(group, description)
+        outcome = conditions[0].outcome if narrow else "unknown"
+        reason = (
+            conditions[0].reason
+            if narrow
+            else (
+                "Compound requirement: only the named skill intersections below are established. "
+                "The complete AND/OR conditions and qualifiers require manual confirmation."
+            )
+        )
+        proof = (
+            " | ".join(dict.fromkeys(c.profile_evidence for c in conditions if c.profile_evidence))
+            or None
+        )
+        items.append(
+            MatchItem(
+                category="requirement_groups",
+                requirement=group.value,
+                importance=group.importance,
+                outcome=outcome,
+                reason=reason,
+                job_evidence=group.evidence,
+                profile_evidence=proof,
+                profile_field="skills" if proof else None,
+                skill_overlaps=list(overlaps.values()),
+                group_operator=group.operator,
+                conditions=conditions,
+            )
+        )
+    extra = []
+    for name in ("degree", "enrollment"):
+        if fact := getattr(data.education, name):
+            extra.append(("education", fact))
+    extra.extend(("education", fact) for fact in data.education.fields_of_study)
+    if data.experience.requirement:
+        extra.append(("experience", data.experience.requirement))
+    elif data.experience.minimum_years:
+        extra.append(("experience", data.experience.minimum_years))
+    for category, fact in extra:
+        items.append(
+            MatchItem(
+                category=category,
+                requirement=str(fact.value),
+                importance="unspecified",
+                outcome="unknown",
+                reason=(
+                    "Requires manual comparison; saved skill mentions do not establish "
+                    "education or experience."
+                    if _source_present(fact.evidence, description)
+                    else "Extraction evidence is not present in the current job description."
+                ),
+                job_evidence=fact.evidence,
+            )
+        )
+    return items
+
+
+def compare(
+    result: ExtractionResult, description: str, profile: UserProfile | None
+) -> list[MatchItem]:
+    if isinstance(result.extraction, JobExtractionSchemaV2):
+        return _compare_v2(result.extraction, description, profile)
+    return _compare_legacy(result, description, profile)
+
+
+def compare_work_constraints(data, description: str) -> list[MatchItem]:
+    """Display source conditions separately; never infer a person's availability."""
+    constraints = data.work_constraints if isinstance(data, JobExtractionSchemaV2) else None
+    facts: dict[str, tuple[str | None, str]] = {
+        name: (None, "")
+        for name in ("schedule", "hours", "minimum_duration", "work_modes", "locations")
+    }
+    review_reasons: dict[str, str] = {}
+    if constraints:
+        if constraints.schedule:
+            facts["schedule"] = (constraints.schedule.value, constraints.schedule.evidence)
+        if constraints.hours:
+            hours = constraints.hours
+            lower = f"{hours.minimum:g}" if hours.minimum is not None else "unknown"
+            upper = f"{hours.maximum:g}" if hours.maximum is not None else "unknown"
+            scope = f"; {hours.condition.value}" if hours.condition else ""
+            facts["hours"] = (
+                f"{lower}–{upper} {hours.unit.replace('_', ' ')}{scope}",
+                "\n".join(
+                    dict.fromkeys(
+                        [hours.evidence] + ([hours.condition.evidence] if hours.condition else [])
+                    )
+                ),
+            )
+            if not hours_evidence_supported(hours, description):
+                facts["hours"] = ("Hours: extracted number/unit requires review", facts["hours"][1])
+                review_reasons["hours"] = (
+                    "Unknown: the model's hours number/unit is not supported by the quoted "
+                    "source. Days per week are not hours per week; no conversion or feasibility "
+                    "claim is made. Review the original quote."
+                )
+        if constraints.minimum_duration:
+            duration = constraints.minimum_duration
+            scope = f"; {duration.condition.value}" if duration.condition else ""
+            facts["minimum_duration"] = (
+                f"At least {duration.value:g} {duration.unit}{scope}",
+                "\n".join(
+                    dict.fromkeys(
+                        [duration.evidence]
+                        + ([duration.condition.evidence] if duration.condition else [])
+                    )
+                ),
+            )
+            if not duration_evidence_supported(duration, description):
+                facts["minimum_duration"] = (
+                    "Minimum duration: extracted number/unit requires review",
+                    facts["minimum_duration"][1],
+                )
+                review_reasons["minimum_duration"] = (
+                    "Unknown: the model's duration number/unit is not supported by the quoted "
+                    "source. No conversion of days, weeks or months is assumed. Review the "
+                    "original quote."
+                )
+        if constraints.work_modes:
+            facts["work_modes"] = (
+                "; ".join(
+                    f"{mode.value}: {'allowed' if mode.allowed else 'not allowed'}"
+                    + (f" ({mode.condition.value})" if mode.condition else "")
+                    for mode in constraints.work_modes
+                ),
+                "\n".join(
+                    dict.fromkeys(
+                        evidence
+                        for mode in constraints.work_modes
+                        for evidence in [mode.evidence]
+                        + ([mode.condition.evidence] if mode.condition else [])
+                    )
+                ),
+            )
+        if constraints.locations:
+            facts["locations"] = (
+                "Extracted location reference: "
+                + "; ".join(fact.value for fact in constraints.locations)
+                + " (workplace unverified)",
+                "\n".join(dict.fromkeys(fact.evidence for fact in constraints.locations)),
+            )
+            review_reasons["locations"] = (
+                "Unknown: this unverified location reference may describe candidate eligibility "
+                "rather than the workplace. Neither workplace nor user-location feasibility is "
+                "established. No feasibility conclusion is made."
+            )
+    result = []
+    for name, (value, evidence) in facts.items():
+        present = value is not None
+        # Each quote may be a separate source line; don't require their join to occur.
+        verified = present and all(
+            _source_present(line, description) for line in evidence.splitlines()
+        )
+        reason = (
+            "Unknown: the source states this condition, but the profile supplies no verified "
+            "availability or location evidence. No feasibility conclusion is made."
+            if verified
+            else "Unknown: this condition was not stated or extracted; do not infer availability or location."
+            if not present
+            else "Unknown: the extracted condition's evidence is not present in the current source."
+        )
+        if name in review_reasons:
+            reason = review_reasons[name]
+        result.append(
+            MatchItem(
+                category=f"work_constraints.{name}",
+                requirement=value
+                if present
+                else f"{name.replace('_', ' ').capitalize()}: not stated",
+                importance="unspecified",
+                outcome="unknown",
+                reason=reason,
+                job_evidence=evidence,
+            )
+        )
+    return result
+
+
 @router.post("/jobs/{job_id}/match-analysis", response_model=MatchAnalysis)
 def analyze(
     job_id: UUID, payload: MatchRequest, response: Response, db: Database, user: CurrentUser
@@ -362,6 +697,12 @@ def build_analysis(
     if result.status != "needs_review":
         report.reason = "invalid_extraction"
         return report
+    report.summary = result.extraction.summary
+    report.responsibilities = [
+        MatchResponsibility.model_validate(fact.model_dump())
+        for fact in result.extraction.responsibilities
+    ]
+    report.work_constraints = compare_work_constraints(result.extraction, job.description)
     report.items = compare(result, job.description, profile)
     report.warnings = [
         "Extracted requirements have not been human-verified. All comparisons are preliminary.",

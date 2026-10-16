@@ -10,8 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.llm import TokenUsage
 
-SCHEMA_VERSION = "job-extraction-v1"
-QUALITY_VERSION = "evidence-coverage-v1"
+SCHEMA_VERSION = "job-extraction-v2"
+QUALITY_VERSION = "evidence-coverage-v2"
+SchemaVersion = Literal["job-extraction-v1", "job-extraction-v2"]
 
 
 class StrictModel(BaseModel):
@@ -100,6 +101,139 @@ class JobExtractionSchema(StrictModel):
         return self
 
 
+class ResponsibilityFact(TextFact):
+    priority: Literal["primary", "secondary", "conditional", "unspecified"]
+    condition: TextFact | None
+
+    @model_validator(mode="after")
+    def preserve_conditional_scope(self) -> ResponsibilityFact:
+        if self.priority == "conditional" and self.condition is None:
+            raise ValueError("Conditional responsibilities require a source-backed condition")
+        if self.priority != "conditional" and self.condition is not None:
+            raise ValueError("Responsibilities with a condition must be marked conditional")
+        return self
+
+
+class RequirementAtom(TextFact):
+    kind: Literal["skill", "language", "trait", "interest", "qualification"]
+    qualifier: TextFact | None
+
+
+class RequirementGroup(TextFact):
+    """A source statement and its explicit AND/OR conditions; never a bag of skills."""
+
+    importance: Literal["required", "preferred", "unspecified"]
+    operator: Literal["all_of", "any_of", "unspecified"]
+    requirements: list[RequirementAtom] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def reject_duplicate_atoms(self) -> RequirementGroup:
+        identities = [
+            (atom.kind, " ".join(atom.value.casefold().split())) for atom in self.requirements
+        ]
+        if len(identities) != len(set(identities)):
+            raise ValueError("Duplicate requirement atoms within a group")
+        return self
+
+
+class HoursFact(StrictModel):
+    minimum: float | None = Field(ge=0, le=168)
+    maximum: float | None = Field(ge=0, le=168)
+    unit: Literal["hours_per_week", "hours_per_day"]
+    evidence: str = Field(min_length=1, max_length=2500)
+    condition: TextFact | None
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> HoursFact:
+        if self.minimum is None and self.maximum is None:
+            raise ValueError("Hours require at least one explicitly stated bound")
+        limit = 24 if self.unit == "hours_per_day" else 168
+        if any(value is not None and value > limit for value in (self.minimum, self.maximum)):
+            raise ValueError("Hours exceed the stated unit")
+        if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:
+            raise ValueError("Minimum hours cannot exceed maximum hours")
+        return self
+
+
+class DurationFact(StrictModel):
+    value: float = Field(gt=0, le=10000)
+    unit: Literal["days", "weeks", "months", "years"]
+    evidence: str = Field(min_length=1, max_length=2500)
+    condition: TextFact | None
+
+
+class WorkModeFact(StrictModel):
+    value: Literal["onsite", "remote", "hybrid"]
+    allowed: bool
+    evidence: str = Field(min_length=1, max_length=2500)
+    condition: TextFact | None
+
+
+class WorkConstraints(StrictModel):
+    schedule: TextFact | None
+    hours: HoursFact | None
+    minimum_duration: DurationFact | None
+    work_modes: list[WorkModeFact] = Field(max_length=12)
+    locations: list[TextFact] = Field(max_length=20)
+
+
+class JobExtractionSchemaV2(StrictModel):
+    """Typed, source-backed facts. Parallel requirement groups are conjunctive.
+
+    An any_of group retains alternatives, while unspecified logic must be reviewed.
+    For Python AND (PyTorch OR TensorFlow), use a Python all_of group and a second
+    any_of group. Do not flatten more complex logic into a false all_of statement.
+    """
+
+    summary: TextFact | None
+    responsibilities: list[ResponsibilityFact] = Field(max_length=40)
+    requirement_groups: list[RequirementGroup] = Field(max_length=60)
+    education: EducationRequirements
+    experience: ExperienceRequirements
+    work_constraints: WorkConstraints
+
+    @model_validator(mode="after")
+    def reject_duplicate_statements(self) -> JobExtractionSchemaV2:
+        for facts in (
+            self.responsibilities,
+            self.requirement_groups,
+            self.work_constraints.locations,
+        ):
+            values = [" ".join(fact.value.casefold().split()) for fact in facts]
+            if len(values) != len(set(values)):
+                raise ValueError("Duplicate extracted statements")
+        modes = [
+            (fact.value, fact.allowed, fact.condition.value if fact.condition else None)
+            for fact in self.work_constraints.work_modes
+        ]
+        if len(modes) != len(set(modes)):
+            raise ValueError("Duplicate work-mode constraints")
+        return self
+
+
+ExtractionPayload = JobExtractionSchema | JobExtractionSchemaV2
+
+
+def payload_model(schema_version: SchemaVersion):
+    if schema_version not in {"job-extraction-v1", "job-extraction-v2"}:
+        raise ValueError("Unsupported extraction schema version")
+    return JobExtractionSchemaV2 if schema_version == "job-extraction-v2" else JobExtractionSchema
+
+
+def prompt_version_for(schema_version: SchemaVersion) -> str:
+    return (
+        "job-extraction-prompt-v2"
+        if schema_version == "job-extraction-v2"
+        else "job-extraction-prompt-v1"
+    )
+
+
+def quality_version_for(schema_version: SchemaVersion) -> str:
+    return (
+        "evidence-coverage-v2" if schema_version == "job-extraction-v2" else "evidence-coverage-v1"
+    )
+
+
 class FixtureCase(StrictModel):
     """A source-bound annotation used for deterministic demos or reviewed evaluation sets."""
 
@@ -108,7 +242,14 @@ class FixtureCase(StrictModel):
     external_id: str = Field(min_length=1, max_length=300)
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     annotation_status: Literal["draft_requires_human_review", "human_reviewed"]
-    extraction: JobExtractionSchema
+    schema_version: SchemaVersion = "job-extraction-v1"
+    extraction: ExtractionPayload
+
+    @model_validator(mode="after")
+    def check_schema_version(self) -> FixtureCase:
+        if not isinstance(self.extraction, payload_model(self.schema_version)):
+            raise ValueError("Fixture schema version does not match its extraction payload")
+        return self
 
 
 class FixtureBundle(StrictModel):
@@ -164,12 +305,12 @@ class ExtractionResult(StrictModel):
     source_url: str = Field(min_length=1, max_length=2048)
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     raw_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-    schema_version: Literal["job-extraction-v1"]
-    prompt_version: Literal["job-extraction-prompt-v1"]
+    schema_version: SchemaVersion
+    prompt_version: Literal["job-extraction-prompt-v1", "job-extraction-prompt-v2"]
     contract_version: Literal["0.1.0"]
     execution_mode: Literal["mock", "live"]
     status: Literal["needs_review", "failed"]
-    extraction: JobExtractionSchema | None
+    extraction: ExtractionPayload | None
     quality: QualityReport | None
     error_code: str | None = Field(default=None, max_length=64, pattern=r"^[a-z0-9_]+$")
     attempts: list[AttemptRecord] = Field(min_length=1, max_length=3)
@@ -188,6 +329,12 @@ class ExtractionResult(StrictModel):
 
     @model_validator(mode="after")
     def check_outcome_consistency(self) -> ExtractionResult:
+        if self.prompt_version != prompt_version_for(self.schema_version):
+            raise ValueError("Schema and prompt versions must correspond")
+        if self.extraction is not None and not isinstance(
+            self.extraction, payload_model(self.schema_version)
+        ):
+            raise ValueError("Schema version does not match the extraction payload")
         if self.status == "failed":
             if self.extraction is not None or self.quality is not None or not self.error_code:
                 raise ValueError("Failed results require an error and no extraction or quality")
