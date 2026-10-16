@@ -58,7 +58,9 @@ jobs:
         run: semgrep --config=auto --error app/
       - name: Dependency scan (pip-audit)
         if: hashFiles('backend/pyproject.toml') != ''
-        run: pip-audit
+        # Audit the backend project, not Semgrep/pip-audit packages installed only in CI.
+        # Semgrep currently pins mcp 1.29.0, which is not a JobPilot dependency.
+        run: pip-audit .
 
   frontend-quality:
     name: Frontend lint / build
