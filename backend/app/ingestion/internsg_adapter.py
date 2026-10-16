@@ -18,6 +18,7 @@ try:
         AdapterBatch,
         ItemFailure,
         JobRecord,
+        JobStatus,
         RawJobItem,
         RunStatus,
         SourceConfig,
@@ -37,6 +38,7 @@ except ImportError:  # pragma: no cover - permits `python scraper.py`
         AdapterBatch,
         ItemFailure,
         JobRecord,
+        JobStatus,
         RawJobItem,
         RunStatus,
         SourceConfig,
@@ -54,7 +56,7 @@ except ImportError:  # pragma: no cover - permits `python scraper.py`
 
 
 LOGGER = logging.getLogger(__name__)
-PARSER_VERSION = "internsg-2026-08-v2"
+PARSER_VERSION = "internsg-2026-10-v3"
 
 
 class AdapterPolicyError(RuntimeError):
@@ -282,6 +284,26 @@ class InternSGAdapter(SourceAdapter):
             raw_hash=raw_hash,
             dedup_hash=build_dedup_hash(self.config.source_id, title, company, city),
             parser_version=PARSER_VERSION,
+            status=self._job_status(container),
+        )
+
+    @staticmethod
+    def _job_status(container: Tag) -> JobStatus:
+        # InternSG's own status UI, observed in archived public pages. Never scan
+        # all prose: a JD can discuss closed-loop systems or closed applications.
+        notices = container.select(
+            ":scope > .isg-job-header > .isg-job-action > .isg-job-closed, "
+            ":scope > .isg-detail-apply"
+        )
+        closed = re.compile(
+            r"\b(?:(?:this\s+)?(?:position|job)\s+is\s+(?:already\s+)?closed|"
+            r"applications?\s+(?:is\s+|are\s+)?(?:already\s+)?closed)\b",
+            re.I,
+        )
+        return (
+            JobStatus.CLOSED
+            if any(closed.search(node.get_text(" ", strip=True)) for node in notices)
+            else JobStatus.ACTIVE
         )
 
     def to_raw_item(self, html: str, url: str) -> RawJobItem:

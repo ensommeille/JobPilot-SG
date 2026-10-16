@@ -21,7 +21,8 @@ from app.llm import (
 @pytest.mark.parametrize(
     "scenario", ["success", "repair", "invalid", "authentication", "truncated"]
 )
-def test_provider_to_extraction(provider_class, scenario, jobs, payload):
+def test_provider_to_extraction(provider_class, scenario, jobs, v2_payload):
+    payload = v2_payload
     requests = []
 
     def handler(request):
@@ -65,7 +66,7 @@ def test_provider_to_extraction(provider_class, scenario, jobs, payload):
     assert result["contract_version"] == "0.1.0"
     assert result["source_id"] == jobs[0]["source_id"]
     assert result["external_id"] == jobs[0]["external_id"]
-    assert '"required_skills"' in requests[0]["messages"][0]["content"]
+    assert '"requirement_groups"' in requests[0]["messages"][0]["content"]
     assert '"$defs"' in requests[0]["messages"][0]["content"]
     assert requests[0]["response_format"] == {"type": "json_object"}
     assert len(requests) == (2 if scenario in {"repair", "invalid"} else 1)
@@ -88,7 +89,8 @@ def test_provider_to_extraction(provider_class, scenario, jobs, payload):
         )
 
 
-def test_batch_isolates_invalid_and_duplicate_inputs(jobs, payload):
+def test_batch_isolates_invalid_and_duplicate_inputs(jobs, v2_payload):
+    payload = v2_payload
     provider = MockProvider(
         [
             StructuredGenerationResponse(
@@ -124,7 +126,8 @@ def test_empty_batch_has_no_success():
     assert report["results"] == []
 
 
-def test_batch_continues_after_provider_failure(jobs, payload):
+def test_batch_continues_after_provider_failure(jobs, v2_payload):
+    payload = v2_payload
     provider = MockProvider(
         [
             ProviderAuthenticationError("DO_NOT_LEAK_RESPONSE"),

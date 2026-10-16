@@ -1,5 +1,69 @@
 # Offline job matching v2
 
+## Typed extraction refinement — 2026-10-16
+
+The starting branch for this change is `feat/course-closeout` at `e2fe853`.
+That branch already contains the Chinese learning-goal guard (`想学 Python` /
+`正在学 Python`) and the unique complete-line Canva evidence fix. These are
+preserved existing features, not new fixes claimed by this change. The new
+`tests/test_semantic_matching.py` verifies their use with typed v2 extraction.
+
+Both stored `job-extraction-v1` and `job-extraction-v2` payloads are supported.
+Historical v1 payloads are read conservatively without rewriting or relabelling
+their schema. V2 uses typed requirement groups rather than treating every fact
+as a skill. Only a `skill` condition with a recognized **specific** skill can
+contribute an intersection. Language, trait, interest and qualification
+conditions cannot contribute, even if their text contains a recognized skill.
+A model labelling `Communication` as a skill still cannot make it a specific skill.
+
+Each v2 group retains its original statement/evidence and its `group_operator`
+(`all_of`, `any_of`, `unspecified`). Additive `conditions` contain `kind`,
+`requirement`, `qualifier` and `qualifier_evidence` (text or null), `outcome`, `reason`, `job_evidence`,
+`profile_evidence` and `skill_overlaps`. Each child is shown separately. A Python
+intersection in `Python AND SQL` does not establish SQL; a Python intersection
+in an OR group does not automatically verify the employer's proficiency or other
+conditions. Compound groups remain `unknown`, including when every named skill
+overlaps. A single unqualified `all_of` skill can retain the original narrowly
+defined exact-entry `supported` or explicit `gap` result. Both the complete group
+label and group quote/context must themselves be unqualified and atomic; a model
+omitting SQL from its child list cannot make a Python-and-SQL group supported.
+A qualifier remains
+unverified; an unsupported group/atom/qualifier quote cannot contribute overlap.
+
+Identical language conditions are shown once across groups, including the exact
+aliases Mandarin/Mandarin Chinese/Putonghua and English aliases. Differently
+qualified written/spoken requirements are not collapsed. Canonical concrete
+skill IDs are deduplicated for discovery ranking across all groups.
+
+The detail response additionally returns `summary` (TextFact or null) and
+`responsibilities` (value/evidence/priority/condition). V2 preserves primary,
+secondary and conditional responsibilities; a conditional duty retains its
+source-backed condition. A v1 duty receives `priority: unspecified` and
+`condition: null`; historical data does not acquire invented priorities.
+
+`work_constraints` is a **separate** list from applicant `items`. It always
+contains five categories: `work_constraints.schedule`, `.hours`,
+`.minimum_duration`, `.work_modes`, `.locations`. Every comparison outcome is
+`unknown`: source facts about a job do not verify anyone's availability or
+location. Known source values and conditional scope are displayed with evidence;
+missing facts are explicitly “not stated”. Months are not converted to assumed
+day counts. Missing legacy v1 fields stay unknown. These five rows neither
+inflate requirement counts nor contribute rank, and no feasible/eligible
+conclusion is returned. This is project feature acceptance, not any team
+member's employment eligibility assessment.
+
+A numeric/unit evidence guard distinguishes days per week from hours per week
+and checks the duration's stated unit. An unsupported model number/unit is
+displayed as “extracted number/unit requires review”, alongside the original
+quote, rather than presenting the wrong hours as a sourced job fact. The raw
+model result is not rewritten. An extracted location reference is explicitly
+workplace-unverified: candidate eligibility wording does not establish an office
+location or a person's location feasibility.
+
+The historical acceptance numbers below describe earlier checkpoints. Validation
+for this refinement must be reported separately after tests and environment
+rebuild; adding this contract is not a deployment or model-accuracy claim.
+
 ## Delivered scope
 
 POST /jobs/{job_id}/match-analysis accepts an empty JSON object and a platform
@@ -43,7 +107,7 @@ the requested level. A Canva/Photoshop/Illustrator requirement with Canva-only
 profile evidence shares only Canva. Alternatives, compound skills, proficiency,
 experience levels and other conditions still need manual comparison.
 
-kind specific denotes a recognized tool, technical or domain skill. kind general
+For historical v1 facts, kind specific denotes a recognized tool, technical or domain skill. kind general
 denotes a broad trait such as communication or teamwork. Both may appear as
 evidence in single-job analysis. The recommendation endpoint separately requires
 at least one specific overlap and excludes general traits from ranking; see
@@ -56,7 +120,7 @@ skills. Microsoft Office does not imply Excel or the reverse; Java is not
 JavaScript; C is not C++. Ambiguous ordinary words require explicit skill context.
 Unknown terminology can be missed. It does not infer proficiency from a mention.
 
-Only required_skills and preferred_skills receive skill overlaps. Education,
+For historical v1 payloads, only required_skills and preferred_skills receive skill overlaps. Education,
 languages, experience and other qualifications remain unknown, not inferred from
 prose or nationality. Summary and responsibilities do not become applicant
 requirements. Other profile fields and uploaded resume files are not parsed.

@@ -1,0 +1,133 @@
+{
+  "benchmark_version": "human-reference-candidates-v1",
+  "purpose": "Project acceptance only; no individual applicant suitability or application decision.",
+  "retrieved_date": "2026-10-16",
+  "reference_author": "Codex first-pass source audit",
+  "human_pending": true,
+  "model_extractions": null,
+  "scope_notes": [
+    "These are concise paraphrased source baselines, not model outputs or measured extraction accuracy.",
+    "Every reference requires independent human approval and a fresh full-source snapshot before model measurement.",
+    "Listing metadata must enter model input before omissions of location, duration or status can count as model errors.",
+    "Only expressly named tools may establish a concrete-skill intersection; interests, duties and general traits cannot supply one.",
+    "Unknown schedule, work mode, location compatibility or conflicting listing status must remain unknown.",
+    "Synthetic negative controls belong in separate fixtures and must never be labelled real model results."
+  ],
+  "cases": [
+    {
+      "id": "wovenstack_software_data_automation",
+      "source_url": "https://www.internsg.com/job/wovenstack-software-engineering-intern-data-automation-ai-systems/",
+      "retrieved_url": "https://www.internsg.com/job/wovenstack-software-engineering-intern-data-automation-ai-systems/?filter_s=Software+Engineering",
+      "source_method": "official_listing_via_web_open",
+      "retrieved_date": "2026-10-16",
+      "human_pending": true,
+      "source_status": "no_closed_marker_observed",
+      "expected": {
+        "specific_skills": ["Python", "browser automation", "HTTP", "cookies", "sessions", "DOM", "single-page applications"],
+        "preferred_skills": ["SQL", "PostgreSQL or Supabase", "Docker", "CI/CD", "REST APIs or webhooks or backend protocols", "LLM APIs or structured prompt engineering"],
+        "traits_interests": ["self-directed ownership", "interest in data infrastructure and automation"],
+        "languages": [],
+        "education": "Relevant diploma/degree in progress or recent graduate.",
+        "eligibility": "Singapore work authorization required.",
+        "responsibilities": {
+          "core": ["Authenticated data pipelines, authentication lifecycle, data validation, monitoring and backend delivery."],
+          "conditional": ["API integrations, transformation, LLM automation or backend services depend on strengths and company needs."]
+        },
+        "compounds": [
+          {"operator": "any", "conditions": ["Playwright preferred", "Selenium accepted"], "parent_requirement": "browser automation experience"},
+          {"operator": "all", "conditions": ["HTTP", "cookies", "sessions", "DOM", "single-page applications"], "parent_requirement": "web application understanding"}
+        ],
+        "work_constraints": {"minimum_months": 6, "location": "Singapore", "weekly_hours": null, "days_per_week": null, "work_mode": "unknown"}
+      },
+      "short_source_quotes": ["Experience with browser automation (Playwright preferred, Selenium acceptable)"],
+      "review_checks": ["Python alone does not satisfy the compound web requirement.", "Keep conditional scope distinct from core duties.", "No asserted schedule or remote compatibility."],
+      "model_output": null,
+      "measurement_status": "pending_live_extraction_and_human_review"
+    },
+    {
+      "id": "cynapse_ml_computer_vision_11",
+      "source_url": "https://www.internsg.com/job/cynapse-pte-ltd-machine-learning-engineer-intern-computer-vision-ai-11/",
+      "status_crosscheck_url": "https://www.internsg.com/jobs/?f_0=1&f_i=420",
+      "source_method": "official_listing_via_web_open_and_category_crosscheck",
+      "retrieved_date": "2026-10-16",
+      "human_pending": true,
+      "source_status": "conflicting_cached_views_manual_review_required",
+      "status_note": "The detail view lacks a closed marker; the category view labels the October-intake listing closed. Do not treat it as confirmed open.",
+      "expected": {
+        "specific_skills": ["Python", "PyTorch or TensorFlow", "Linux", "SSH", "shell scripting", "CLI file management"],
+        "preferred_skills": ["computer vision frameworks", "vision-language models or zero-shot detection", "Git or Docker or experiment tracking", "OpenCV or FFmpeg or video streams"],
+        "traits_interests": ["interest in model training and experimentation", "practical curiosity"],
+        "languages": [],
+        "education": "Relevant technical degree completed or in progress.",
+        "eligibility": "Based in Singapore or prior Singapore study/work experience.",
+        "responsibilities": {"core": ["Train and evaluate vision models, test architectures, debug failures, refine data and automate pipelines."], "conditional": []},
+        "compounds": [
+          {"operator": "all", "conditions": ["Python proficiency", "PyTorch or TensorFlow experience"]},
+          {"operator": "any", "conditions": ["PyTorch", "TensorFlow"]},
+          {"operator": "all", "conditions": ["Linux competency", "SSH", "shell scripting", "CLI file management"]}
+        ],
+        "work_constraints": {"minimum_months": 6, "minimum_days_per_week": 4, "preferred_days_per_week": 5, "location": "Singapore", "weekly_hours": null, "work_mode": "unknown", "intakes": ["October 2026 to April 2027", "December 2026 to June 2027"]}
+      },
+      "short_source_quotes": ["Proficiency in Python and experience with PyTorch or TensorFlow."],
+      "review_checks": ["Learning interest cannot satisfy Python.", "Python-only overlap leaves framework experience unverified.", "Availability and listing status need review."],
+      "model_output": null,
+      "measurement_status": "pending_source_status_resolution_live_extraction_and_human_review"
+    },
+    {
+      "id": "cynapse_ai_evaluation_quality_2",
+      "source_url": "https://www.internsg.com/job/cynapse-pte-ltd-ai-evaluation-quality-intern-2/",
+      "retrieved_url": "https://www.internsg.com/job/cynapse-pte-ltd-ai-evaluation-quality-intern-2/?f_0=1&f_i=420",
+      "source_method": "official_listing_content_returned_by_search_canonical_open_timed_out",
+      "retrieved_date": "2026-10-16",
+      "human_pending": true,
+      "source_status": "no_closed_marker_observed_recheck_before_measurement",
+      "expected": {
+        "specific_skills": [],
+        "preferred_skills": ["LLM or VLM or agentic-AI familiarity"],
+        "traits_interests": ["AI interest", "attention to detail", "consistency", "clear written communication", "curiosity", "willingness to learn"],
+        "languages": [],
+        "education": "Diploma in any discipline, completed or in progress.",
+        "eligibility": "Based in Singapore or prior Singapore study/work experience.",
+        "responsibilities": {"core": ["Human model QA, dataset curation, error discovery, benchmarking and structured feedback."], "conditional": []},
+        "compounds": [
+          {"operator": "any", "conditions": ["LLM familiarity", "VLM familiarity", "agentic-AI familiarity"], "importance": "preferred"},
+          {"operator": "all", "conditions": ["minimum three months", "minimum four days weekly"]}
+        ],
+        "explicit_nonrequirements": ["Programming experience"],
+        "work_constraints": {"minimum_months": 3, "encouraged_months": 6, "minimum_days_per_week": 4, "preferred_days_per_week": 5, "location": "Singapore", "weekly_hours": null, "work_mode": "unknown", "intakes": ["October to December 2026", "January to April 2027"]}
+      },
+      "short_source_quotes": ["No programming experience required.", "Interest in AI and how modern models behave."],
+      "review_checks": ["Do not invent required Python from the AI title.", "AI interest alone supplies no concrete-skill intersection.", "Unknown work mode remains unknown."],
+      "model_output": null,
+      "measurement_status": "pending_full_source_snapshot_live_extraction_and_human_review"
+    },
+    {
+      "id": "strides_ai_closed",
+      "source_url": "https://www.internsg.com/job/strides-digital-artificial-intelligence-ai-intern/",
+      "source_method": "official_listing_via_web_open",
+      "retrieved_date": "2026-10-16",
+      "human_pending": true,
+      "source_status": "closed_explicit",
+      "expected": {
+        "specific_skills": ["Python", "data-science libraries", "machine-learning concepts", "SQL", "data handling"],
+        "preferred_skills": [],
+        "traits_interests": ["analytical reasoning", "attention to detail", "communication", "collaboration"],
+        "languages": [],
+        "education": "Relevant bachelor or postgraduate degree.",
+        "eligibility": "School placement letter for non-credit internship.",
+        "responsibilities": {"core": ["Prepare data, evaluate models, build pipelines, support pilots and document data securely."], "conditional": ["Production deployment support where applicable."]},
+        "compounds": [
+          {"operator": "all", "conditions": ["Python foundation", "familiarity with data-science libraries"]},
+          {"operator": "all", "conditions": ["SQL knowledge", "data handling"]}
+        ],
+        "library_examples_not_all_mandatory": ["pandas", "NumPy", "scikit-learn", "PyTorch or TensorFlow"],
+        "work_constraints": {"minimum_months": 6, "location": "Paya Lebar, Singapore", "weekly_hours": null, "days_per_week": null, "work_mode": "unknown"},
+        "recommendation_gate": "Exclude closed posting even with concrete skill overlap."
+      },
+      "short_source_quotes": ["This position is already closed", "Basic knowledge of SQL and data handling"],
+      "review_checks": ["Retain closure outside the JD body.", "Library examples do not mean every library is mandatory.", "No model or overlap score can override closure."],
+      "model_output": null,
+      "measurement_status": "closed_negative_control_pending_human_review"
+    }
+  ]
+}

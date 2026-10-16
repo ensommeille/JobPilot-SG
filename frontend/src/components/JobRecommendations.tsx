@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
 import { getToken, watchSession } from '../services/auth'
+import { RequirementConditions, WorkConstraints } from './RequirementEvidence'
+import type { StructuredRequirement, WorkConstraintEvidence } from './RequirementEvidence'
 import './JobRecommendations.css'
 
-interface Evidence {
+interface Evidence extends StructuredRequirement {
   requirement: string
   importance: string
   reason: string
@@ -22,6 +24,7 @@ interface Suggestion {
   gaps: Evidence[]
   unknown: Evidence[]
   overlaps?: Evidence[]
+  work_constraints?: WorkConstraintEvidence[]
 }
 interface Report {
   status: 'ready' | 'profile_needed' | 'no_candidates' | 'no_evidence' | 'no_matches'
@@ -137,9 +140,11 @@ export default function JobRecommendations() {
                   <p className="muted">Model-labelled priority: {item.importance} · not verified or used for ordering.</p>
                   {!!item.skill_overlaps?.length && <p>Shared mentions: {item.skill_overlaps.map(skill => skill.label + (skill.kind === 'general' ? ' (general trait; not ranked)' : '')).join(', ')}.</p>}
                   <p>{item.reason}</p>
+                  <RequirementConditions item={item} />
                   <dl><dt>Job description</dt><dd>{item.job_evidence}</dd>
                     <dt>Your profile</dt><dd>{item.profile_evidence || 'No comparable explicit evidence used.'}</dd></dl>
                 </div>))}
+              <WorkConstraints items={job.work_constraints} />
             </details>
             <Link to={'/jobs/' + job.job_id}>View job and full analysis</Link>
           </li>)}

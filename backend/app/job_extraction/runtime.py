@@ -8,8 +8,7 @@ from dataclasses import dataclass, field
 
 from app.llm import CONTRACT_VERSION, LLMProvider, MockProvider, StructuredGenerationResponse
 
-from .models import QUALITY_VERSION, SCHEMA_VERSION
-from .prompts import PROMPT_VERSION
+from .models import prompt_version_for, quality_version_for
 from .service import ExtractionConfig
 
 
@@ -30,7 +29,7 @@ def live_runtime(settings) -> "ExtractionRuntime":
 
     return ExtractionRuntime(
         provider_factory=factory,
-        profile_revision="live-extraction-v2-nonthinking-" + endpoint_revision,
+        profile_revision="live-extraction-v3-semantics-nonthinking-" + endpoint_revision,
         provider=settings.provider,
         model=settings.model
         or ("deepseek-v4-flash" if settings.provider == "deepseek" else "qwen3.8-flash"),
@@ -38,7 +37,7 @@ def live_runtime(settings) -> "ExtractionRuntime":
         config=ExtractionConfig(
             max_validation_retries=0,
             provider_call_timeout_seconds=settings.timeout_seconds + 5,
-            max_output_tokens=4000,
+            max_output_tokens=8000,
         ),
     )
 
@@ -55,13 +54,16 @@ async def mock_provider() -> AsyncIterator[LLMProvider]:
                 data={
                     "summary": None,
                     "responsibilities": [],
-                    "required_skills": [],
-                    "preferred_skills": [],
-                    "required_qualifications": [],
-                    "preferred_qualifications": [],
+                    "requirement_groups": [],
                     "education": {"degree": None, "fields_of_study": [], "enrollment": None},
                     "experience": {"requirement": None, "minimum_years": None},
-                    "languages": [],
+                    "work_constraints": {
+                        "schedule": None,
+                        "hours": None,
+                        "minimum_duration": None,
+                        "work_modes": [],
+                        "locations": [],
+                    },
                 },
             )
         ]
@@ -73,7 +75,7 @@ class ExtractionRuntime:
     """Factory owns cleanup; revision identifies model/routing/fixture configuration changes."""
 
     provider_factory: Callable[[], AbstractAsyncContextManager[LLMProvider]] = mock_provider
-    profile_revision: str = "mock-empty-v1"
+    profile_revision: str = "mock-empty-v2"
     provider: str = "mock"
     model: str = "scripted-fixture-v1"
     is_mock: bool = True
@@ -86,9 +88,9 @@ class ExtractionRuntime:
             "model": self.model,
             "execution_mode": "mock" if self.is_mock else "live",
             "config": self.config.model_dump(),
-            "schema_version": SCHEMA_VERSION,
-            "prompt_version": PROMPT_VERSION,
-            "quality_version": QUALITY_VERSION,
+            "schema_version": self.config.schema_version,
+            "prompt_version": prompt_version_for(self.config.schema_version),
+            "quality_version": quality_version_for(self.config.schema_version),
             "contract_version": CONTRACT_VERSION,
         }
 

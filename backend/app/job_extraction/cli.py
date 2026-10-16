@@ -18,7 +18,7 @@ from app.llm import MockProvider, StructuredGenerationResponse
 
 from .inputs import input_from_job
 from .models import FixtureBundle
-from .service import JobExtractionService
+from .service import ExtractionConfig, JobExtractionService
 from .storage import assert_distinct_paths, atomic_write_json
 
 
@@ -73,7 +73,11 @@ async def run_offline(records: list[Any], cases: list[dict[str, Any]]) -> dict[s
                 )
             ]
         )
-        result = await JobExtractionService(provider).extract(job)
+        # Replay the annotation's declared contract; never silently relabel v1 facts as v2.
+        result = await JobExtractionService(
+            provider,
+            ExtractionConfig(schema_version=case.get("schema_version", "job-extraction-v1")),
+        ).extract(job)
         results.append(result.model_dump(mode="json"))
     failed = len(failures) + sum(item["status"] == "failed" for item in results)
     successful = sum(item["status"] == "needs_review" for item in results)

@@ -1,5 +1,50 @@
 {
   "$defs": {
+    "DurationFact": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "exclusiveMinimum": 0,
+          "maximum": 10000,
+          "title": "Value",
+          "type": "number"
+        },
+        "unit": {
+          "enum": [
+            "days",
+            "weeks",
+            "months",
+            "years"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "evidence": {
+          "maxLength": 2500,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "value",
+        "unit",
+        "evidence",
+        "condition"
+      ],
+      "title": "DurationFact",
+      "type": "object"
+    },
     "EducationRequirements": {
       "additionalProperties": false,
       "properties": {
@@ -71,6 +116,70 @@
       "title": "ExperienceRequirements",
       "type": "object"
     },
+    "HoursFact": {
+      "additionalProperties": false,
+      "properties": {
+        "minimum": {
+          "anyOf": [
+            {
+              "maximum": 168,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Minimum"
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "maximum": 168,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Maximum"
+        },
+        "unit": {
+          "enum": [
+            "hours_per_week",
+            "hours_per_day"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "evidence": {
+          "maxLength": 2500,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "minimum",
+        "maximum",
+        "unit",
+        "evidence",
+        "condition"
+      ],
+      "title": "HoursFact",
+      "type": "object"
+    },
     "NumberFact": {
       "additionalProperties": false,
       "properties": {
@@ -92,6 +201,154 @@
         "evidence"
       ],
       "title": "NumberFact",
+      "type": "object"
+    },
+    "RequirementAtom": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "evidence": {
+          "description": "Verbatim supporting quote from description",
+          "maxLength": 2500,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "skill",
+            "language",
+            "trait",
+            "interest",
+            "qualification"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "qualifier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "value",
+        "evidence",
+        "kind",
+        "qualifier"
+      ],
+      "title": "RequirementAtom",
+      "type": "object"
+    },
+    "RequirementGroup": {
+      "additionalProperties": false,
+      "description": "A source statement and its explicit AND/OR conditions; never a bag of skills.",
+      "properties": {
+        "value": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "evidence": {
+          "description": "Verbatim supporting quote from description",
+          "maxLength": 2500,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "importance": {
+          "enum": [
+            "required",
+            "preferred",
+            "unspecified"
+          ],
+          "title": "Importance",
+          "type": "string"
+        },
+        "operator": {
+          "enum": [
+            "all_of",
+            "any_of",
+            "unspecified"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "requirements": {
+          "items": {
+            "$ref": "#/$defs/RequirementAtom"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Requirements",
+          "type": "array"
+        }
+      },
+      "required": [
+        "value",
+        "evidence",
+        "importance",
+        "operator",
+        "requirements"
+      ],
+      "title": "RequirementGroup",
+      "type": "object"
+    },
+    "ResponsibilityFact": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "evidence": {
+          "description": "Verbatim supporting quote from description",
+          "maxLength": 2500,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "priority": {
+          "enum": [
+            "primary",
+            "secondary",
+            "conditional",
+            "unspecified"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "value",
+        "evidence",
+        "priority",
+        "condition"
+      ],
+      "title": "ResponsibilityFact",
       "type": "object"
     },
     "TextFact": {
@@ -117,10 +374,112 @@
       ],
       "title": "TextFact",
       "type": "object"
+    },
+    "WorkConstraints": {
+      "additionalProperties": false,
+      "properties": {
+        "schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hours": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HoursFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "minimum_duration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DurationFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "work_modes": {
+          "items": {
+            "$ref": "#/$defs/WorkModeFact"
+          },
+          "maxItems": 12,
+          "title": "Work Modes",
+          "type": "array"
+        },
+        "locations": {
+          "items": {
+            "$ref": "#/$defs/TextFact"
+          },
+          "maxItems": 20,
+          "title": "Locations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schedule",
+        "hours",
+        "minimum_duration",
+        "work_modes",
+        "locations"
+      ],
+      "title": "WorkConstraints",
+      "type": "object"
+    },
+    "WorkModeFact": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "enum": [
+            "onsite",
+            "remote",
+            "hybrid"
+          ],
+          "title": "Value",
+          "type": "string"
+        },
+        "allowed": {
+          "title": "Allowed",
+          "type": "boolean"
+        },
+        "evidence": {
+          "maxLength": 2500,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "value",
+        "allowed",
+        "evidence",
+        "condition"
+      ],
+      "title": "WorkModeFact",
+      "type": "object"
     }
   },
   "additionalProperties": false,
-  "description": "All keys are required; unknown information is represented by null or an empty list.",
+  "description": "Typed, source-backed facts. Parallel requirement groups are conjunctive.\n\nAn any_of group retains alternatives, while unspecified logic must be reviewed.\nFor Python AND (PyTorch OR TensorFlow), use a Python all_of group and a second\nany_of group. Do not flatten more complex logic into a false all_of statement.",
   "properties": {
     "summary": {
       "anyOf": [
@@ -134,42 +493,18 @@
     },
     "responsibilities": {
       "items": {
-        "$ref": "#/$defs/TextFact"
+        "$ref": "#/$defs/ResponsibilityFact"
       },
       "maxItems": 40,
       "title": "Responsibilities",
       "type": "array"
     },
-    "required_skills": {
+    "requirement_groups": {
       "items": {
-        "$ref": "#/$defs/TextFact"
+        "$ref": "#/$defs/RequirementGroup"
       },
-      "maxItems": 40,
-      "title": "Required Skills",
-      "type": "array"
-    },
-    "preferred_skills": {
-      "items": {
-        "$ref": "#/$defs/TextFact"
-      },
-      "maxItems": 40,
-      "title": "Preferred Skills",
-      "type": "array"
-    },
-    "required_qualifications": {
-      "items": {
-        "$ref": "#/$defs/TextFact"
-      },
-      "maxItems": 40,
-      "title": "Required Qualifications",
-      "type": "array"
-    },
-    "preferred_qualifications": {
-      "items": {
-        "$ref": "#/$defs/TextFact"
-      },
-      "maxItems": 40,
-      "title": "Preferred Qualifications",
+      "maxItems": 60,
+      "title": "Requirement Groups",
       "type": "array"
     },
     "education": {
@@ -178,27 +513,18 @@
     "experience": {
       "$ref": "#/$defs/ExperienceRequirements"
     },
-    "languages": {
-      "items": {
-        "$ref": "#/$defs/TextFact"
-      },
-      "maxItems": 20,
-      "title": "Languages",
-      "type": "array"
+    "work_constraints": {
+      "$ref": "#/$defs/WorkConstraints"
     }
   },
   "required": [
     "summary",
     "responsibilities",
-    "required_skills",
-    "preferred_skills",
-    "required_qualifications",
-    "preferred_qualifications",
+    "requirement_groups",
     "education",
     "experience",
-    "languages"
+    "work_constraints"
   ],
-  "title": "JobExtractionSchema",
+  "title": "JobExtractionSchemaV2",
   "type": "object"
 }
-

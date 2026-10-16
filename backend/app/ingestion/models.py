@@ -19,6 +19,7 @@ class SourceType(StrEnum):
 class JobStatus(StrEnum):
     ACTIVE = "active"
     INCOMPLETE = "incomplete"
+    CLOSED = "closed"
 
 
 class RunStatus(StrEnum):

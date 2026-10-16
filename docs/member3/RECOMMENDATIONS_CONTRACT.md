@@ -1,5 +1,44 @@
 # Evidence-led recommendations v2
 
+## Typed requirement-group refinement — 2026-10-16
+
+This refinement starts from `feat/course-closeout` / `e2fe853`, which already
+contains the Chinese learning-goal and complete-line Canva context fixes.
+Those existing changes are preserved. Historical v1 extractions stay v1 and are
+not silently rewritten into the new typed schema.
+
+V2 requirement groups retain AND/OR/unspecified logic, original evidence, and
+each skill/language/trait/interest/qualification child. Only recognized specific
+skills inside `kind: skill` conditions contribute an intersection. Traits,
+learning interest, language and qualifications cannot supply the concrete-skill
+gate or improve rank. A job needs at least one such intersection; no minimum
+recommendation count is manufactured. Skill IDs remain deduplicated across
+groups/aliases. Repeated language conditions are displayed once, while different
+language qualifications remain separate unverified conditions.
+
+Each MatchItem adds `group_operator` and `conditions`, as specified in
+[the matching contract](MATCH_ANALYSIS_CONTRACT.md). Every compound group remains
+unknown even when its skill names overlap. Shared names, partial AND coverage,
+and an OR alternative do not prove the whole requirement or requested level.
+The existing specific-intersection, active/deadline, latest-run, stale/failed and
+mock exclusions are retained and tested against v2 payloads as well as legacy
+data. Current source availability must still be checked; an unknown deadline is
+not proof a listing remains open.
+
+Each recommendation adds `work_constraints`, separate from supported/gaps/unknown
+and overlaps. It has five explicitly unknown comparison rows for schedule,
+hours, minimum duration, work modes and locations. Source facts and their scope
+are retained where present, without asserting a person's availability. Unknown
+facts are not filled with assumed Singapore location or hours. They do not
+increase rank or the applicant-requirement count. This endpoint does not perform
+an availability/eligibility assessment for project members or other users.
+
+This contract does not claim semantic accuracy from quote coverage. A model
+classification with a locatable quote can still be wrong; live extractions stay
+needs_review. New synthetic regression tests validate engineering boundaries;
+real AI/software job evaluation, model extraction and deployed UI checks must be
+reported independently. The checkpoint counts below remain historical.
+
 ## Scope
 
 POST /jobs/recommendations accepts the current platform JWT and a JSON object:
@@ -99,7 +138,7 @@ related or parent/child skills: Microsoft Office does not establish Excel, Excel
 does not establish Microsoft Office, and Java is not JavaScript. Ordinary uses of
 ambiguous words are filtered conservatively. Unknown terms can be missed.
 
-Only extracted required/preferred skill facts produce skill overlaps. Education,
+For historical v1 payloads, only extracted required/preferred skill facts produce skill overlaps. Education,
 languages, experience and other qualifications remain manual; uploaded resume
 files and other profile prose fields are not parsed. Proficiency, years,
 eligibility and complete compound requirements are not inferred. Missing skills

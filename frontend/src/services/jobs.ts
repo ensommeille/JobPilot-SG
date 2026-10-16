@@ -73,7 +73,7 @@ export const normalizeJob = (raw: RawJob): JobView => {
     id: (raw.id as JobId) ?? '',
     title: str(raw.title) ?? 'Untitled role',
     company: str(raw.company) ?? 'Unknown company',
-    location: str(raw.city) ?? str(raw.location) ?? 'Singapore',
+    location: str(raw.city) ?? str(raw.location) ?? 'Location unknown',
     type: str(raw.job_type) ?? str(raw.type) ?? 'Other',
     tags: ((raw.tags as RawTag[] | undefined) ?? [])
       .map(t => (typeof t === 'string' ? t : t?.name ?? ''))
