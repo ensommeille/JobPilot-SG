@@ -56,6 +56,7 @@ class JsonJobRepository:
             elif (
                 previous.raw_hash == record.raw_hash
                 and previous.parser_version == record.parser_version
+                and previous.status == record.status
             ):
                 items_unchanged += 1
             else:

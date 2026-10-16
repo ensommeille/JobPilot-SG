@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from app.ingestion.models import JobRecord, SourceType
+from app.ingestion.models import JobRecord, JobStatus, SourceType
 from app.ingestion.normalization import build_dedup_hash, sha256_text
 from app.ingestion.repository import JsonJobRepository, SnapshotValidationError
 
@@ -53,6 +53,18 @@ def test_empty_failed_batch_never_replaces_last_success(tmp_path) -> None:
 
     assert path.read_bytes() == before
     assert stats.total_stored == 1
+
+
+def test_closed_status_updates_even_when_hash_and_parser_version_match(tmp_path):
+    path = tmp_path / "jobs.json"
+    repository = JsonJobRepository(path)
+    active = make_record()
+    repository.upsert([active])
+    closed = active.model_copy(update={"status": JobStatus.CLOSED})
+    stats = repository.upsert([closed])
+    assert stats.items_updated == 1
+    assert json.loads(path.read_text(encoding="utf-8"))[0]["status"] == "closed"
+    assert repository.upsert([closed]).items_unchanged == 1
 
 
 def test_invalid_existing_snapshot_is_preserved(tmp_path) -> None:

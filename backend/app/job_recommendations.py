@@ -36,6 +36,7 @@ class Recommendation(BaseModel):
     gaps: list[MatchItem]
     unknown: list[MatchItem]
     overlaps: list[MatchItem] = Field(default_factory=list)
+    work_constraints: list[MatchItem] = Field(default_factory=list)
 
 
 class RecommendationReport(BaseModel):
@@ -154,6 +155,7 @@ def recommend(
             gaps=gaps,
             unknown=[i for i in analysis.items if i.outcome == "unknown"],
             overlaps=overlaps,
+            work_constraints=analysis.work_constraints,
         )
         # Model-assigned required/preferred labels are unverified and do not affect
         # rank. Generic soft skills, duplicates and synonyms cannot inflate rank.

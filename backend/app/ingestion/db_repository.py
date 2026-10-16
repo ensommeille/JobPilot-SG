@@ -40,7 +40,7 @@ class SqlAlchemyJobRepository:
             elif job.source_id != self.source.id:
                 # Keep the canonical source identity intact on cross-source deduplication.
                 items_unchanged += 1
-            elif job.raw_hash == record.raw_hash:
+            elif job.raw_hash == record.raw_hash and job.status == record.status.value:
                 # Backfill provenance for legacy rows even when page content is unchanged.
                 job.source_url = record.source_url
                 items_unchanged += 1

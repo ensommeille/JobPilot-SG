@@ -1,0 +1,1333 @@
+{
+  "report_version": "real-jd-synthetic-profile-matching-v1",
+  "generated_at": "2026-10-16T06:08:55.386019+00:00",
+  "source_capture_run": "output/semantics-acceptance-20261016/20261016T060330247717Z",
+  "baseline_commit": "e2fe853",
+  "implementation_state": "local_uncommitted_semantics_v2_refinement",
+  "execution": {
+    "database_reads": false,
+    "database_writes": false,
+    "network_calls": false,
+    "model_calls": 0,
+    "input_and_model_artifacts_modified": false,
+    "path": "direct compare and compare_work_constraints with saved actual live model outputs"
+  },
+  "synthetic_profiles": {
+    "python_only": [
+      "Python"
+    ],
+    "want_to_learn_python_only": [
+      "想学 Python"
+    ],
+    "currently_learning_python_only": [
+      "正在学 Python"
+    ],
+    "canva_only": [
+      "Canva"
+    ]
+  },
+  "interpretation": [
+    "These profiles are fabricated feature-acceptance inputs, not any team member or job applicant.",
+    "needs_review and source quote presence are not semantic accuracy or hiring eligibility.",
+    "No closed marker observed is not a guarantee the listing is still open.",
+    "Specific-skill gate results below are direct-comparison results, not end-to-end HTTP or deployment verification.",
+    "Missing/failed/mock/latest-stale/expired behavior is also covered by isolated regression tests, not live model calls."
+  ],
+  "cases": [
+    {
+      "id": "wovenstack_software_data_automation",
+      "source_url": "https://www.internsg.com/job/wovenstack-software-engineering-intern-data-automation-ai-systems/",
+      "source_status": "no_closed_marker_observed",
+      "model_status": "needs_review",
+      "comparison_performed": true,
+      "input_hash": "395db60fed081d2fa62e8773d871a2e68fe85de93b90755034ab36b08ff646d7",
+      "model_result_id": "9b660a93-6ec1-477b-ad4c-3266b6ac7d39",
+      "extraction_result_sha256": "482db7f8d353d6f0735ccd43c60ff250484af0aec20947ced75e5748589c1cd7",
+      "recorded_quality_issues": [
+        {
+          "code": "evidence_not_in_description",
+          "field": "summary"
+        }
+      ],
+      "recomputed_current_quality_issues": [
+        {
+          "code": "evidence_not_in_description",
+          "field": "summary"
+        }
+      ],
+      "profiles": {
+        "python_only": {
+          "affirmative_profile_skill_ids": [
+            "python"
+          ],
+          "specific_skill_ids": [
+            "python"
+          ],
+          "passes_specific_skill_intersection_gate": true,
+          "counts": {
+            "supported": 0,
+            "gap": 0,
+            "unknown": 18
+          },
+          "matching_groups": [
+            {
+              "category": "requirement_groups",
+              "requirement": "Solid Python skills. You can write code that other people can read and maintain",
+              "importance": "required",
+              "outcome": "unknown",
+              "reason": "Compound requirement: only the named skill intersections below are established. The complete AND/OR conditions and qualifiers require manual confirmation.",
+              "job_evidence": "Solid Python skills. You can write code that other people can read and maintain",
+              "profile_evidence": "Python",
+              "profile_field": "skills",
+              "skill_overlaps": [
+                {
+                  "skill_id": "python",
+                  "label": "Python",
+                  "kind": "specific",
+                  "profile_evidence": "Python"
+                }
+              ],
+              "group_operator": "all_of",
+              "conditions": [
+                {
+                  "kind": "skill",
+                  "requirement": "Solid Python skills",
+                  "qualifier": "Solid",
+                  "qualifier_evidence": "Solid Python skills. You can write code that other people can read and maintain",
+                  "outcome": "unknown",
+                  "reason": "Shared concrete skill names only. The qualifier, proficiency and complete compound requirement remain unverified.",
+                  "job_evidence": "Solid Python skills. You can write code that other people can read and maintain",
+                  "profile_evidence": "Python",
+                  "skill_overlaps": [
+                    {
+                      "skill_id": "python",
+                      "label": "Python",
+                      "kind": "specific",
+                      "profile_evidence": "Python"
+                    }
+                  ]
+                },
+                {
+                  "kind": "skill",
+                  "requirement": "Can write code that other people can read and maintain",
+                  "qualifier": null,
+                  "qualifier_evidence": null,
+                  "outcome": "unknown",
+                  "reason": "This condition requires manual comparison; it does not establish suitability.",
+                  "job_evidence": "Solid Python skills. You can write code that other people can read and maintain",
+                  "profile_evidence": null,
+                  "skill_overlaps": []
+                }
+              ]
+            }
+          ],
+          "language_conditions": [],
+          "work_constraints": [
+            {
+              "category": "work_constraints.schedule",
+              "requirement": "Schedule: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.hours",
+              "requirement": "Hours: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.minimum_duration",
+              "requirement": "Minimum duration: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.work_modes",
+              "requirement": "Work modes: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.locations",
+              "requirement": "Extracted location reference: Singapore (workplace unverified)",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this unverified location reference may describe candidate eligibility rather than the workplace. Neither workplace nor user-location feasibility is established. No feasibility conclusion is made.",
+              "job_evidence": "Valid work authorization in Singapore (PR, Citizen, or eligible Student/Work Holiday Pass)",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            }
+          ]
+        },
+        "want_to_learn_python_only": {
+          "affirmative_profile_skill_ids": [],
+          "specific_skill_ids": [],
+          "passes_specific_skill_intersection_gate": false,
+          "counts": {
+            "supported": 0,
+            "gap": 0,
+            "unknown": 18
+          },
+          "matching_groups": [],
+          "language_conditions": [],
+          "work_constraints": [
+            {
+              "category": "work_constraints.schedule",
+              "requirement": "Schedule: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.hours",
+              "requirement": "Hours: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.minimum_duration",
+              "requirement": "Minimum duration: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.work_modes",
+              "requirement": "Work modes: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.locations",
+              "requirement": "Extracted location reference: Singapore (workplace unverified)",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this unverified location reference may describe candidate eligibility rather than the workplace. Neither workplace nor user-location feasibility is established. No feasibility conclusion is made.",
+              "job_evidence": "Valid work authorization in Singapore (PR, Citizen, or eligible Student/Work Holiday Pass)",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            }
+          ]
+        },
+        "currently_learning_python_only": {
+          "affirmative_profile_skill_ids": [],
+          "specific_skill_ids": [],
+          "passes_specific_skill_intersection_gate": false,
+          "counts": {
+            "supported": 0,
+            "gap": 0,
+            "unknown": 18
+          },
+          "matching_groups": [],
+          "language_conditions": [],
+          "work_constraints": [
+            {
+              "category": "work_constraints.schedule",
+              "requirement": "Schedule: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.hours",
+              "requirement": "Hours: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.minimum_duration",
+              "requirement": "Minimum duration: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.work_modes",
+              "requirement": "Work modes: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.locations",
+              "requirement": "Extracted location reference: Singapore (workplace unverified)",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this unverified location reference may describe candidate eligibility rather than the workplace. Neither workplace nor user-location feasibility is established. No feasibility conclusion is made.",
+              "job_evidence": "Valid work authorization in Singapore (PR, Citizen, or eligible Student/Work Holiday Pass)",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            }
+          ]
+        },
+        "canva_only": {
+          "affirmative_profile_skill_ids": [
+            "canva"
+          ],
+          "specific_skill_ids": [],
+          "passes_specific_skill_intersection_gate": false,
+          "counts": {
+            "supported": 0,
+            "gap": 0,
+            "unknown": 18
+          },
+          "matching_groups": [],
+          "language_conditions": [],
+          "work_constraints": [
+            {
+              "category": "work_constraints.schedule",
+              "requirement": "Schedule: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.hours",
+              "requirement": "Hours: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.minimum_duration",
+              "requirement": "Minimum duration: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.work_modes",
+              "requirement": "Work modes: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.locations",
+              "requirement": "Extracted location reference: Singapore (workplace unverified)",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this unverified location reference may describe candidate eligibility rather than the workplace. Neither workplace nor user-location feasibility is established. No feasibility conclusion is made.",
+              "job_evidence": "Valid work authorization in Singapore (PR, Citizen, or eligible Student/Work Holiday Pass)",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            }
+          ]
+        }
+      },
+      "raw_artifacts_unchanged": true
+    },
+    {
+      "id": "cynapse_ml_computer_vision_11",
+      "source_url": "https://www.internsg.com/job/cynapse-pte-ltd-machine-learning-engineer-intern-computer-vision-ai-11/",
+      "source_status": "closed",
+      "model_status": "skipped_source_ineligible",
+      "comparison_performed": false,
+      "recommendation_exclusion": "source_observed_closed",
+      "profiles": {
+        "python_only": {
+          "eligible_for_recommendation_pool": false,
+          "specific_skill_ids": []
+        },
+        "want_to_learn_python_only": {
+          "eligible_for_recommendation_pool": false,
+          "specific_skill_ids": []
+        },
+        "currently_learning_python_only": {
+          "eligible_for_recommendation_pool": false,
+          "specific_skill_ids": []
+        },
+        "canva_only": {
+          "eligible_for_recommendation_pool": false,
+          "specific_skill_ids": []
+        }
+      }
+    },
+    {
+      "id": "cynapse_ai_evaluation_quality_2",
+      "source_url": "https://www.internsg.com/job/cynapse-pte-ltd-ai-evaluation-quality-intern-2/",
+      "source_status": "no_closed_marker_observed",
+      "model_status": "needs_review",
+      "comparison_performed": true,
+      "input_hash": "cc92b07458b2107df581f3b3f921e03f21bd51de0618db46ace7b38d28416b38",
+      "model_result_id": "d23bc79c-0cb9-40fa-893b-1d06485bafec",
+      "extraction_result_sha256": "eec90a23863936b16439e36c8e1615aebca441e1d4e65559974f9f7969afb054",
+      "recorded_quality_issues": [],
+      "recomputed_current_quality_issues": [
+        {
+          "code": "numeric_hours_not_supported",
+          "field": "work_constraints.hours"
+        }
+      ],
+      "profiles": {
+        "python_only": {
+          "affirmative_profile_skill_ids": [
+            "python"
+          ],
+          "specific_skill_ids": [],
+          "passes_specific_skill_intersection_gate": false,
+          "counts": {
+            "supported": 0,
+            "gap": 0,
+            "unknown": 12
+          },
+          "matching_groups": [],
+          "language_conditions": [],
+          "work_constraints": [
+            {
+              "category": "work_constraints.schedule",
+              "requirement": "Able to work at least 4 days a week (Preferably full-time / 5 days a week).",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "Able to work at least 4 days a week (Preferably full-time / 5 days a week).",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.hours",
+              "requirement": "Hours: extracted number/unit requires review",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the model's hours number/unit is not supported by the quoted source. Days per week are not hours per week; no conversion or feasibility claim is made. Review the original quote.",
+              "job_evidence": "Able to work at least 4 days a week (Preferably full-time / 5 days a week).",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.minimum_duration",
+              "requirement": "At least 3 months",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "Available for at least a 3-month internship; candidates who can commit to a 6-month internship are also encouraged to apply.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.work_modes",
+              "requirement": "Work modes: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.locations",
+              "requirement": "Extracted location reference: Singapore (workplace unverified)",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this unverified location reference may describe candidate eligibility rather than the workplace. Neither workplace nor user-location feasibility is established. No feasibility conclusion is made.",
+              "job_evidence": "Due to the nature of the role, the position is considered for candidates who are based in Singapore or have experience studying and/or working in Singapore.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            }
+          ]
+        },
+        "want_to_learn_python_only": {
+          "affirmative_profile_skill_ids": [],
+          "specific_skill_ids": [],
+          "passes_specific_skill_intersection_gate": false,
+          "counts": {
+            "supported": 0,
+            "gap": 0,
+            "unknown": 12
+          },
+          "matching_groups": [],
+          "language_conditions": [],
+          "work_constraints": [
+            {
+              "category": "work_constraints.schedule",
+              "requirement": "Able to work at least 4 days a week (Preferably full-time / 5 days a week).",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "Able to work at least 4 days a week (Preferably full-time / 5 days a week).",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.hours",
+              "requirement": "Hours: extracted number/unit requires review",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the model's hours number/unit is not supported by the quoted source. Days per week are not hours per week; no conversion or feasibility claim is made. Review the original quote.",
+              "job_evidence": "Able to work at least 4 days a week (Preferably full-time / 5 days a week).",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.minimum_duration",
+              "requirement": "At least 3 months",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "Available for at least a 3-month internship; candidates who can commit to a 6-month internship are also encouraged to apply.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.work_modes",
+              "requirement": "Work modes: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.locations",
+              "requirement": "Extracted location reference: Singapore (workplace unverified)",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this unverified location reference may describe candidate eligibility rather than the workplace. Neither workplace nor user-location feasibility is established. No feasibility conclusion is made.",
+              "job_evidence": "Due to the nature of the role, the position is considered for candidates who are based in Singapore or have experience studying and/or working in Singapore.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            }
+          ]
+        },
+        "currently_learning_python_only": {
+          "affirmative_profile_skill_ids": [],
+          "specific_skill_ids": [],
+          "passes_specific_skill_intersection_gate": false,
+          "counts": {
+            "supported": 0,
+            "gap": 0,
+            "unknown": 12
+          },
+          "matching_groups": [],
+          "language_conditions": [],
+          "work_constraints": [
+            {
+              "category": "work_constraints.schedule",
+              "requirement": "Able to work at least 4 days a week (Preferably full-time / 5 days a week).",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "Able to work at least 4 days a week (Preferably full-time / 5 days a week).",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.hours",
+              "requirement": "Hours: extracted number/unit requires review",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the model's hours number/unit is not supported by the quoted source. Days per week are not hours per week; no conversion or feasibility claim is made. Review the original quote.",
+              "job_evidence": "Able to work at least 4 days a week (Preferably full-time / 5 days a week).",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.minimum_duration",
+              "requirement": "At least 3 months",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "Available for at least a 3-month internship; candidates who can commit to a 6-month internship are also encouraged to apply.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.work_modes",
+              "requirement": "Work modes: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.locations",
+              "requirement": "Extracted location reference: Singapore (workplace unverified)",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this unverified location reference may describe candidate eligibility rather than the workplace. Neither workplace nor user-location feasibility is established. No feasibility conclusion is made.",
+              "job_evidence": "Due to the nature of the role, the position is considered for candidates who are based in Singapore or have experience studying and/or working in Singapore.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            }
+          ]
+        },
+        "canva_only": {
+          "affirmative_profile_skill_ids": [
+            "canva"
+          ],
+          "specific_skill_ids": [],
+          "passes_specific_skill_intersection_gate": false,
+          "counts": {
+            "supported": 0,
+            "gap": 0,
+            "unknown": 12
+          },
+          "matching_groups": [],
+          "language_conditions": [],
+          "work_constraints": [
+            {
+              "category": "work_constraints.schedule",
+              "requirement": "Able to work at least 4 days a week (Preferably full-time / 5 days a week).",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "Able to work at least 4 days a week (Preferably full-time / 5 days a week).",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.hours",
+              "requirement": "Hours: extracted number/unit requires review",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the model's hours number/unit is not supported by the quoted source. Days per week are not hours per week; no conversion or feasibility claim is made. Review the original quote.",
+              "job_evidence": "Able to work at least 4 days a week (Preferably full-time / 5 days a week).",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.minimum_duration",
+              "requirement": "At least 3 months",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "Available for at least a 3-month internship; candidates who can commit to a 6-month internship are also encouraged to apply.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.work_modes",
+              "requirement": "Work modes: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.locations",
+              "requirement": "Extracted location reference: Singapore (workplace unverified)",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this unverified location reference may describe candidate eligibility rather than the workplace. Neither workplace nor user-location feasibility is established. No feasibility conclusion is made.",
+              "job_evidence": "Due to the nature of the role, the position is considered for candidates who are based in Singapore or have experience studying and/or working in Singapore.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            }
+          ]
+        }
+      },
+      "raw_artifacts_unchanged": true
+    },
+    {
+      "id": "strides_ai_closed",
+      "source_url": "https://www.internsg.com/job/strides-digital-artificial-intelligence-ai-intern/",
+      "source_status": "closed",
+      "model_status": "skipped_source_ineligible",
+      "comparison_performed": false,
+      "recommendation_exclusion": "source_observed_closed",
+      "profiles": {
+        "python_only": {
+          "eligible_for_recommendation_pool": false,
+          "specific_skill_ids": []
+        },
+        "want_to_learn_python_only": {
+          "eligible_for_recommendation_pool": false,
+          "specific_skill_ids": []
+        },
+        "currently_learning_python_only": {
+          "eligible_for_recommendation_pool": false,
+          "specific_skill_ids": []
+        },
+        "canva_only": {
+          "eligible_for_recommendation_pool": false,
+          "specific_skill_ids": []
+        }
+      }
+    },
+    {
+      "id": "ilodia_retail",
+      "source_url": "https://www.internsg.com/job/ilodia-labs-pte-ltd-retail-e-commerce-operations-intern/",
+      "source_status": "no_closed_marker_observed",
+      "model_status": "needs_review",
+      "comparison_performed": true,
+      "input_hash": "b7de88f7837c6675a319982bd02c2c212057d72cb4044ff1bbfa097acb0aa7f8",
+      "model_result_id": "fb6a7f4d-022c-4dcb-bb32-be7b16213c6c",
+      "extraction_result_sha256": "6e8aa8a9f3e81c8678a557c500cdb4da214ccebe51600d5b7b99563d065d67e6",
+      "recorded_quality_issues": [],
+      "recomputed_current_quality_issues": [],
+      "profiles": {
+        "python_only": {
+          "affirmative_profile_skill_ids": [
+            "python"
+          ],
+          "specific_skill_ids": [],
+          "passes_specific_skill_intersection_gate": false,
+          "counts": {
+            "supported": 0,
+            "gap": 0,
+            "unknown": 6
+          },
+          "matching_groups": [],
+          "language_conditions": [
+            {
+              "kind": "language",
+              "requirement": "Mandarin",
+              "qualifier": "Basic conversational",
+              "qualifier_evidence": "Basic conversational Mandarin for liaising with Chinese-speaking suppliers; translation tools may be used for written communication",
+              "outcome": "unknown",
+              "reason": "Language, traits, interests and qualifications are not established by saved skill mentions and do not contribute to the recommendation rank.",
+              "job_evidence": "Basic conversational Mandarin for liaising with Chinese-speaking suppliers; translation tools may be used for written communication",
+              "profile_evidence": null,
+              "skill_overlaps": []
+            }
+          ],
+          "work_constraints": [
+            {
+              "category": "work_constraints.schedule",
+              "requirement": "For Full-Time, our working hours are Monday - Friday, 9:30am – 6:30pm, including a one-hour lunch break. For Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "For Full-Time, our working hours are Monday - Friday, 9:30am – 6:30pm, including a one-hour lunch break. For Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.hours",
+              "requirement": "20–unknown hours per week; For Part-Time/Flexi",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "with a min. 20 hours/week & 3 months commitment\nFor Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis, with a min. 20 hours/week & 3 months commitment.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.minimum_duration",
+              "requirement": "At least 3 months; For Part-Time/Flexi",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "with a min. 20 hours/week & 3 months commitment\nFor Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis, with a min. 20 hours/week & 3 months commitment.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.work_modes",
+              "requirement": "remote: not allowed; hybrid: not allowed",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "Remote or hybrid arrangements are not available.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.locations",
+              "requirement": "Locations: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            }
+          ]
+        },
+        "want_to_learn_python_only": {
+          "affirmative_profile_skill_ids": [],
+          "specific_skill_ids": [],
+          "passes_specific_skill_intersection_gate": false,
+          "counts": {
+            "supported": 0,
+            "gap": 0,
+            "unknown": 6
+          },
+          "matching_groups": [],
+          "language_conditions": [
+            {
+              "kind": "language",
+              "requirement": "Mandarin",
+              "qualifier": "Basic conversational",
+              "qualifier_evidence": "Basic conversational Mandarin for liaising with Chinese-speaking suppliers; translation tools may be used for written communication",
+              "outcome": "unknown",
+              "reason": "Language, traits, interests and qualifications are not established by saved skill mentions and do not contribute to the recommendation rank.",
+              "job_evidence": "Basic conversational Mandarin for liaising with Chinese-speaking suppliers; translation tools may be used for written communication",
+              "profile_evidence": null,
+              "skill_overlaps": []
+            }
+          ],
+          "work_constraints": [
+            {
+              "category": "work_constraints.schedule",
+              "requirement": "For Full-Time, our working hours are Monday - Friday, 9:30am – 6:30pm, including a one-hour lunch break. For Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "For Full-Time, our working hours are Monday - Friday, 9:30am – 6:30pm, including a one-hour lunch break. For Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.hours",
+              "requirement": "20–unknown hours per week; For Part-Time/Flexi",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "with a min. 20 hours/week & 3 months commitment\nFor Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis, with a min. 20 hours/week & 3 months commitment.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.minimum_duration",
+              "requirement": "At least 3 months; For Part-Time/Flexi",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "with a min. 20 hours/week & 3 months commitment\nFor Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis, with a min. 20 hours/week & 3 months commitment.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.work_modes",
+              "requirement": "remote: not allowed; hybrid: not allowed",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "Remote or hybrid arrangements are not available.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.locations",
+              "requirement": "Locations: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            }
+          ]
+        },
+        "currently_learning_python_only": {
+          "affirmative_profile_skill_ids": [],
+          "specific_skill_ids": [],
+          "passes_specific_skill_intersection_gate": false,
+          "counts": {
+            "supported": 0,
+            "gap": 0,
+            "unknown": 6
+          },
+          "matching_groups": [],
+          "language_conditions": [
+            {
+              "kind": "language",
+              "requirement": "Mandarin",
+              "qualifier": "Basic conversational",
+              "qualifier_evidence": "Basic conversational Mandarin for liaising with Chinese-speaking suppliers; translation tools may be used for written communication",
+              "outcome": "unknown",
+              "reason": "Language, traits, interests and qualifications are not established by saved skill mentions and do not contribute to the recommendation rank.",
+              "job_evidence": "Basic conversational Mandarin for liaising with Chinese-speaking suppliers; translation tools may be used for written communication",
+              "profile_evidence": null,
+              "skill_overlaps": []
+            }
+          ],
+          "work_constraints": [
+            {
+              "category": "work_constraints.schedule",
+              "requirement": "For Full-Time, our working hours are Monday - Friday, 9:30am – 6:30pm, including a one-hour lunch break. For Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "For Full-Time, our working hours are Monday - Friday, 9:30am – 6:30pm, including a one-hour lunch break. For Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.hours",
+              "requirement": "20–unknown hours per week; For Part-Time/Flexi",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "with a min. 20 hours/week & 3 months commitment\nFor Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis, with a min. 20 hours/week & 3 months commitment.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.minimum_duration",
+              "requirement": "At least 3 months; For Part-Time/Flexi",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "with a min. 20 hours/week & 3 months commitment\nFor Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis, with a min. 20 hours/week & 3 months commitment.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.work_modes",
+              "requirement": "remote: not allowed; hybrid: not allowed",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "Remote or hybrid arrangements are not available.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.locations",
+              "requirement": "Locations: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            }
+          ]
+        },
+        "canva_only": {
+          "affirmative_profile_skill_ids": [
+            "canva"
+          ],
+          "specific_skill_ids": [
+            "canva"
+          ],
+          "passes_specific_skill_intersection_gate": true,
+          "counts": {
+            "supported": 0,
+            "gap": 0,
+            "unknown": 6
+          },
+          "matching_groups": [
+            {
+              "category": "requirement_groups",
+              "requirement": "Basic Canva skills, an eye for clear layouts and familiarity with spreadsheets",
+              "importance": "required",
+              "outcome": "unknown",
+              "reason": "Compound requirement: only the named skill intersections below are established. The complete AND/OR conditions and qualifiers require manual confirmation.",
+              "job_evidence": "Basic Canva skills, an eye for clear layouts and familiarity with spreadsheets",
+              "profile_evidence": "Canva",
+              "profile_field": "skills",
+              "skill_overlaps": [
+                {
+                  "skill_id": "canva",
+                  "label": "Canva",
+                  "kind": "specific",
+                  "profile_evidence": "Canva"
+                }
+              ],
+              "group_operator": "all_of",
+              "conditions": [
+                {
+                  "kind": "skill",
+                  "requirement": "Canva",
+                  "qualifier": "Basic",
+                  "qualifier_evidence": "Basic Canva skills, an eye for clear layouts and familiarity with spreadsheets",
+                  "outcome": "unknown",
+                  "reason": "Shared concrete skill names only. The qualifier, proficiency and complete compound requirement remain unverified.",
+                  "job_evidence": "Basic Canva skills, an eye for clear layouts and familiarity with spreadsheets",
+                  "profile_evidence": "Canva",
+                  "skill_overlaps": [
+                    {
+                      "skill_id": "canva",
+                      "label": "Canva",
+                      "kind": "specific",
+                      "profile_evidence": "Canva"
+                    }
+                  ]
+                },
+                {
+                  "kind": "trait",
+                  "requirement": "An eye for clear layouts",
+                  "qualifier": null,
+                  "qualifier_evidence": null,
+                  "outcome": "unknown",
+                  "reason": "Language, traits, interests and qualifications are not established by saved skill mentions and do not contribute to the recommendation rank.",
+                  "job_evidence": "Basic Canva skills, an eye for clear layouts and familiarity with spreadsheets",
+                  "profile_evidence": null,
+                  "skill_overlaps": []
+                },
+                {
+                  "kind": "skill",
+                  "requirement": "Spreadsheets",
+                  "qualifier": "Familiarity",
+                  "qualifier_evidence": "Basic Canva skills, an eye for clear layouts and familiarity with spreadsheets",
+                  "outcome": "unknown",
+                  "reason": "This condition requires manual comparison; it does not establish suitability.",
+                  "job_evidence": "Basic Canva skills, an eye for clear layouts and familiarity with spreadsheets",
+                  "profile_evidence": null,
+                  "skill_overlaps": []
+                }
+              ]
+            }
+          ],
+          "language_conditions": [
+            {
+              "kind": "language",
+              "requirement": "Mandarin",
+              "qualifier": "Basic conversational",
+              "qualifier_evidence": "Basic conversational Mandarin for liaising with Chinese-speaking suppliers; translation tools may be used for written communication",
+              "outcome": "unknown",
+              "reason": "Language, traits, interests and qualifications are not established by saved skill mentions and do not contribute to the recommendation rank.",
+              "job_evidence": "Basic conversational Mandarin for liaising with Chinese-speaking suppliers; translation tools may be used for written communication",
+              "profile_evidence": null,
+              "skill_overlaps": []
+            }
+          ],
+          "work_constraints": [
+            {
+              "category": "work_constraints.schedule",
+              "requirement": "For Full-Time, our working hours are Monday - Friday, 9:30am – 6:30pm, including a one-hour lunch break. For Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "For Full-Time, our working hours are Monday - Friday, 9:30am – 6:30pm, including a one-hour lunch break. For Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.hours",
+              "requirement": "20–unknown hours per week; For Part-Time/Flexi",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "with a min. 20 hours/week & 3 months commitment\nFor Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis, with a min. 20 hours/week & 3 months commitment.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.minimum_duration",
+              "requirement": "At least 3 months; For Part-Time/Flexi",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "with a min. 20 hours/week & 3 months commitment\nFor Part-Time/Flexi, open to discussing the arrangement during the working hours, on a case-by-case basis, with a min. 20 hours/week & 3 months commitment.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.work_modes",
+              "requirement": "remote: not allowed; hybrid: not allowed",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: the source states this condition, but the profile supplies no verified availability or location evidence. No feasibility conclusion is made.",
+              "job_evidence": "Remote or hybrid arrangements are not available.",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            },
+            {
+              "category": "work_constraints.locations",
+              "requirement": "Locations: not stated",
+              "importance": "unspecified",
+              "outcome": "unknown",
+              "reason": "Unknown: this condition was not stated or extracted; do not infer availability or location.",
+              "job_evidence": "",
+              "profile_evidence": null,
+              "profile_field": null,
+              "skill_overlaps": [],
+              "group_operator": null,
+              "conditions": []
+            }
+          ]
+        }
+      },
+      "raw_artifacts_unchanged": true
+    }
+  ],
+  "ranking_within_this_saved_source_pool": {
+    "python_only": [
+      {
+        "case_id": "wovenstack_software_data_automation",
+        "specific_skill_ids": [
+          "python"
+        ],
+        "distinct_specific_skill_count": 1,
+        "has_explicit_gap": false,
+        "full_requirement_satisfaction": "unverified"
+      }
+    ],
+    "want_to_learn_python_only": [],
+    "currently_learning_python_only": [],
+    "canva_only": [
+      {
+        "case_id": "ilodia_retail",
+        "specific_skill_ids": [
+          "canva"
+        ],
+        "distinct_specific_skill_count": 1,
+        "has_explicit_gap": false,
+        "full_requirement_satisfaction": "unverified"
+      }
+    ]
+  },
+  "observations": [
+    {
+      "case_id": "wovenstack_software_data_automation",
+      "finding": "Python-only shares Python in a multi-condition group. Readable/maintainable code, proficiency and other conditions remain unverified; no full support is claimed."
+    },
+    {
+      "case_id": "ilodia_retail",
+      "finding": "Canva-only shares Canva. Layout judgement and spreadsheet familiarity remain separate unverified children. Mandarin is a language condition and adds no score; this actual output has one Mandarin condition, so duplicate-language defense is independently demonstrated by synthetic regressions."
+    },
+    {
+      "case_id": "cynapse_ai_evaluation_quality_2",
+      "finding": "No concrete intersection for the four synthetic profiles. LLM/VLM/agentic-AI words are not inferred to be Python; closed vocabulary may miss other legitimate domain skills."
+    },
+    {
+      "case_id": "cynapse_ai_evaluation_quality_2",
+      "finding": "Actual model error retained: 4 days/week was encoded as 4 hours/week. The current deterministic guard flags numeric_hours_not_supported and the matching row displays extracted number/unit requires review, not 4 verified hours."
+    },
+    {
+      "case_id": "cynapse_ai_evaluation_quality_2",
+      "finding": "Based in Singapore eligibility wording does not establish workplace location; matching explicitly marks the extracted reference workplace-unverified."
+    },
+    {
+      "case_id": "cynapse_ml_computer_vision_11",
+      "finding": "Observed closed; no live extraction or recommendation."
+    },
+    {
+      "case_id": "strides_ai_closed",
+      "finding": "Observed closed; no live extraction or recommendation."
+    }
+  ],
+  "last_verified_at": "2026-10-16T06:10:36.321488+00:00",
+  "verification_note": "Rechecked after single-atom source-group completeness and full-group uncertainty guards; derived matching results unchanged."
+}

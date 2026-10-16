@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom'
 import axios from 'axios'
 import api from '../services/api'
 import { getToken, watchSession } from '../services/auth'
+import { RequirementConditions, WorkConstraints } from './RequirementEvidence'
+import type { StructuredRequirement, WorkConstraintEvidence } from './RequirementEvidence'
 import './JobMatchAnalysis.css'
 
-interface MatchItem {
+interface MatchItem extends StructuredRequirement {
   category: string
   requirement: string
   importance: 'required' | 'preferred' | 'unspecified'
@@ -21,6 +23,9 @@ interface Analysis {
   reason: string | null
   warnings: string[]
   items: MatchItem[]
+  work_constraints?: WorkConstraintEvidence[]
+  summary?: {value: string; evidence: string} | null
+  responsibilities?: {value: string; evidence: string; priority: 'primary' | 'secondary' | 'conditional' | 'unspecified'; condition: {value: string; evidence: string} | null}[]
 }
 const reasons: Record<string, string> = {
   missing_extraction: 'This job has no extracted requirements yet. Its requirements need to be prepared before analysis.',
@@ -92,6 +97,16 @@ export default function JobMatchAnalysis({jobId}: {jobId: string}) {
       </div>
       {result.status === 'preliminary' && <>
         <p>Based on your saved profile at the time of analysis. After changing your profile, choose Analyze again. Uploaded resume files are not parsed by this feature.</p>
+        {(result.summary || !!result.responsibilities?.length) && <details>
+          <summary>Extracted role and responsibilities (unverified)</summary>
+          {result.summary && <><p>{result.summary.value}</p><details><summary>Role summary evidence</summary><blockquote>{result.summary.evidence}</blockquote></details></>}
+          <ul>{result.responsibilities?.map((duty, index) => <li key={index}>
+            <p><strong>{duty.priority === 'unspecified' ? 'Priority not stated' : duty.priority === 'conditional' ? 'Conditional responsibility' : duty.priority === 'primary' ? 'Primary responsibility' : 'Secondary responsibility'}:</strong> {duty.value}</p>
+            {duty.condition && <p>Applies when: {duty.condition.value}</p>}
+            <details><summary>Responsibility evidence</summary><blockquote>{duty.evidence}</blockquote>
+              {duty.condition && <blockquote>{duty.condition.evidence}</blockquote>}</details>
+          </li>)}</ul>
+        </details>}
         {groups.map(group => <div className="job-match-group" key={group.key}>
           <h4>{group.title}</h4>
           {result.items.some(item => inGroup(item, group.key)) ? <ul>
@@ -99,6 +114,7 @@ export default function JobMatchAnalysis({jobId}: {jobId: string}) {
               <p><strong>{item.requirement}</strong> <span className="job-match-importance">{item.importance === 'unspecified' ? 'Priority not classified' : item.importance === 'required' ? 'Required · model-labelled, unverified' : 'Preferred · model-labelled, unverified'}</span></p>
               {!!item.skill_overlaps?.length && <p>Shared mentions: {item.skill_overlaps.map(skill => skill.label + (skill.kind === 'general' ? ' (general trait)' : '')).join(', ')}.</p>}
               <p>{item.reason}</p>
+              <RequirementConditions item={item} />
               <details>
                 <summary>Compare evidence</summary>
                 <dl>
@@ -110,6 +126,7 @@ export default function JobMatchAnalysis({jobId}: {jobId: string}) {
             </li>)}
           </ul> : <p>{group.empty}</p>}
         </div>)}
+        <WorkConstraints items={result.work_constraints} />
       </>}
     </>}
   </section>

@@ -32,9 +32,46 @@ def payload(cases):
 
 
 @pytest.fixture
-def response(payload):
+def v2_payload(payload):
+    # A synthetic contract fixture, not an automatic semantic migration of stored v1 results.
+    return {
+        "summary": payload["summary"],
+        "responsibilities": [
+            {**item, "priority": "unspecified", "condition": None}
+            for item in payload["responsibilities"]
+        ],
+        "requirement_groups": [
+            {
+                **item,
+                "importance": importance,
+                "operator": "all_of",
+                "requirements": [{**item, "kind": kind, "qualifier": None}],
+            }
+            for field, importance, kind in (
+                ("required_skills", "required", "skill"),
+                ("preferred_skills", "preferred", "skill"),
+                ("required_qualifications", "required", "qualification"),
+                ("preferred_qualifications", "preferred", "qualification"),
+                ("languages", "unspecified", "language"),
+            )
+            for item in payload[field]
+        ],
+        "education": payload["education"],
+        "experience": payload["experience"],
+        "work_constraints": {
+            "schedule": None,
+            "hours": None,
+            "minimum_duration": None,
+            "work_modes": [],
+            "locations": [],
+        },
+    }
+
+
+@pytest.fixture
+def response(v2_payload):
     return StructuredGenerationResponse(
-        data=payload, provider="mock", model="fixture", finish_reason="stop"
+        data=v2_payload, provider="mock", model="fixture", finish_reason="stop"
     )
 
 

@@ -1,0 +1,1164 @@
+{
+  "audit_version": "source-to-model-first-pass-v1",
+  "audit_date": "2026-10-16",
+  "reviewer": "Codex independent first-pass audit, not human approval",
+  "human_pending": true,
+  "run_path": "output\\semantics-acceptance-20261016\\20261016T060330247717Z",
+  "scope": "Project acceptance; no personal job-search or employer application.",
+  "method": {
+    "reference_construction": "posthoc source-line units, not a preregistered exhaustive benchmark",
+    "coverage": "Meaning appears in an extracted value; evidence-only presence is insufficient. Classification and structural correctness are separate.",
+    "denominators": "Duties, applicant statements and selected work constraints; units differ across cases and must not be pooled as accuracy.",
+    "source_boundaries": "Only exact model_input.description is assessed. Page metadata outside that input is excluded.",
+    "classification": "One source requirement statement per unit; ambiguous categories remain review, not correct.",
+    "priority": "Explicit source priority only; ordinary duty lists do not establish primary status.",
+    "limits": [
+      "Small selected sample; no calibrated accuracy or model comparison.",
+      "Evidence counts are quote-presence diagnostics only.",
+      "No new paid calls or overwrites of original results."
+    ]
+  },
+  "cases": {
+    "wovenstack_software_data_automation": {
+      "source_url": "https://www.internsg.com/job/wovenstack-software-engineering-intern-data-automation-ai-systems/",
+      "input_hash": "395db60fed081d2fa62e8773d871a2e68fe85de93b90755034ab36b08ff646d7",
+      "result_id": "9b660a93-6ec1-477b-ad4c-3266b6ac7d39",
+      "model_input_path": "output\\semantics-acceptance-20261016\\20261016T060330247717Z\\wovenstack_software_data_automation\\model_input.json",
+      "actual_result_path": "output\\semantics-acceptance-20261016\\20261016T060330247717Z\\wovenstack_software_data_automation\\extraction_result.json",
+      "execution_mode": "live",
+      "status": "needs_review",
+      "model": "deepseek-flash",
+      "human_pending": true,
+      "reference_facts": [
+        {
+          "id": "D1",
+          "source_lines_zero_based": [
+            5
+          ],
+          "reference": "authenticated pipelines",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[0]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D2",
+          "source_lines_zero_based": [
+            6
+          ],
+          "reference": "authentication lifecycle",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[1]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D3",
+          "source_lines_zero_based": [
+            7
+          ],
+          "reference": "data normalization",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[2]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D4",
+          "source_lines_zero_based": [
+            8
+          ],
+          "reference": "failure monitoring",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[3]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D5",
+          "source_lines_zero_based": [
+            9
+          ],
+          "reference": "downstream integration",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[4]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D6",
+          "source_lines_zero_based": [
+            10
+          ],
+          "reference": "Python maintenance",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[5]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D7",
+          "source_lines_zero_based": [
+            11
+          ],
+          "reference": "founder collaboration",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[6]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R1",
+          "source_lines_zero_based": [
+            13
+          ],
+          "reference": "education alternatives",
+          "expected_category": "qualification",
+          "model_paths": [
+            "extraction.requirement_groups[0]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R2",
+          "source_lines_zero_based": [
+            14
+          ],
+          "reference": "Python ability",
+          "expected_category": "skill",
+          "model_paths": [
+            "extraction.requirement_groups[1]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R3",
+          "source_lines_zero_based": [
+            15
+          ],
+          "reference": "browser alternatives",
+          "expected_category": "skill",
+          "model_paths": [
+            "extraction.requirement_groups[2]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R4",
+          "source_lines_zero_based": [
+            16
+          ],
+          "reference": "Web fundamentals",
+          "expected_category": "skill",
+          "model_paths": [
+            "extraction.requirement_groups[3]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R5",
+          "source_lines_zero_based": [
+            17
+          ],
+          "reference": "self-direction",
+          "expected_category": "trait",
+          "model_paths": [
+            "extraction.requirement_groups[4]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R6",
+          "source_lines_zero_based": [
+            18
+          ],
+          "reference": "ownership",
+          "expected_category": "trait",
+          "model_paths": [
+            "extraction.requirement_groups[5]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R7",
+          "source_lines_zero_based": [
+            19
+          ],
+          "reference": "work authorization",
+          "expected_category": "qualification",
+          "model_paths": [
+            "extraction.requirement_groups[6]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "P1",
+          "source_lines_zero_based": [
+            21
+          ],
+          "reference": "deployment options",
+          "expected_category": "skill",
+          "model_paths": [
+            "extraction.requirement_groups[7]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "P2",
+          "source_lines_zero_based": [
+            22
+          ],
+          "reference": "SQL/database alternatives",
+          "expected_category": "skill",
+          "model_paths": [
+            "extraction.requirement_groups[8]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "P3",
+          "source_lines_zero_based": [
+            23
+          ],
+          "reference": "integration alternatives",
+          "expected_category": "skill",
+          "model_paths": [
+            "extraction.requirement_groups[9]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "P4",
+          "source_lines_zero_based": [
+            24
+          ],
+          "reference": "AI alternatives",
+          "expected_category": "skill",
+          "model_paths": [
+            "extraction.requirement_groups[10]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "P5",
+          "source_lines_zero_based": [
+            25
+          ],
+          "reference": "domain interest",
+          "expected_category": "interest",
+          "model_paths": [
+            "extraction.requirement_groups[11]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "S1",
+          "source_lines_zero_based": [
+            3
+          ],
+          "reference": "conditional extras",
+          "expected_category": "conditional_responsibility",
+          "model_paths": [
+            "extraction.responsibilities[7]"
+          ],
+          "represented_in_value": true
+        }
+      ],
+      "fact_coverage": {
+        "represented": 20,
+        "denominator": 20,
+        "missing_fact_ids": []
+      },
+      "classification_review": {
+        "correct": 12,
+        "errors": 0,
+        "requires_review": 0,
+        "denominator": 12,
+        "unit": "requirement_group category_and_importance"
+      },
+      "compound_review": {
+        "fully_structured": 6,
+        "partially_structured": 2,
+        "denominator": 8,
+        "partial_group_indices": [
+          7,
+          8
+        ]
+      },
+      "priority_review": {
+        "conditional_preserved_indices": [
+          7
+        ],
+        "priority_requires_review_indices": [
+          4,
+          5,
+          6
+        ]
+      },
+      "errors_and_limits": [
+        {
+          "code": "summary_quote_noncontiguous",
+          "model_path": "extraction.summary.evidence",
+          "note": "Summary quotation joins separated passages."
+        },
+        {
+          "code": "nested_alternatives_unstructured",
+          "model_paths": [
+            "extraction.requirement_groups[7]",
+            "extraction.requirement_groups[8]"
+          ],
+          "note": "Deployment/database alternatives remain embedded."
+        },
+        {
+          "code": "eligibility_used_as_workplace",
+          "model_path": "extraction.work_constraints.locations[0]",
+          "note": "Work authorization incorrectly supplies workplace."
+        }
+      ],
+      "quote_presence_diagnostic": {
+        "matched": 66,
+        "claims": 67,
+        "not_accuracy": true
+      },
+      "recommendation_explanation_review": {
+        "status": "separate_matching_check_pending",
+        "accuracy": null
+      }
+    },
+    "cynapse_ai_evaluation_quality_2": {
+      "source_url": "https://www.internsg.com/job/cynapse-pte-ltd-ai-evaluation-quality-intern-2/",
+      "input_hash": "cc92b07458b2107df581f3b3f921e03f21bd51de0618db46ace7b38d28416b38",
+      "result_id": "d23bc79c-0cb9-40fa-893b-1d06485bafec",
+      "model_input_path": "output\\semantics-acceptance-20261016\\20261016T060330247717Z\\cynapse_ai_evaluation_quality_2\\model_input.json",
+      "actual_result_path": "output\\semantics-acceptance-20261016\\20261016T060330247717Z\\cynapse_ai_evaluation_quality_2\\extraction_result.json",
+      "execution_mode": "live",
+      "status": "needs_review",
+      "model": "deepseek-flash",
+      "human_pending": true,
+      "reference_facts": [
+        {
+          "id": "D1",
+          "source_lines_zero_based": [
+            6
+          ],
+          "reference": "human QA",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[0]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D2",
+          "source_lines_zero_based": [
+            7
+          ],
+          "reference": "dataset curation",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[1]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D3",
+          "source_lines_zero_based": [
+            8
+          ],
+          "reference": "error discovery",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[2]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D4",
+          "source_lines_zero_based": [
+            9
+          ],
+          "reference": "benchmark tools",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[3]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D5",
+          "source_lines_zero_based": [
+            10
+          ],
+          "reference": "model handling",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[4]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D6",
+          "source_lines_zero_based": [
+            11
+          ],
+          "reference": "structured feedback",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[5]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R1",
+          "source_lines_zero_based": [
+            19
+          ],
+          "reference": "diploma flexibility",
+          "expected_category": "qualification",
+          "model_paths": [
+            "extraction.requirement_groups[0]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R2",
+          "source_lines_zero_based": [
+            20
+          ],
+          "reference": "AI interest",
+          "expected_category": "interest",
+          "model_paths": [
+            "extraction.requirement_groups[1]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R3",
+          "source_lines_zero_based": [
+            20
+          ],
+          "reference": "preferred AI familiarity",
+          "expected_category": "preferred_skill",
+          "model_paths": [
+            "extraction.requirement_groups[2]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R4",
+          "source_lines_zero_based": [
+            21
+          ],
+          "reference": "detail/consistency",
+          "expected_category": "trait",
+          "model_paths": [
+            "extraction.requirement_groups[3]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R5",
+          "source_lines_zero_based": [
+            22
+          ],
+          "reference": "written communication",
+          "expected_category": "general_capability_review",
+          "model_paths": [
+            "extraction.requirement_groups[4]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R6",
+          "source_lines_zero_based": [
+            23
+          ],
+          "reference": "programming waived",
+          "expected_category": "nonrequirement",
+          "model_paths": [
+            "extraction.requirement_groups[5]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R7",
+          "source_lines_zero_based": [
+            24
+          ],
+          "reference": "curiosity/learning",
+          "expected_category": "trait_and_interest",
+          "model_paths": [
+            "extraction.requirement_groups[6]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "W1",
+          "source_lines_zero_based": [
+            26
+          ],
+          "reference": "minimum months",
+          "expected_category": "work_constraint",
+          "model_paths": [
+            "extraction.work_constraints.minimum_duration"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "W2",
+          "source_lines_zero_based": [
+            26
+          ],
+          "reference": "longer-period preference",
+          "expected_category": "preferred_work_constraint",
+          "model_paths": [
+            "extraction.requirement_groups[7].value"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "W3",
+          "source_lines_zero_based": [
+            27
+          ],
+          "reference": "minimum days",
+          "expected_category": "work_constraint",
+          "model_paths": [
+            "extraction.work_constraints.schedule"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "W4",
+          "source_lines_zero_based": [
+            27
+          ],
+          "reference": "preferred days",
+          "expected_category": "preferred_work_constraint",
+          "model_paths": [
+            "extraction.work_constraints.schedule"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "W5",
+          "source_lines_zero_based": [
+            28
+          ],
+          "reference": "date flexibility",
+          "expected_category": "work_constraint",
+          "model_paths": [],
+          "represented_in_value": false
+        },
+        {
+          "id": "E1",
+          "source_lines_zero_based": [
+            34,
+            35
+          ],
+          "reference": "Singapore alternatives",
+          "expected_category": "qualification",
+          "model_paths": [
+            "extraction.requirement_groups[9]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "T1",
+          "source_lines_zero_based": [
+            14
+          ],
+          "reference": "October intake",
+          "expected_category": "work_constraint",
+          "model_paths": [],
+          "represented_in_value": false
+        },
+        {
+          "id": "T2",
+          "source_lines_zero_based": [
+            15
+          ],
+          "reference": "January intake",
+          "expected_category": "work_constraint",
+          "model_paths": [],
+          "represented_in_value": false
+        }
+      ],
+      "fact_coverage": {
+        "represented": 18,
+        "denominator": 21,
+        "missing_fact_ids": [
+          "W5",
+          "T1",
+          "T2"
+        ]
+      },
+      "classification_review": {
+        "correct": 6,
+        "errors": 1,
+        "requires_review": 3,
+        "denominator": 10,
+        "unit": "requirement_group category_and_importance",
+        "error_group_indices": [
+          5
+        ],
+        "review_group_indices": [
+          4,
+          7,
+          8
+        ]
+      },
+      "compound_review": {
+        "fully_structured": 2,
+        "partially_structured": 0,
+        "denominator": 2,
+        "group_indices": [
+          2,
+          9
+        ]
+      },
+      "priority_review": {
+        "unsupported_primary_indices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "errors_and_limits": [
+        {
+          "code": "days_misread_as_hours",
+          "model_path": "extraction.work_constraints.hours",
+          "note": "Days incorrectly become weekly hours.",
+          "expected": {
+            "hours": null,
+            "schedule_days_minimum": 4
+          },
+          "actual": {
+            "hours_minimum": 4,
+            "unit": "hours_per_week"
+          }
+        },
+        {
+          "code": "general_capability_category_review",
+          "model_path": "extraction.requirement_groups[4]",
+          "note": "Communication uses skill category."
+        },
+        {
+          "code": "nonrequirement_marked_required",
+          "model_path": "extraction.requirement_groups[5]",
+          "note": "Programming waiver marked required."
+        },
+        {
+          "code": "eligibility_used_as_workplace",
+          "model_path": "extraction.work_constraints.locations[0]",
+          "note": "Eligibility incorrectly supplies workplace."
+        },
+        {
+          "code": "preference_not_atomic",
+          "model_path": "extraction.requirement_groups[7]",
+          "note": "Longer-duration preference lacks separate atom."
+        },
+        {
+          "code": "preference_scope_not_atomic",
+          "model_path": "extraction.requirement_groups[8]",
+          "note": "Preferred days remain inside required statement."
+        }
+      ],
+      "quote_presence_diagnostic": {
+        "matched": 39,
+        "claims": 39,
+        "not_accuracy": true
+      },
+      "recommendation_explanation_review": {
+        "status": "separate_matching_check_pending",
+        "accuracy": null
+      }
+    },
+    "ilodia_retail": {
+      "source_url": "https://www.internsg.com/job/ilodia-labs-pte-ltd-retail-e-commerce-operations-intern/",
+      "input_hash": "b7de88f7837c6675a319982bd02c2c212057d72cb4044ff1bbfa097acb0aa7f8",
+      "result_id": "fb6a7f4d-022c-4dcb-bb32-be7b16213c6c",
+      "model_input_path": "output\\semantics-acceptance-20261016\\20261016T060330247717Z\\ilodia_retail\\model_input.json",
+      "actual_result_path": "output\\semantics-acceptance-20261016\\20261016T060330247717Z\\ilodia_retail\\extraction_result.json",
+      "execution_mode": "live",
+      "status": "needs_review",
+      "model": "deepseek-flash",
+      "human_pending": true,
+      "reference_facts": [
+        {
+          "id": "D1",
+          "source_lines_zero_based": [
+            6
+          ],
+          "reference": "stockist packing",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[0]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D2",
+          "source_lines_zero_based": [
+            7
+          ],
+          "reference": "inventory checks",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[1]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D3",
+          "source_lines_zero_based": [
+            8
+          ],
+          "reference": "display upkeep",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[2]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D4",
+          "source_lines_zero_based": [
+            9
+          ],
+          "reference": "materials organization",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[3]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D5",
+          "source_lines_zero_based": [
+            11
+          ],
+          "reference": "online fulfillment",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[4]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D6",
+          "source_lines_zero_based": [
+            12
+          ],
+          "reference": "listing updates",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[5]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D7",
+          "source_lines_zero_based": [
+            13
+          ],
+          "reference": "event preparation",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[6]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D8",
+          "source_lines_zero_based": [
+            14
+          ],
+          "reference": "returned inventory",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[7]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D9",
+          "source_lines_zero_based": [
+            16
+          ],
+          "reference": "Canva collateral",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[8]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D10",
+          "source_lines_zero_based": [
+            17
+          ],
+          "reference": "photo adaptation",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[9]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D11",
+          "source_lines_zero_based": [
+            18
+          ],
+          "reference": "brand consistency",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[10]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D12",
+          "source_lines_zero_based": [
+            20
+          ],
+          "reference": "supplier research",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[11]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D13",
+          "source_lines_zero_based": [
+            21
+          ],
+          "reference": "supplier comparison",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[12]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D14",
+          "source_lines_zero_based": [
+            22
+          ],
+          "reference": "supplier follow-up",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[13]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D15",
+          "source_lines_zero_based": [
+            23
+          ],
+          "reference": "project tracking",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[14]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "D16",
+          "source_lines_zero_based": [
+            24
+          ],
+          "reference": "production coordination",
+          "expected_category": "responsibility",
+          "model_paths": [
+            "extraction.responsibilities[15]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R1",
+          "source_lines_zero_based": [
+            26
+          ],
+          "reference": "reliability/detail",
+          "expected_category": "trait",
+          "model_paths": [
+            "extraction.requirement_groups[0]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R2",
+          "source_lines_zero_based": [
+            27
+          ],
+          "reference": "practical handling",
+          "expected_category": "skill",
+          "model_paths": [
+            "extraction.requirement_groups[1]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R3",
+          "source_lines_zero_based": [
+            28
+          ],
+          "reference": "compound Canva/layout/spreadsheets",
+          "expected_category": "mixed",
+          "model_paths": [
+            "extraction.requirement_groups[2]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R4",
+          "source_lines_zero_based": [
+            29
+          ],
+          "reference": "learning/reporting",
+          "expected_category": "behavior_and_interest_review",
+          "model_paths": [
+            "extraction.requirement_groups[3]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R5",
+          "source_lines_zero_based": [
+            30
+          ],
+          "reference": "retail interests",
+          "expected_category": "interest",
+          "model_paths": [
+            "extraction.requirement_groups[4]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "R6",
+          "source_lines_zero_based": [
+            31
+          ],
+          "reference": "Mandarin",
+          "expected_category": "language",
+          "model_paths": [
+            "extraction.requirement_groups[5]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "W1",
+          "source_lines_zero_based": [
+            35
+          ],
+          "reference": "full-time schedule",
+          "expected_category": "work_constraint",
+          "model_paths": [
+            "extraction.work_constraints.schedule"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "W2",
+          "source_lines_zero_based": [
+            36
+          ],
+          "reference": "flexi negotiation",
+          "expected_category": "conditional_work_constraint",
+          "model_paths": [
+            "extraction.work_constraints.schedule"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "W3",
+          "source_lines_zero_based": [
+            36
+          ],
+          "reference": "weekly minimum",
+          "expected_category": "conditional_work_constraint",
+          "model_paths": [
+            "extraction.work_constraints.hours"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "W4",
+          "source_lines_zero_based": [
+            36
+          ],
+          "reference": "minimum duration",
+          "expected_category": "conditional_work_constraint",
+          "model_paths": [
+            "extraction.work_constraints.minimum_duration"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "W5",
+          "source_lines_zero_based": [
+            37
+          ],
+          "reference": "remote prohibited",
+          "expected_category": "work_constraint",
+          "model_paths": [
+            "extraction.work_constraints.work_modes[0]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "W6",
+          "source_lines_zero_based": [
+            37
+          ],
+          "reference": "hybrid prohibited",
+          "expected_category": "work_constraint",
+          "model_paths": [
+            "extraction.work_constraints.work_modes[1]"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "S1",
+          "source_lines_zero_based": [
+            3
+          ],
+          "reference": "core/conditional scope",
+          "expected_category": "priority",
+          "model_paths": [
+            "extraction.summary"
+          ],
+          "represented_in_value": true
+        },
+        {
+          "id": "L1",
+          "source_lines_zero_based": [
+            31
+          ],
+          "reference": "written translation permission",
+          "expected_category": "language_scope",
+          "model_paths": [
+            "extraction.requirement_groups[5].value"
+          ],
+          "represented_in_value": true
+        }
+      ],
+      "fact_coverage": {
+        "represented": 30,
+        "denominator": 30,
+        "missing_fact_ids": []
+      },
+      "classification_review": {
+        "correct": 4,
+        "errors": 1,
+        "requires_review": 1,
+        "denominator": 6,
+        "unit": "requirement_group category",
+        "error_group_indices": [
+          1
+        ],
+        "review_group_indices": [
+          3
+        ]
+      },
+      "compound_review": {
+        "fully_structured": 5,
+        "partially_structured": 0,
+        "denominator": 5,
+        "group_indices": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "priority_review": {
+        "core_preserved_indices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "conditional_preserved_indices": [
+          8,
+          9,
+          10
+        ],
+        "conditional_scope_requires_review_indices": [
+          11,
+          12,
+          13,
+          14,
+          15
+        ]
+      },
+      "errors_and_limits": [
+        {
+          "code": "practical_capability_as_trait",
+          "model_path": "extraction.requirement_groups[1]",
+          "note": "Packing abilities classified as traits."
+        },
+        {
+          "code": "behavior_interest_scope_review",
+          "model_path": "extraction.requirement_groups[3]",
+          "note": "Reporting behavior classified as interests."
+        },
+        {
+          "code": "conditional_priority_incomplete",
+          "model_paths": [
+            "extraction.responsibilities[11]",
+            "extraction.responsibilities[12]",
+            "extraction.responsibilities[13]",
+            "extraction.responsibilities[14]",
+            "extraction.responsibilities[15]"
+          ],
+          "note": "Supplier/project priority conflicts with conditional role scope."
+        },
+        {
+          "code": "permission_not_atomic",
+          "model_path": "extraction.requirement_groups[5]",
+          "note": "Translation permission lacks separate representation."
+        }
+      ],
+      "quote_presence_diagnostic": {
+        "matched": 52,
+        "claims": 52,
+        "not_accuracy": true
+      },
+      "recommendation_explanation_review": {
+        "status": "separate_matching_check_pending",
+        "accuracy": null
+      }
+    }
+  },
+  "closed_negative_controls": [
+    {
+      "id": "cynapse_ml_computer_vision_11",
+      "status": "closed",
+      "model_calls": 0
+    },
+    {
+      "id": "strides_ai_closed",
+      "status": "closed",
+      "model_calls": 0
+    }
+  ]
+}

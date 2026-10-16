@@ -145,6 +145,38 @@ test('partial shared skills are separate from unconditional support and retain f
   }
 });
 
+test('v2 retains compound conditions, conditional duties and unknown work feasibility', async ({page}) => {
+  const compound = {...report.items[0], requirement: 'Python and framework experience', outcome: 'unknown',
+    reason: 'Only Python overlaps; the complete requirement remains unverified.',
+    group_operator: 'all_of', skill_overlaps: [{skill_id: 'python', label: 'Python', kind: 'specific', profile_evidence: 'Python'}],
+    conditions: [
+      {kind: 'skill', requirement: 'Python', qualifier: null, outcome: 'supported', reason: 'Skill entry shared; proficiency unverified.', job_evidence: 'Python', profile_evidence: 'Python'},
+      {kind: 'skill', requirement: 'PyTorch or TensorFlow', qualifier: 'experience', outcome: 'unknown', reason: 'Framework experience is not established.', job_evidence: 'experience with PyTorch or TensorFlow', profile_evidence: null},
+    ]};
+  const work = ['schedule', 'hours', 'minimum_duration', 'work_modes', 'locations'].map(category => ({
+    category: 'work_constraints.' + category, requirement: category + ': not stated', outcome: 'unknown',
+    reason: 'Compatibility unknown; no comparable availability evidence.', job_evidence: '',
+  }));
+  await setup(page, route => route.fulfill({json: {...report, items: [compound], work_constraints: work,
+    summary: {value: 'Core pipeline work; integrations depend on team needs.', evidence: 'Core pipeline work.'},
+    responsibilities: [{value: 'Build integrations', evidence: 'Build integrations as needed', priority: 'conditional', condition: {value: 'as needed', evidence: 'as needed'}}],
+  }}));
+  await page.getByRole('button', {name: 'Analyze my match'}).click();
+  await expect(page.locator('.job-match')).toContainText('All listed conditions are required together.');
+  await expect(page.getByLabel('Individual requirement conditions')).toContainText('PyTorch or TensorFlow');
+  await expect(page.getByLabel('Individual requirement conditions')).toContainText('Unknown');
+  await expect(page.locator('.job-work-constraints li')).toHaveCount(5);
+  await expect(page.locator('.job-work-constraints')).toContainText('compatibility unknown');
+  await page.getByText('Extracted role and responsibilities (unverified)', {exact: true}).click();
+  await expect(page.locator('.job-match')).toContainText('Conditional responsibility: Build integrations');
+  await expect(page.locator('.job-match')).toContainText('Applies when: as needed');
+  for (const [name, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]]) {
+    await page.setViewportSize({width, height});
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({path: `../output/semantic-matching-${name}.png`, fullPage: true});
+  }
+});
+
 test('clearing storage in another tab removes displayed private analysis', async ({page, context}) => {
   let calls = 0;
   const privateEvidence = 'Private signed-in profile evidence that must be cleared';

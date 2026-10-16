@@ -91,7 +91,7 @@ def test_changed_input_and_profile_do_not_reuse(client, db, setup_job):
     assert second.status_code == 201
     assert second.json()["input_hash"] != first["input_hash"]
     app.dependency_overrides[get_extraction_runtime] = lambda: ExtractionRuntime(
-        profile_revision="mock-empty-v2"
+        profile_revision="mock-empty-v3"
     )
     try:
         assert (
@@ -103,6 +103,56 @@ def test_changed_input_and_profile_do_not_reuse(client, db, setup_job):
         assert third.json()["pipeline_hash"] != first["pipeline_hash"]
     finally:
         app.dependency_overrides.pop(get_extraction_runtime, None)
+
+
+def test_v2_does_not_reuse_or_rewrite_legacy_history(client, db, setup_job, empty_payload):
+    from app.job_extraction.service import ExtractionConfig
+    from app.llm import StructuredGenerationResponse
+
+    @asynccontextmanager
+    async def legacy_provider():
+        yield MockProvider(
+            [
+                StructuredGenerationResponse(
+                    data=empty_payload,
+                    provider="mock",
+                    model="legacy-fixture",
+                    finish_reason="stop",
+                )
+            ]
+        )
+
+    legacy_runtime = ExtractionRuntime(
+        provider_factory=legacy_provider,
+        profile_revision="legacy-empty-v1",
+        config=ExtractionConfig(schema_version="job-extraction-v1"),
+    )
+    app.dependency_overrides[get_extraction_runtime] = lambda: legacy_runtime
+    try:
+        first = trigger(client, setup_job).json()
+        assert first["result"]["schema_version"] == "job-extraction-v1"
+        before = first["result"]
+    finally:
+        app.dependency_overrides.pop(get_extraction_runtime, None)
+    current = trigger(client, setup_job)
+    assert current.status_code == 201
+    second = current.json()
+    assert second["result"]["schema_version"] == "job-extraction-v2"
+    assert second["id"] != first["id"]
+    assert second["pipeline_hash"] != first["pipeline_hash"]
+    job_id, _, headers = setup_job
+    history = client.get(f"/jobs/{job_id}/extractions", headers=headers)
+    assert history.status_code == 200
+    assert history.json()["total"] == 2
+    assert {row["result"]["schema_version"] for row in history.json()["items"]} == {
+        "job-extraction-v1",
+        "job-extraction-v2",
+    }
+    old = client.get(f"/extractions/{first['id']}", headers=headers)
+    assert old.status_code == 200
+    assert old.json()["result"] == before
+    assert old.json()["is_current_pipeline"] is False
+    assert db.get(JobExtractionRun, UUID(first["id"])).result_json == before
 
 
 def test_failure_does_not_replace_valid_result(client, db, setup_job):

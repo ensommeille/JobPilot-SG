@@ -43,19 +43,35 @@ def runtime(calls, status=200):
                                 {
                                     "summary": None,
                                     "responsibilities": [],
-                                    "required_skills": [
-                                        {"value": "Python", "evidence": "Python required."}
+                                    "requirement_groups": [
+                                        {
+                                            "value": "Python required.",
+                                            "evidence": "Python required.",
+                                            "importance": "required",
+                                            "operator": "all_of",
+                                            "requirements": [
+                                                {
+                                                    "kind": "skill",
+                                                    "value": "Python",
+                                                    "evidence": "Python required.",
+                                                    "qualifier": None,
+                                                }
+                                            ],
+                                        }
                                     ],
-                                    "preferred_skills": [],
-                                    "required_qualifications": [],
-                                    "preferred_qualifications": [],
                                     "education": {
                                         "degree": None,
                                         "enrollment": None,
                                         "fields_of_study": [],
                                     },
                                     "experience": {"requirement": None, "minimum_years": None},
-                                    "languages": [],
+                                    "work_constraints": {
+                                        "schedule": None,
+                                        "hours": None,
+                                        "minimum_duration": None,
+                                        "work_modes": [],
+                                        "locations": [],
+                                    },
                                 }
                             )
                         },
@@ -101,7 +117,8 @@ def test_jd_persisted_live_result_reused_and_updated(client, db, pipeline):
     assert job.source_url
     result = db.scalar(select(JobExtractionRun)).result_json
     assert result["execution_mode"] == "live"
-    assert result["extraction"]["required_skills"][0]["evidence"] == text[0]
+    assert result["schema_version"] == "job-extraction-v2"
+    assert result["extraction"]["requirement_groups"][0]["requirements"][0]["evidence"] == text[0]
     assert run()["jobs"][0]["reused"] is True
     assert len(calls) == 1
     text[0] += " Build APIs."

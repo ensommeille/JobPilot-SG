@@ -23,18 +23,22 @@ from .models import (
     SCHEMA_VERSION,
     AttemptRecord,
     ExtractionInput,
+    ExtractionPayload,
     ExtractionResult,
-    JobExtractionSchema,
+    SchemaVersion,
     StrictModel,
+    payload_model,
+    prompt_version_for,
 )
-from .prompts import PROMPT_VERSION, build_messages
+from .prompts import build_messages
 from .quality import assess_quality
 
 
 class ExtractionConfig(StrictModel):
+    schema_version: SchemaVersion = SCHEMA_VERSION
     max_validation_retries: int = Field(default=1, ge=0, le=2)
     provider_call_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
-    max_output_tokens: int = Field(default=2500, ge=1, le=16000)
+    max_output_tokens: int = Field(default=8000, ge=1, le=16000)
 
 
 class JobExtractionService:
@@ -60,7 +64,7 @@ class JobExtractionService:
         attempts: list[AttemptRecord] = []
         repair_codes: list[str] = []
 
-        def finish(data: JobExtractionSchema | None, error: str | None) -> ExtractionResult:
+        def finish(data: ExtractionPayload | None, error: str | None) -> ExtractionResult:
             return ExtractionResult(
                 result_id=result_id,
                 source_id=job.source_id,
@@ -68,8 +72,8 @@ class JobExtractionService:
                 source_url=job.source_url,
                 input_hash=job.input_hash,
                 raw_hash=job.raw_hash,
-                schema_version=SCHEMA_VERSION,
-                prompt_version=PROMPT_VERSION,
+                schema_version=self.config.schema_version,
+                prompt_version=prompt_version_for(self.config.schema_version),
                 contract_version=CONTRACT_VERSION,
                 execution_mode="mock" if self.provider_is_mock else "live",
                 status="needs_review" if data is not None else "failed",
@@ -84,14 +88,16 @@ class JobExtractionService:
         for attempt in range(1, self.config.max_validation_retries + 2):
             request = StructuredGenerationRequest(
                 request_id=f"{result_id}:{attempt}",
-                messages=build_messages(job, repair_codes),
-                schema_name="job_extraction_v1",
-                output_schema=JobExtractionSchema.model_json_schema(),
+                messages=build_messages(
+                    job, repair_codes, schema_version=self.config.schema_version
+                ),
+                schema_name=self.config.schema_version.replace("-", "_"),
+                output_schema=payload_model(self.config.schema_version).model_json_schema(),
                 max_output_tokens=self.config.max_output_tokens,
             )
             clock = perf_counter()
             response: StructuredGenerationResponse | None = None
-            data: JobExtractionSchema | None = None
+            data: ExtractionPayload | None = None
             retry = False
             try:
                 candidate = await asyncio.wait_for(
@@ -105,7 +111,7 @@ class JobExtractionService:
                 if response.finish_reason != "stop":
                     outcome = f"provider_{response.finish_reason}"
                 else:
-                    data = JobExtractionSchema.model_validate(response.data)
+                    data = payload_model(self.config.schema_version).model_validate(response.data)
                     outcome = "needs_review"
             except InvalidStructuredOutputError:
                 outcome = "invalid_structured_output"
