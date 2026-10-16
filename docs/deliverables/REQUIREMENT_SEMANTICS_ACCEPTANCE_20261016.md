@@ -13,7 +13,7 @@
 - 保留严格的 v1 读取模型，新增 v2；schema、prompt 与 payload 必须对应。旧抽取不迁移、不覆盖，新 pipeline 不复用 v1 缓存。
 - `requirement_groups` 保留完整语句、证据、required/preferred/unspecified 及 all_of/any_of/unspecified；每个条件单独有 value、evidence、kind 和 qualifier。kind 区分具体技能、语言、一般特质、兴趣／学习意愿、其他资格。
 - 职责保留 `priority`（primary/secondary/conditional/unspecified）和独立条件证据。数据结构可以表达主次，但模型的主次判断仍需复核。
-- `work_constraints` 包括 schedule、hours、minimum_duration、work_modes、locations。工时和周期保留数值、原单位及 PT 等条件范围；工作模式明确允许或禁止。未知用 null/[]。天数可保留在 schedule 中，目前没有独立 days-per-week 数值字段。
+- `work_constraints` 包括 schedule、hours、minimum_duration、work_modes、locations。工时和周期保留数值、原单位及 PT 等条件范围；工作模式记录模型提取的允许或禁止方向，但展示仍需证据核对。未知用 null/[]。天数可保留在 schedule 中，目前没有独立 days-per-week 数值字段。
 - 工时／周期追加数值与单位证据校验。例如 4 days/week 不能支持 4 hours/week，三个月不能换成 90 天。原始输出保留；消费者对不支持的数值显示 requires review。
 
 完整契约和 v1/v2 示例见 `docs/member3/examples/EXTRACTION_V2_CONTRACT.md`。
@@ -22,7 +22,7 @@
 
 1. 只有肯定表达、且被识别为具体技能的 profile 信号贡献交集。学习目标、兴趣、特质和语言不满足门槛。
 2. 至少存在一个具体技能交集才展示推荐；不凑数量。排序保持：无明确缺口在前，再按不同具体技能交集数和发布时间排序。模型 required/preferred 不参与排序。
-3. 技能按 canonical ID 去重。相同普通话条件跨类别出现也不增加分数；不同限定条件仍保留。
+3. 技能按 canonical ID 去重。只有来源引文、优先级和限定相同的独立语言条件才合并，优先保留 language 类别；不同复合组即使重复出现同一种语言，也须保留各自 AND/OR 条件。语言不增加分数。
 4. 复合组逐条件解释，整体保持 unknown。即使模型漏拆 SQL，只剩一个 Python 子条件，也不能凭这个子条件把“Python 和 SQL”判为 supported。
 5. 工作约束单独展示，不计入技能条件数量或排序。岗位事实存在也不代表人的时间／地点可行；五类比较均明确 unknown。通用岗位列表不再把未知地点填成 Singapore。
 6. 缺失、失败、Mock、失效或最新抽取不可用时不回退旧成功结果。关闭／过期岗位不推荐。本轮另修复了 InternSG 明确关闭状态的采集和持久化，包括内容 hash 相同但状态变化的情况。
@@ -56,13 +56,15 @@
 
 ## 验证结果与实际环境
 
-- 最终本地完整后端：**721 passed**，分支覆盖率约 **93%**，一个既有 Starlette/httpx 弃用警告。
+- PR #30 初始提交的本地完整后端：**721 passed**；本次审查修复后的独立工作树重新运行完整后端：**730 passed**、分支覆盖率约 **93%**，一个既有 Starlette/httpx 弃用警告。关键回归曾在修复前按预期失败，修复后通过。
 - 完整浏览器回归：**195 passed，6 skipped**。跳过的是需安装扩展／真实站点控件资源的既有用例；这些测试主要采用受控接口数据，不能单独证明实际模型质量。
 - 前端 TypeScript/Vite 构建、ESLint、后端 Ruff 和 Git 空白检查通过。
 - 独立 Compose 项目 `jobpilot-semantics-20261016` 已重建。网页 `http://127.0.0.1:15176`，API `http://127.0.0.1:18316`；使用独立 PostgreSQL 数据卷及端口，不覆盖旧环境。
 - 三份真实模型结果回放到新库。仅对数据库来源 UUID 和输入 hash 作有记录的 envelope 重绑，语义 payload、原请求审计和原始文件保留，回放不产生新模型调用。
 - `scripts/verify_semantics_deployment.mjs` **5 组无 HTTP Mock 的接口／页面检查通过**，包含桌面和移动端溢出检查、实际页面截图、合成账号登录和上述匹配反例。
 - DeepSeek `deepseek-flash` 实际调用 **3 次**，每例一次、无重试。全部保持 `needs_review`。未进行雇主投递、云端部署或任何组员个人条件判断。
+
+审查补丁只重新运行了本地后端全量测试、相关 Ruff 与空白检查；本节的浏览器和隔离 Docker 结果属于 PR #30 初始提交，**尚未在审查补丁上重跑**。补丁让不同复合组保留各自语言条件，并对明显相反、缺少条件证据或不属于简单明确措辞的工作模式方向显示“requires review”。它不改写原始模型结果，也不等于模型语义验收。
 
 有两类中途环境问题已纠正：Windows 公共 Temp／长路径权限导致的 pytest setup 失败，改用可写短目录后全量通过；浏览器源码契约测试须在 Vite 运行，Docker 则另用无 Mock 脚本验证。失败运行未计入通过数。
 
@@ -80,7 +82,7 @@ JUnit／覆盖率在 `output/semantics-backend-junit.xml`、`output/semantics-co
 
 ## 仍未解决的边界
 
-模型仍会误分类、臆测主次、漏掉限定或把嵌套逻辑留在字符串中。普通话不再重复计分不代表所有抽取语义已正确。数值 guard 保守且不是通用语义证明器，陌生表达可能进入人工复核；具体技能词表有限，也可能漏召回。
+模型仍会误分类、臆测主次、漏掉限定或把嵌套逻辑留在字符串中。普通话不再重复计分不代表所有抽取语义已正确。数值与工作模式措辞 guard 都是保守检查，不是通用语义证明器；陌生、含例外或复杂的表达会进入人工复核。具体技能词表有限，也可能漏召回。
 
 地点／周期等页面元数据尚未作为有独立来源字段的模型输入；只在元数据存在的信息不计本次 description 抽取遗漏。后续若扩展输入，需要同时版本化证据来源，不能简单拼接后隐藏出处。
 
