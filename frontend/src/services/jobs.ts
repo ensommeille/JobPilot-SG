@@ -15,7 +15,8 @@ export const addFavorite = (id: JobId, config?: AxiosRequestConfig) => api.post(
 
 export const removeFavorite = (id: JobId, config?: AxiosRequestConfig) => api.delete(`/jobs/${id}/favorite`, config)
 
-export const fetchFavorites = () => api.get('/favorites')
+export const fetchFavorites = (page = 1, pageSize = 20, config?: AxiosRequestConfig) =>
+  api.get('/favorites', { ...config, params: { ...config?.params, page, page_size: pageSize } })
 
 /* #17: job-object salary formatter (used by JobDetailPage on raw JobRead) */
 export const formatSalary = (job: {

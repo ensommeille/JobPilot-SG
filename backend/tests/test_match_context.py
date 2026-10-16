@@ -76,6 +76,22 @@ def test_conflicting_duplicate_quote_contexts_fail_closed():
     assert item.skill_overlaps == []
 
 
+def test_complete_jd_line_does_not_borrow_learning_goal_from_next_bullet():
+    quote = "Basic Canva skills, an eye for clear layouts and familiarity with spreadsheets"
+    description = quote + "\nWilling to learn, ask questions and communicate progress"
+    item = analysis(quote, quote, description, ["Canva"])
+    assert item.outcome == "unknown"  # Compound requirements are not proven.
+    assert [overlap.skill_id for overlap in item.skill_overlaps] == ["canva"]
+    assert item.job_evidence == quote
+
+
+def test_duplicate_complete_line_does_not_hide_a_negative_context():
+    description = "Canva required\nNo Canva required"
+    item = analysis("Canva", "Canva required", description, ["Canva"])
+    assert item.outcome == "unknown"
+    assert item.skill_overlaps == []
+
+
 def test_unrelated_valid_skill_cannot_rescue_clipped_longer_token():
     assert quote_contexts("JavaScript required; Java preferred.", "JavaS") == []
 

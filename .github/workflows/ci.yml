@@ -83,6 +83,9 @@ jobs:
       - name: Type-check and build (tsc + Vite)
         if: hashFiles('frontend/package.json') != ''
         run: npm run build
+      - name: Dependency scan (npm audit)
+        if: hashFiles('frontend/package.json') != ''
+        run: npm audit --audit-level=high
 
   extension-quality:
     name: Extension safety / browser tests

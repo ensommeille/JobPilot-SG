@@ -203,7 +203,10 @@ _AFTER_CONTEXT = re.compile(
     re.IGNORECASE,
 )
 _LIST_SEPARATOR = re.compile(r"^\s*(?:[,/|&;+]|\band\b|\bor\b|\bnor\b)\s*$", re.IGNORECASE)
-_CHINESE_UNCERTAIN = re.compile(r"不会|不會|没有|沒有|不懂|不了解|不熟悉|尚未|未学|未學|学习|學習")
+_CHINESE_UNCERTAIN = re.compile(
+    r"不会|不會|没有|沒有|不懂|不了解|不熟悉|尚未|未学|未學|"
+    r"(?:想|正在)[学學]|学习|學習"
+)
 _OFFICE_TOOL_BEFORE = re.compile(
     r"\b(?:using|use|uses|used|software|tools?|"
     r"proficient\s+in|knowledge\s+of|familiar\s+with|experience\s+with)\s*$",

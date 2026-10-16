@@ -4,8 +4,10 @@ const base = process.env.FRONTEND_BASE_URL;
 test.skip(!base, 'Set FRONTEND_BASE_URL for application-history checks.');
 const record = (id, method = 'assistant', status = 'submitted') => ({
   id, method, status, job: {id: `job-${id}`, title: `Fictional ${id} role`, company: 'Test employer'},
-  created_at: '2026-10-14T09:00:00Z', submitted_at: '2026-10-14T09:00:00Z',
+  created_at: '2026-10-14T09:00:00Z', updated_at: '2026-10-14T09:00:00Z', submitted_at: '2026-10-14T09:00:00Z',
 });
+const historyPage = (items, page = 1, total = items.length, pages = total ? Math.ceil(total / 20) : 0) =>
+  ({items, page, page_size: 20, total, pages});
 
 async function setup(page, history) {
   await page.addInitScript(() => localStorage.setItem('jobpilot_token', 'account-a-token'));
@@ -15,7 +17,7 @@ async function setup(page, history) {
 }
 
 test('history distinguishes saved answers from user-reported applications and tracked progress', async ({page}) => {
-  await setup(page, route => route.fulfill({json: {items: [record('assistant'), record('manual', 'manual'), record('interview', 'assistant', 'interview')]}}));
+  await setup(page, route => route.fulfill({json: historyPage([record('assistant'), record('manual', 'manual'), record('interview', 'manual', 'interviewing')])}));
   const saved = page.getByRole('article', {name: 'Fictional assistant role'});
   const manual = page.getByRole('article', {name: 'Fictional manual role'});
   await expect(saved).toContainText('Record saved');
@@ -23,7 +25,7 @@ test('history distinguishes saved answers from user-reported applications and tr
   await expect(saved).toContainText('Recorded:');
   await expect(manual).toContainText('Reported applied');
   await expect(manual).toContainText('User-reported record');
-  await expect(page.getByRole('article', {name: 'Fictional interview role'})).toContainText('Interview');
+  await expect(page.getByRole('article', {name: 'Fictional interview role'})).toContainText('Interviewing');
   await expect(page.getByText('These are your JobPilot records and tracked statuses', {exact: false})).toContainText('not verified employer receipts');
   await expect(page.getByText('Applied:', {exact: false})).toHaveCount(0);
   await page.setViewportSize({width: 1440, height: 1000});
@@ -41,12 +43,12 @@ test('an old delayed history response cannot expose the previous account after s
     headers.push(authorization);
     if (authorization === 'Bearer account-a-token') {
       await new Promise(resolve => releases.push(resolve));
-      try { await route.fulfill({json: {items: [record('private-account-a')]}}); }
+      try { await route.fulfill({json: historyPage([record('private-account-a')])}); }
       catch { /* The old request may already be aborted by the session guard. */ }
       finally { completedA++; }
       return;
     }
-    await route.fulfill({json: {items: [record('account-b')]}});
+    await route.fulfill({json: historyPage([record('account-b')])});
   });
   await expect.poll(() => releases.length).toBeGreaterThan(0);
   await page.evaluate(() => {
@@ -67,7 +69,7 @@ test('failed history can retry and cross-tab sign-out immediately clears private
   let failing = true, calls = 0;
   await setup(page, route => {
     calls++;
-    return route.fulfill(failing ? {status: 503, json: {}} : {json: {items: [record('private-account-a')]}});
+    return route.fulfill(failing ? {status: 503, json: {}} : {json: historyPage([record('private-account-a')])});
   });
   await expect(page.getByRole('alert')).toContainText('Could not load your application records');
   failing = false;
@@ -82,4 +84,44 @@ test('failed history can retry and cross-tab sign-out immediately clears private
   await expect(page.getByRole('alert')).toContainText('Sign in to JobPilot');
   await expect(page.getByRole('button', {name: 'Sign in', exact: true})).toBeVisible();
   expect(calls).toBe(beforeLogout);
+});
+
+test('history uses server pagination and only offers backend-supported status transitions', async ({page}) => {
+  const first = [record('manual', 'manual'), ...Array.from({length: 19}, (_, index) => record(`other-${index}`))];
+  const updates = [];
+  await setup(page, route => {
+    const currentPage = Number(new URL(route.request().url()).searchParams.get('page'));
+    return route.fulfill({json: historyPage(currentPage === 2 ? [record('last')] : first, currentPage, 21, 2)});
+  });
+  await page.route('**/applications/manual', route => {
+    updates.push({method: route.request().method(), payload: route.request().postDataJSON()});
+    return route.fulfill({json: record('manual', 'manual', 'interviewing')});
+  });
+  await expect(page.getByText('Showing 1–20 of 21 records')).toBeVisible();
+  const manual = page.getByRole('article', {name: 'Fictional manual role'});
+  await manual.getByLabel('Update reported status').selectOption('interviewing');
+  await manual.getByRole('button', {name: 'Save status'}).click();
+  await expect(manual).toContainText('Interviewing');
+  expect(updates).toEqual([{method: 'PATCH', payload: {status: 'interviewing'}}]);
+  await expect(manual.getByRole('option', {name: 'Reported applied'})).toHaveCount(0);
+  await page.getByRole('button', {name: 'Next'}).click();
+  await expect(page.getByText('Showing 21–21 of 21 records')).toBeVisible();
+  await expect(page.getByRole('article', {name: 'Fictional last role'})).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Next'})).toBeDisabled();
+});
+
+test('a status conflict offers an explicit reload instead of claiming the update succeeded', async ({page}) => {
+  let current = record('manual', 'manual');
+  await setup(page, route => route.fulfill({json: historyPage([current])}));
+  await page.route('**/applications/manual', route => {
+    current = record('manual', 'manual', 'rejected');
+    return route.fulfill({status: 409, json: {detail: 'Invalid transition'}});
+  });
+  const manual = page.getByRole('article', {name: 'Fictional manual role'});
+  await manual.getByLabel('Update reported status').selectOption('interviewing');
+  await manual.getByRole('button', {name: 'Save status'}).click();
+  await expect(manual.getByRole('alert')).toContainText('Could not update this record');
+  await expect(manual).toContainText('Reported applied');
+  await manual.getByRole('button', {name: 'Reload history'}).click();
+  await expect(page.getByRole('article', {name: 'Fictional manual role'})).toContainText('Rejected');
 });

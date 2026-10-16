@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
 import { internsgApplicationUrl } from '../services/internsg'
+import ManualApplicationRecord from './ManualApplicationRecord'
 
 interface ApplicationJob {
   id: string
@@ -59,5 +60,6 @@ function ApplicationOptions({ job }: { job: ApplicationJob }) {
       {active && !embedded && external && external !== original && <a className="btn btn-secondary" href={external} target="_blank" rel="noopener noreferrer">Open original application ↗</a>}
       {original && <a className="btn btn-secondary" href={original} target="_blank" rel="noopener noreferrer">View Original Posting ↗</a>}
     </div>
+    {active && <ManualApplicationRecord jobId={job.id} />}
   </section>
 }

@@ -150,6 +150,14 @@ def quote_contexts(description: str, quote: str) -> list[str]:
     text, needle = normalized(description), normalized(quote)
     if not needle:
         return []
+    # InternSG's plain-text JD uses separate lines for list items. A unique
+    # complete line is a self-contained quote; do not borrow an unrelated
+    # learning/negation bullet after whitespace normalization. Duplicates and
+    # clipped quotes retain the conservative full-context path below.
+    if text.count(needle) == 1 and any(
+        normalized(line) == needle for line in description.splitlines()
+    ):
+        return [needle]
     contexts = []
     start = 0
     while (position := text.find(needle, start)) >= 0:

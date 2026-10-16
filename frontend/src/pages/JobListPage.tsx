@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import JobRecommendations from '../components/JobRecommendations'
-import { fetchJobs, addFavorite, removeFavorite, normalizeJobList } from '../services/jobs'
+import { fetchJobs, fetchFavorites, addFavorite, removeFavorite, normalizeJobList, normalizeFavoriteList } from '../services/jobs'
 import type { JobId, JobView } from '../services/jobs'
+import { getToken, watchSession } from '../services/auth'
 
 const DAY = 86400000
 const PAGE_SIZE = 10
@@ -90,10 +91,20 @@ const XIcon = () => (
 )
 
 const JobListPage = () => {
+  const token = useSyncExternalStore(watchSession, getToken, getToken)
   const [jobs, setJobs] = useState<JobView[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [favorites, setFavorites] = useState<JobId[]>([])
+  const [favoriteState, setFavoriteState] = useState<{ token: string | null; ids: JobId[]; loading: boolean; error: string }>({
+    token: null, ids: [], loading: false, error: '',
+  })
+  const [favoriteReload, setFavoriteReload] = useState(0)
+  const favoriteRequests = useRef(new Map<JobId, AbortController>())
+  const [favoritePending, setFavoritePending] = useState<{ token: string | null; ids: JobId[] }>({ token: null, ids: [] })
+  const favorites = favoriteState.token === token ? favoriteState.ids : []
+  const favoritesLoading = Boolean(token && (favoriteState.token !== token || favoriteState.loading))
+  const favoriteError = favoriteState.token === token ? favoriteState.error : ''
+  const pendingIds = favoritePending.token === token ? favoritePending.ids : []
   const [today] = useState(startOfToday)
   const navigate = useNavigate()
 
@@ -126,18 +137,65 @@ const JobListPage = () => {
     return () => clearTimeout(timer)
   }, [search])
 
+  useEffect(() => {
+    const request = new AbortController()
+    const pendingRequests = favoriteRequests.current
+    const isCurrent = () => !request.signal.aborted && getToken() === token
+    if (!token) return () => request.abort()
+    const loadFavorites = async () => {
+      setFavoriteState({ token, ids: [], loading: true, error: '' })
+      try {
+        const all: JobId[] = []
+        let nextPage = 1
+        let pageCount = 1
+        while (nextPage <= pageCount) {
+          const res = await fetchFavorites(nextPage, 100, {
+            signal: request.signal, timeout: 15000,
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!isCurrent()) return
+          all.push(...normalizeFavoriteList(res.data).map(job => job.id))
+          pageCount = Math.max(0, Number(res.data.pages) || 0)
+          nextPage += 1
+        }
+        if (isCurrent()) setFavoriteState({ token, ids: all, loading: false, error: '' })
+      } catch {
+        if (isCurrent()) setFavoriteState({ token, ids: [], loading: false, error: 'Could not load saved jobs. Retry to update your saved state.' })
+      }
+    }
+    void loadFavorites()
+    return () => {
+      request.abort()
+      for (const pending of pendingRequests.values()) pending.abort()
+      pendingRequests.clear()
+    }
+  }, [token, favoriteReload])
+
   const toggleFavorite = async (e: React.MouseEvent, id: JobId) => {
     e.stopPropagation()
+    if (!token) {
+      setFavoriteState({ token: null, ids: [], loading: false, error: 'Sign in to JobPilot to save jobs.' })
+      return
+    }
+    if (getToken() !== token || favoritesLoading || favoriteError || favoriteRequests.current.has(id)) return
+    const request = new AbortController()
+    favoriteRequests.current.set(id, request)
+    setFavoritePending(prev => ({ token, ids: [...(prev.token === token ? prev.ids : []), id] }))
+    const isCurrent = () => !request.signal.aborted && getToken() === token
     try {
+      const config = { signal: request.signal, timeout: 15000, headers: { Authorization: `Bearer ${token}` } }
       if (favorites.includes(id)) {
-        await removeFavorite(id)
-        setFavorites(prev => prev.filter(f => f !== id))
+        await removeFavorite(id, config)
+        if (isCurrent()) setFavoriteState(prev => prev.token === token ? { ...prev, ids: prev.ids.filter(f => f !== id) } : prev)
       } else {
-        await addFavorite(id)
-        setFavorites(prev => [...prev, id])
+        await addFavorite(id, config)
+        if (isCurrent()) setFavoriteState(prev => prev.token === token ? { ...prev, ids: prev.ids.includes(id) ? prev.ids : [...prev.ids, id] } : prev)
       }
     } catch {
-      // 静默失败，不影响体验
+      if (isCurrent()) setFavoriteState(prev => prev.token === token ? { ...prev, error: 'Could not update saved jobs. Check your connection and retry.' } : prev)
+    } finally {
+      if (favoriteRequests.current.get(id) === request) favoriteRequests.current.delete(id)
+      if (isCurrent()) setFavoritePending(prev => prev.token === token ? { token, ids: prev.ids.filter(pending => pending !== id) } : prev)
     }
   }
 
@@ -204,7 +262,8 @@ const JobListPage = () => {
         </div>
 
         <JobRecommendations />
-        <h2 style={{marginBottom: 'var(--s-4)'}}>Browse all jobs</h2>
+        <h2 style={{marginBottom: 'var(--s-4)'}}>Browse jobs</h2>
+        <p className="muted" style={{ marginBottom: 'var(--s-4)' }}>Showing up to the first 100 results for each search. Sidebar filters apply to those loaded results.</p>
         <form className="searchbar" onSubmit={e => e.preventDefault()} role="search">
           <label className="searchbar-field searchbar-main">
             <SearchIcon />
@@ -276,6 +335,10 @@ const JobListPage = () => {
             </div>
 
             {error && <div className="alert alert-error">{error}</div>}
+            {favoriteError && <div className="alert alert-error" role="alert">
+              {favoriteError}
+              {token && !favoritesLoading && <button type="button" className="link" style={{ marginLeft: 'var(--s-2)' }} onClick={() => setFavoriteReload(n => n + 1)}>Reload saved jobs</button>}
+            </div>}
 
             {!loading && !error && visible.map(job => {
               const saved = favorites.includes(job.id)
@@ -305,6 +368,7 @@ const JobListPage = () => {
                     <span className={`deadline-badge ${dl.urgent ? 'urgent' : ''}`}><ClockIcon />{dl.text}</span>
                     <button type="button" className={`icon-btn ${saved ? 'saved' : ''}`}
                       aria-label={saved ? 'Remove from saved' : 'Save job'} aria-pressed={saved}
+                      disabled={Boolean(token && (favoritesLoading || favoriteError || pendingIds.includes(job.id)))}
                       onClick={e => toggleFavorite(e, job.id)}>
                       <BookmarkIcon filled={saved} />
                     </button>
