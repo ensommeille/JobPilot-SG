@@ -30,10 +30,13 @@ omitting SQL from its child list cannot make a Python-and-SQL group supported.
 A qualifier remains
 unverified; an unsupported group/atom/qualifier quote cannot contribute overlap.
 
-Identical language conditions are shown once across groups, including the exact
-aliases Mandarin/Mandarin Chinese/Putonghua and English aliases. Differently
-qualified written/spoken requirements are not collapsed. Canonical concrete
-skill IDs are deduplicated for discovery ranking across all groups.
+Only identical standalone language claims with the same source quote, priority
+and qualifier are shown once, including Mandarin/Mandarin Chinese/Putonghua and
+English aliases. A language-typed duplicate takes precedence over a skill-typed
+duplicate. Repeated languages inside distinct compound groups remain visible so
+their AND/OR conditions are not silently removed. Differently qualified
+written/spoken requirements are not collapsed. Canonical concrete skill IDs are
+deduplicated for discovery ranking across all groups.
 
 The detail response additionally returns `summary` (TextFact or null) and
 `responsibilities` (value/evidence/priority/condition). V2 preserves primary,
@@ -59,6 +62,10 @@ quote, rather than presenting the wrong hours as a sourced job fact. The raw
 model result is not rewritten. An extracted location reference is explicitly
 workplace-unverified: candidate eligibility wording does not establish an office
 location or a person's location feasibility.
+Work-mode allowance has a separate conservative wording guard: a contradiction,
+missing conditional quote or wording outside simple explicit allow/prohibit
+patterns is shown as “extracted allowance requires review”. Even when the simple
+quote supports a direction, the model interpretation is not human-verified.
 
 The historical acceptance numbers below describe earlier checkpoints. Validation
 for this refinement must be reported separately after tests and environment

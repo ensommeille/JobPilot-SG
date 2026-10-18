@@ -19,6 +19,7 @@ from app.job_extraction.models import (
     RequirementAtom,
     RequirementGroup,
     TextFact,
+    WorkModeFact,
 )
 from app.job_extraction.persistence import ExtractionRequestError, job_input
 from app.job_extraction.quality import (
@@ -362,6 +363,22 @@ def _language_identity(value: str) -> str:
     return value
 
 
+def _singleton_language_key(group: RequirementGroup) -> tuple[str, str, str, str] | None:
+    """Only identical standalone source claims may be de-duplicated across groups."""
+    if len(group.requirements) != 1 or group.operator != "all_of":
+        return None
+    atom = group.requirements[0]
+    identity = _language_identity(atom.value)
+    if atom.kind != "language" and identity not in {"mandarin", "english"}:
+        return None
+    return (
+        identity,
+        clean(atom.qualifier.value) if atom.qualifier else "",
+        clean(group.evidence),
+        group.importance,
+    )
+
+
 def _narrow_atomic_group(group: RequirementGroup, description: str) -> bool:
     """One model atom does not prove the source group has only one condition."""
     if len(group.requirements) != 1 or group.operator != "all_of":
@@ -449,18 +466,24 @@ def _compare_group_atom(
 def _compare_v2(data: JobExtractionSchemaV2, description: str, profile) -> list[MatchItem]:
     skills = profile.skills if profile else []
     items = []
-    seen_languages: set[tuple[str, str]] = set()
+    language_typed_keys = {
+        key
+        for group in data.requirement_groups
+        if (key := _singleton_language_key(group)) is not None
+        and group.requirements[0].kind == "language"
+    }
+    seen_singleton_languages: set[tuple[str, str, str, str]] = set()
     for group in data.requirement_groups:
+        language_key = _singleton_language_key(group)
+        if language_key is not None:
+            if (
+                language_key in seen_singleton_languages
+                or (group.requirements[0].kind != "language" and language_key in language_typed_keys)
+            ):
+                continue
+            seen_singleton_languages.add(language_key)
         conditions = []
         for atom in group.requirements:
-            if atom.kind == "language" or _language_identity(atom.value) in {"mandarin", "english"}:
-                key = (
-                    _language_identity(atom.value),
-                    clean(atom.qualifier.value) if atom.qualifier else "",
-                )
-                if key in seen_languages:
-                    continue
-                seen_languages.add(key)
             conditions.append(_compare_group_atom(atom, group, description, skills))
         if not conditions:
             continue
@@ -536,6 +559,41 @@ def compare(
     return _compare_legacy(result, description, profile)
 
 
+def _work_mode_polarity_supported(mode: WorkModeFact, description: str) -> bool:
+    """Guard only simple explicit allowance wording; complex wording stays unverified."""
+    if not _source_present(mode.evidence, description) or (
+        mode.condition and not _source_present(mode.condition.evidence, description)
+    ):
+        return False
+    quote = clean(mode.evidence)
+    term = {
+        "remote": r"\bremote(?:ly)?\b",
+        "hybrid": r"\bhybrid\b",
+        "onsite": r"\b(?:on[ -]?site|in[ -]?office)\b",
+    }[mode.value]
+    if not re.search(term, quote):
+        return False
+    if re.search(r"\b(?:except|unless|only if|depending on|subject to)\b", quote):
+        return False
+    negative = bool(
+        re.search(rf"\bno\b[^.!?;]{{0,40}}{term}", quote)
+        or re.search(
+            rf"{term}[^.!?;]{{0,40}}\b(?:not|never)\s+"
+            r"(?:allowed|permitted|available)\b",
+            quote,
+        )
+        or re.search(rf"{term}[^.!?;]{{0,40}}\b(?:prohibited|forbidden)\b", quote)
+    )
+    positive = bool(
+        re.search(
+            rf"{term}[^.!?;]{{0,40}}\b(?<!not )"
+            r"(?:allowed|permitted|available)\b",
+            quote,
+        )
+    )
+    return negative != positive and mode.allowed == positive
+
+
 def compare_work_constraints(data, description: str) -> list[MatchItem]:
     """Display source conditions separately; never infer a person's availability."""
     constraints = data.work_constraints if isinstance(data, JobExtractionSchemaV2) else None
@@ -590,8 +648,14 @@ def compare_work_constraints(data, description: str) -> list[MatchItem]:
                     "original quote."
                 )
         if constraints.work_modes:
+            unsupported_mode = any(
+                not _work_mode_polarity_supported(mode, description)
+                for mode in constraints.work_modes
+            )
             facts["work_modes"] = (
-                "; ".join(
+                "Work mode: extracted allowance requires review"
+                if unsupported_mode
+                else "; ".join(
                     f"{mode.value}: {'allowed' if mode.allowed else 'not allowed'}"
                     + (f" ({mode.condition.value})" if mode.condition else "")
                     for mode in constraints.work_modes
@@ -604,6 +668,14 @@ def compare_work_constraints(data, description: str) -> list[MatchItem]:
                         + ([mode.condition.evidence] if mode.condition else [])
                     )
                 ),
+            )
+            review_reasons["work_modes"] = (
+                "Unknown: the model's allowed/not allowed interpretation contradicts or lacks "
+                "clear support in a source quote. Review the original wording. No feasibility "
+                "conclusion is made."
+                if unsupported_mode
+                else "Unknown: the source quote is present, but the model's work-mode "
+                "interpretation has not been human-verified. No feasibility conclusion is made."
             )
         if constraints.locations:
             facts["locations"] = (
