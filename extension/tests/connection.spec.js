@@ -43,6 +43,13 @@ test('PKCE handshake keeps verifier and session token out of webpage messages', 
   await expect(f.handle({kind: 'complete', state: pending.state, code: 'c'.repeat(43)}, f.external, true)).rejects.toThrow();
 });
 
+test('isolated ATS acceptance deployment uses its exact local API pair', async () => {
+  const f = fixture();
+  await f.handle({kind: 'begin', site: 'http://127.0.0.1:5174'}, f.internal);
+  expect(f.stored.jobpilotPending.api).toBe('http://127.0.0.1:8002');
+  expect(f.calls[0].url).toMatch(/^http:\/\/127\.0\.0\.1:5174\/connect-extension#/);
+});
+
 test('origin, top frame, requesting tab, state, expiry and internal caller are bound', async () => {
   const f = fixture();
   await expect(f.handle({kind: 'begin', site: 'https://evil.test'}, f.internal)).rejects.toThrow();

@@ -23,8 +23,10 @@ On 19 October 2026 an isolated four-service Docker smoke test registered public 
 
 ## Manual acceptance checklist
 
-1. Pull the branch and rebuild the backend/frontend and reload the unpacked extension.
+1. Pull the branch and rebuild the backend/frontend and reload the unpacked extension. To test without disturbing a separate `5173/8000` JobPilot checkout, the extension also offers **Isolated ATS acceptance** at `127.0.0.1:5174` with API `127.0.0.1:8002`; configure the backend's approved extension ID and web origin for that pair.
 2. Log in to the local demo, register and run a current public board with the admin API, and confirm the source run plus imported jobs.
 3. Open a hosted Greenhouse/Lever apply link, connect the extension to the local JobPilot account, and review basic contact fields. Use test-only details on a test or explicitly authorized form.
 4. Confirm only the reviewed empty fields are populated; custom questions, uploads, consent and final Submit remain untouched. Do not send a synthetic application to an employer.
 5. Verify a custom-domain redirect or changed/unrecognized page is refused rather than silently filled.
+
+The October 19 hosted-page candidates for this test were a [Figma Greenhouse form](https://job-boards.greenhouse.io/figma/jobs/6178851004?gh_jid=6178851004) and a [ShopBack Lever software-engineering form](https://jobs.lever.co/shopback-2/1804a30e-2d2e-4631-9e85-614c91806ddf/apply). Both resolved to their hosted ATS domain and displayed basic contact fields when inspected. These are test surfaces, not personal job recommendations; check their availability again before a later acceptance run.
