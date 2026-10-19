@@ -61,10 +61,12 @@ try {
   expect(python.items[0].work_constraints.every(i => i.outcome === 'unknown')).toBe(true);
   checks.push('Python-only: one specific overlap, partial conditions, no AI-title/retail/closed filler recommendations');
   await page.goto(web + '/jobs/' + ids.wovenstack_software_data_automation.job_id);
-  await page.getByRole('button', {name: 'Analyze my match', exact: true}).click();
+  await page.getByRole('button', {name: 'Check my match', exact: true}).click();
+  await page.locator('.job-match-evidence > summary').first().click();
   await expect(page.locator('.job-match')).toContainText('All listed conditions are required together.');
+  await page.getByText('Work conditions to review', {exact: true}).click();
   await expect(page.locator('.job-work-constraints')).toContainText('compatibility unknown');
-  await page.getByText('Extracted role and responsibilities (unverified)', {exact: true}).click();
+  await page.getByText('Role & responsibilities', {exact: true}).click();
   await expect(page.locator('.job-match')).toContainText('Conditional responsibility');
   for (const [name, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]]) {
     await page.setViewportSize({width, height});
@@ -94,7 +96,8 @@ try {
   await expect(page.locator('.recommendation-list')).toContainText('Part-Time/Flexi');
   checks.push('Canva-only: compound partial, no language/trait score, part-time scope and remote prohibitions retained');
   await page.goto(web + '/jobs/' + ids.cynapse_ai_evaluation_quality_2.job_id);
-  await page.getByRole('button', {name: 'Analyze my match', exact: true}).click();
+  await page.getByRole('button', {name: 'Check my match', exact: true}).click();
+  await page.getByText('Work conditions to review', {exact: true}).click();
   await expect(page.locator('.job-work-constraints')).toContainText('extracted number/unit requires review');
   await expect(page.locator('.job-work-constraints')).not.toContainText('4–unknown hours per week');
   checks.push('Actual model days-to-hours error: raw artifact retained, unsupported hours not presented as confirmed fact');

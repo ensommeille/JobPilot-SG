@@ -28,6 +28,7 @@ from app.job_extraction.quality import (
     normalized,
 )
 from app.jobs.service import get_job
+from app.responsibility_matching import ResponsibilityMatch, match_responsibilities
 from app.skill_signals import is_uncertain_or_negative, mentions, positive_profile
 
 router = APIRouter(tags=["job-matching"])
@@ -36,6 +37,7 @@ Database = Annotated[Session, Depends(get_db)]
 
 class MatchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+    include_experience: bool = False
 
 
 class SkillOverlap(BaseModel):
@@ -89,6 +91,7 @@ class MatchAnalysis(BaseModel):
     work_constraints: list[MatchItem] = Field(default_factory=list)
     summary: TextFact | None = None
     responsibilities: list[MatchResponsibility] = Field(default_factory=list)
+    responsibility_matches: list[ResponsibilityMatch] = Field(default_factory=list)
 
 
 # Only a closed set of atomic skill labels is comparable. Compound requirements,
@@ -476,9 +479,8 @@ def _compare_v2(data: JobExtractionSchemaV2, description: str, profile) -> list[
     for group in data.requirement_groups:
         language_key = _singleton_language_key(group)
         if language_key is not None:
-            if (
-                language_key in seen_singleton_languages
-                or (group.requirements[0].kind != "language" and language_key in language_typed_keys)
+            if language_key in seen_singleton_languages or (
+                group.requirements[0].kind != "language" and language_key in language_typed_keys
             ):
                 continue
             seen_singleton_languages.add(language_key)
@@ -736,14 +738,21 @@ def analyze(
         .limit(1)
     )
     profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
-    return build_analysis(job, run, profile)
+    return build_analysis(job, run, profile, include_experience=payload.include_experience)
 
 
 def build_analysis(
-    job: JobPosting, run: JobExtractionRun | None, profile: UserProfile | None
+    job: JobPosting,
+    run: JobExtractionRun | None,
+    profile: UserProfile | None,
+    *,
+    include_experience: bool = False,
+    project_evidence: dict[str, str] | None = None,
 ) -> MatchAnalysis:
     """Shared read-only validation for detail analysis and discovery."""
     report = MatchAnalysis(job_id=job.id, status="unavailable")
+    if include_experience:
+        report.version = "evidence-overlap-v3"
     if run is None:
         report.reason = "missing_extraction"
         return report
@@ -776,6 +785,13 @@ def build_analysis(
     ]
     report.work_constraints = compare_work_constraints(result.extraction, job.description)
     report.items = compare(result, job.description, profile)
+    if include_experience and result.execution_mode != "mock":
+        report.responsibility_matches = match_responsibilities(
+            report.responsibilities,
+            job.description,
+            profile.experience if profile else None,
+            project_evidence=project_evidence,
+        )
     report.warnings = [
         "Extracted requirements have not been human-verified. All comparisons are preliminary.",
         "Skill mentions are not proof of the complete requirement. No eligibility decision or match percentage.",
@@ -788,7 +804,7 @@ def build_analysis(
         report.warnings.append(
             "Add explicit skills to your JobPilot profile; missing skills remain unknown."
         )
-    if not report.items:
+    if not report.items and not report.responsibility_matches:
         report.reason = "no_requirements"
         return report
     report.status = "preliminary"

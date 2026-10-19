@@ -6,22 +6,52 @@
   overflow-wrap: anywhere;
   line-height: 1.6;
 }
-.job-match h3 { margin: 0 0 var(--s-2); }
+.job-match h3 { margin: 0 0 var(--s-2); font-size: 1.2rem; }
 .job-match p { margin: var(--s-2) 0; max-width: 72ch; }
 .job-match-actions { display: flex; gap: var(--s-4); flex-wrap: wrap; align-items: center; margin-block: var(--s-4); }
 .job-match a { color: var(--primary); text-underline-offset: 3px; }
 .job-match-notice { padding: var(--s-4); background: var(--warning-soft); margin-block: var(--s-4); }
 .job-match-group, .job-work-constraints { margin-top: var(--s-5); }
-.job-match-group h4 { font-size: 1rem; margin-bottom: var(--s-2); }
+.job-match-group h4 { font-size: 1rem; margin-bottom: var(--s-2); display: flex; align-items: baseline; gap: var(--s-2); }
 .job-match-group ul { list-style: none; padding: 0; margin: 0; }
-.job-match-group li { padding-block: var(--s-4); border-bottom: 1px solid var(--border); }
-.job-match-importance { color: var(--text-muted); display: inline-block; margin-inline-start: var(--s-2); font-size: 0.875rem; }
-.job-match summary { cursor: pointer; color: var(--primary); padding-block: var(--s-2); }
+.job-match-item { padding-block: var(--s-3); border-bottom: 1px solid var(--border); }
+.job-match-group-count { font-size: 0.875rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.job-match-hint { color: var(--text-muted); font-size: 0.875rem; }
+.job-match-shared { color: var(--primary); font-size: 0.875rem; }
+.job-match summary { cursor: pointer; color: var(--primary); padding-block: var(--s-2); min-height: 44px; }
+.job-match summary:hover { text-decoration: underline; text-underline-offset: 3px; }
 .job-match dl { margin-block: var(--s-2); }
 .job-match dt { font-weight: 600; margin-top: var(--s-3); }
 .job-match dd { margin: var(--s-1) 0; white-space: pre-wrap; }
+.job-match .job-match-counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-4); padding-block: var(--s-4); margin-block: var(--s-4); border-block: 1px solid var(--border); }
+.job-match-counts > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); }
+.job-match-counts dt, .job-match-counts dd { margin: 0; }
+.job-match-counts dt { font-size: 0.875rem; font-weight: 500; }
+.job-match-counts dd { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.job-match [data-match-count="matched"], .job-match [data-match-group="matched"] h4 { color: var(--primary); }
+.job-match [data-match-count="gap"], .job-match [data-match-group="gap"] h4 { color: var(--danger); }
+.job-match-more { margin-top: var(--s-5); padding-top: var(--s-3); border-top: 1px solid var(--border-strong); }
+.job-match-evidence { font-size: 0.875rem; }
+.job-match-evidence ul { padding-inline-start: var(--s-4); }
+.job-match-evidence li { margin-block: var(--s-4); }
+.job-match-general ul { list-style: none; padding: 0; }
+.job-match-general-item { padding-block: var(--s-2); }
+.job-match-evidence dd { padding-inline-start: var(--s-3); border-inline-start: 1px solid var(--border-strong); }
+.job-match .btn { min-height: 44px; height: auto; padding-block: var(--s-2); white-space: normal; }
+.job-match ::selection { background: var(--primary-soft); color: var(--text); }
 .job-match :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 .job-match [role="alert"] { color: var(--danger); }
+.job-match .responsibility-evidence { margin-block: var(--s-5); }
+.job-match .responsibility-evidence h4 { margin: 0 0 var(--s-2); font-size: 1rem; }
+.job-match .responsibility-evidence-list { list-style: none; padding: 0; margin: 0; }
+.job-match .responsibility-evidence-item { padding-block: var(--s-3); border-bottom: 1px solid var(--border); }
+.job-match .responsibility-evidence-note { color: var(--text-muted); font-size: 0.875rem; }
+.job-match .responsibility-evidence-pair { font-size: 0.875rem; }
+.job-match .responsibility-evidence-pair dd { padding-inline-start: var(--s-3); border-inline-start: 1px solid var(--border-strong); }
+.job-match .responsibility-evidence-pair dd p { margin-block: var(--s-2); white-space: pre-wrap; }
+@media (max-width: 600px) {
+  .job-match .job-match-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+}
 @media (max-width: 700px) {
   .job-detail-page .navbar-inner { flex-wrap: wrap; height: auto; padding-block: 12px; gap: 8px; }
   .job-detail-page .nav-links { flex-wrap: wrap; }

@@ -12,6 +12,7 @@ from sqlalchemy.orm import joinedload
 from app.auth.dependencies import CurrentUser
 from app.db.models import JobExtractionRun, JobPosting, UserProfile
 from app.job_matching import Database, MatchItem, build_analysis
+from app.responsibility_matching import ResponsibilityMatch, prepare_project_evidence
 from app.skill_signals import mentions, positive_profile
 
 router = APIRouter(tags=["job-recommendations"])
@@ -24,6 +25,7 @@ class RecommendationRequest(BaseModel):
     city: str = Field(default="", max_length=120)
     job_type: str = Field(default="", max_length=80)
     limit: int = Field(default=10, ge=1, le=20)
+    include_experience: bool = False
 
 
 class Recommendation(BaseModel):
@@ -37,6 +39,7 @@ class Recommendation(BaseModel):
     unknown: list[MatchItem]
     overlaps: list[MatchItem] = Field(default_factory=list)
     work_constraints: list[MatchItem] = Field(default_factory=list)
+    responsibility_matches: list[ResponsibilityMatch] = Field(default_factory=list)
 
 
 class RecommendationReport(BaseModel):
@@ -66,12 +69,24 @@ def recommend(
     response.headers["Cache-Control"] = "no-store"
     profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
     affirmative = positive_profile(profile.skills) if profile else {}
-    if not any(
+    has_skills = any(
         mention.skill_id in affirmative and mention.kind == "specific"
         for text in (profile.skills if profile else [])
         for mention in mentions(text)
-    ):
-        return RecommendationReport(status="profile_needed")
+    )
+    # Request-local only: avoid parsing personal project text once per candidate.
+    projects = (
+        prepare_project_evidence(profile.experience if profile else None)
+        if payload.include_experience
+        else {}
+    )
+    if not has_skills and not projects:
+        return RecommendationReport(
+            status="profile_needed",
+            version="evidence-discovery-v3"
+            if payload.include_experience
+            else "evidence-discovery-v2",
+        )
     today = datetime.now(timezone(timedelta(hours=8))).date()
     conditions = [
         JobPosting.status == "active",
@@ -102,6 +117,8 @@ def recommend(
         )
     )
     report = RecommendationReport(status="no_candidates", truncated=len(jobs) > CANDIDATE_LIMIT)
+    if payload.include_experience:
+        report.version = "evidence-discovery-v3"
     jobs = jobs[:CANDIDATE_LIMIT]
     report.scanned = len(jobs)
     if not jobs:
@@ -131,9 +148,22 @@ def recommend(
     ordered = []
     for index, job in enumerate(jobs):
         run = runs.get(job.id)
-        analysis = build_analysis(job, run, profile)
+        analysis = build_analysis(
+            job,
+            run,
+            profile,
+            include_experience=payload.include_experience,
+            project_evidence=projects,
+        )
         reason = analysis.reason
-        if analysis.status == "preliminary" and run.result_json.get("execution_mode") == "mock":
+        if (
+            run is not None
+            and (
+                analysis.status == "preliminary"
+                or (payload.include_experience and reason == "no_requirements")
+            )
+            and run.result_json.get("execution_mode") == "mock"
+        ):
             reason = "mock_extraction"
         if reason:
             report.excluded[reason] = report.excluded.get(reason, 0) + 1
@@ -141,7 +171,15 @@ def recommend(
         report.evaluated += 1
         supported = [i for i in analysis.items if i.outcome == "supported"]
         concrete = specific_overlap_ids(analysis.items)
-        if not concrete:
+        activities = {
+            activity
+            for match in analysis.responsibility_matches
+            if match.outcome == "related_evidence"
+            and match.priority not in {"conditional", "secondary"}
+            and match.condition is None
+            for activity in match.activities
+        }
+        if not concrete and not activities:
             continue
         gaps = [i for i in analysis.items if i.outcome == "gap"]
         overlaps = [i for i in analysis.items if i.outcome == "unknown" and i.skill_overlaps]
@@ -156,10 +194,13 @@ def recommend(
             unknown=[i for i in analysis.items if i.outcome == "unknown"],
             overlaps=overlaps,
             work_constraints=analysis.work_constraints,
+            responsibility_matches=analysis.responsibility_matches,
         )
         # Model-assigned required/preferred labels are unverified and do not affect
         # rank. Generic soft skills, duplicates and synonyms cannot inflate rank.
-        ordered.append(((bool(gaps), -len(concrete), index), item))
+        # Project activities are a separate, deduplicated discovery signal. They
+        # never become satisfied requirements or override explicit skill gaps.
+        ordered.append(((bool(gaps), -len(concrete), -len(activities), index), item))
     ordered.sort(key=lambda pair: pair[0])
     report.matched = len(ordered)
     report.items = [item for _, item in ordered[: payload.limit]]
