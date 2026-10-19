@@ -5,7 +5,7 @@ import path from 'node:path';
 const root = path.resolve(import.meta.dirname, '..');
 async function setup(page, {expired = false, unsupported = false, skipped = false, widgetsReady = false, embeddedAccess = true} = {}) {
   await page.addInitScript(({expired, unsupported, skipped, widgetsReady, embeddedAccess}) => {
-    window.operations = []; window.drafts = []; window.stored = {};
+    window.operations = []; window.drafts = []; window.stored = {}; window.atsCalls = [];
     window.embeddedAccess = embeddedAccess; window.permissionAllowed = true; window.permissionRequests = [];
     window.applicationUrl = 'https://www.internsg.com/job-apply/123';
     window.connect = email => {
@@ -26,6 +26,15 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
         set: async value => { window.stored = value; }, remove: async () => { window.stored = {}; }}},
       tabs: {query: async () => [{id: 7}]},
       scripting: {executeScript: async request => {
+        if (request.func.name === 'interactWithATSPage') {
+          window.atsCalls.push(request.args[0]);
+          if (request.args[0].action === 'inspect') return [{documentId: 'ats-document', result: {
+            provider: 'Lever', url: 'https://jobs.lever.co/acme/abc-123/apply',
+            fields: [{id: 'full_name', available: true, occupied: false, maxLength: 200},
+              {id: 'email', available: true, occupied: false, maxLength: 200},
+              {id: 'phone', available: false, occupied: false, maxLength: 200}]}}];
+          return [{documentId: 'ats-document', result: {filled: request.args[0].approved.map(item => item.id), skipped: [], submitted: false}}];
+        }
         if (request.func.name === 'discoverApplication') {
           if (unsupported) throw new Error('Open an InternSG application page first.');
           return [{documentId: 'document-1', result: {mode: 'direct', url: window.applicationUrl}}];
@@ -77,7 +86,7 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
   }, {expired, unsupported, skipped, widgetsReady, embeddedAccess});
   await page.route('https://popup.test/**', async route => {
     const name = new URL(route.request().url()).pathname.slice(1);
-    if (!['popup.html', 'popup.css', 'popup.js', 'page.js', 'widgets.js', 'submission.js', 'frames.js', 'connection.js'].includes(name)) return route.abort();
+    if (!['popup.html', 'popup.css', 'popup.js', 'ats-page.js', 'page.js', 'widgets.js', 'submission.js', 'frames.js', 'connection.js'].includes(name)) return route.abort();
     await route.fulfill({body: await readFile(path.join(root, name)), contentType: name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : 'text/html'});
   });
   await page.goto('https://popup.test/popup.html');
@@ -105,6 +114,20 @@ test('sign in, inspect, approve and fill without automatic model call', async ({
   expect(calls.some(c => c.payload.generate_summary)).toBe(false);
   const operations = await page.evaluate(() => window.operations);
   expect(operations[1][2]).toEqual([{id: 'applicant_name', value: 'Fictional Applicant', confirmed: true}]);
+});
+
+test('public ATS popup reviews profile before one fill and never submits', async ({page}) => {
+  await setup(page); await login(page, 'fictional@example.test', {expand: false});
+  await page.locator('#ats-tools > summary').click();
+  await page.getByRole('button', {name: 'Read form & load saved details'}).click();
+  await expect(page.locator('#ats-full_name')).toHaveValue('Fictional Applicant');
+  await page.getByRole('button', {name: 'Fill reviewed fields only'}).click();
+  await expect(page.locator('#ats-result')).toContainText('Nothing was submitted');
+  expect(await page.evaluate(() => window.atsCalls.map(call => call.action))).toEqual(['inspect', 'fill']);
+  expect(await page.evaluate(() => window.atsCalls[1].approved)).toEqual([
+    {id: 'full_name', value: 'Fictional Applicant', confirmed: true},
+  ]);
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
 });
 test('the fill click approves the current edited answer without individual checkboxes or generation controls', async ({page}) => {
   await setup(page); await login(page);

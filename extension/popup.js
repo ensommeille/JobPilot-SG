@@ -3,11 +3,14 @@ import {interactWithWidgets} from './widgets.js';
 import {submissionPage, reserveAttempt} from './submission.js';
 import {resolveApplicationTarget, assertApplicationContext} from './frames.js';
 import {DEPLOYMENTS} from './connection.js';
+import {interactWithATSPage} from './ats-page.js';
 
 const $ = id => document.getElementById(id);
 let session = null, snapshot = null, busy = false;
 let supplements = {};
 let submissionReview = null;
+let atsReview = null;
+const atsEditors = new Map();
 let permissionVersion = 0;
 const embeddedOrigins = current => ['https://www.internsg.com/*', 'https://internsg.com/*', current.site + '/*'];
 async function refreshEmbeddedAccess() {
@@ -65,6 +68,8 @@ function refresh() {
   $('prepare-submit').disabled = busy || !session?.userId;
   $('check-result').disabled = busy || !session?.userId;
   $('send-application').disabled = busy || !submissionReview?.captchaReady || !$('submit-consent').checked;
+  $('ats-inspect').disabled = busy;
+  $('ats-fill').disabled = busy || !atsReview || ![...atsEditors.values()].some(input => input.value.trim());
 }
 async function run(task, validate = true) {
   if (busy) return;
@@ -88,6 +93,11 @@ function assertSession(current) {
 function clearDraft() {
   snapshot = null; editors.clear(); $('fields').replaceChildren(); resetSubmission();
   $('target').textContent = ''; $('submission-status').textContent = '';
+}
+function clearAtsReview() {
+  atsReview = null; atsEditors.clear(); $('ats-fields').replaceChildren();
+  $('ats-target').textContent = ''; $('ats-result').textContent = 'Nothing was submitted.';
+  refresh();
 }
 async function api(path, body, method = 'POST') {
   const current = session;
@@ -273,6 +283,60 @@ $('inspect').addEventListener('click', () => run(async unchanged => {
   const values = {...data.values};
   render(snapshot.fields, values); renderCountries(widgets, data.countries); status('Loaded your JobPilot profile for this review. After changing your platform profile, choose Read page & load profile again. Review the shown answers, then click Fill application form.');
 }));
+$('ats-inspect').addEventListener('click', () => run(async unchanged => {
+  clearAtsReview();
+  const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+  if (!tab?.id) throw new Error('Open a Greenhouse or Lever application form first.');
+  const [response] = await chrome.scripting.executeScript({target: {tabId: tab.id}, func: interactWithATSPage, args: [{action: 'inspect'}]});
+  unchanged();
+  const review = response?.result;
+  if (!review?.url || !response.documentId || !Array.isArray(review.fields)) throw new Error('No supported ATS form found. Open the original application page.');
+  const data = await api('/browser-assistant/draft', {page_url: review.url,
+    field_ids: ['applicant_name', 'applicant_email', 'applicant_contact']});
+  unchanged();
+  if (data.profile_source !== 'jobpilot') throw new Error('Could not read this JobPilot profile.');
+  const name = (data.values?.applicant_name || '').trim().split(/\s+/);
+  const values = {first_name: name.length > 1 ? name[0] : '', last_name: name.length > 1 ? name.slice(1).join(' ') : '',
+    full_name: data.values?.applicant_name || '', email: data.values?.applicant_email || '', phone: data.values?.applicant_contact || ''};
+  for (const field of review.fields) {
+    const row = document.createElement('div'); row.className = 'field';
+    const label = document.createElement('label'); label.textContent = ({first_name: 'First name', last_name: 'Last name', full_name: 'Full name', email: 'Email', phone: 'Phone'})[field.id] || field.id;
+    row.append(label);
+    if (!field.available || field.occupied) {
+      const note = document.createElement('p'); note.textContent = field.occupied ? 'Already filled on the website; left unchanged.' : 'Unavailable or ambiguous on this page; fill manually.';
+      row.append(note);
+    } else {
+      const input = document.createElement('input'); input.id = 'ats-' + field.id;
+      input.maxLength = field.maxLength; input.value = values[field.id] || '';
+      input.type = field.id === 'email' ? 'email' : field.id === 'phone' ? 'tel' : 'text';
+      label.htmlFor = input.id; input.addEventListener('input', refresh);
+      row.append(input); atsEditors.set(field.id, input);
+    }
+    $('ats-fields').append(row);
+  }
+  atsReview = {...review, tabId: tab.id, documentId: response.documentId};
+  $('ats-target').textContent = `${review.provider} — ${review.url}`;
+  $('ats-result').textContent = 'Review the shown values, then choose Fill reviewed fields only. Nothing has been sent.';
+  refresh();
+}));
+$('ats-fill').addEventListener('click', () => {
+  if (busy || !atsReview) return;
+  const current = atsReview;
+  const approved = [...atsEditors].filter(([, input]) => input.value.trim())
+    .map(([id, input]) => ({id, value: input.value.trim(), confirmed: true}));
+  run(async unchanged => {
+    if (atsReview !== current || !approved.length) throw new Error('Read and review the form again.');
+    // A single attempt only. If the page changes or reports an uncertain result,
+    // re-inspect it manually before another fill rather than retrying.
+    atsReview = null; refresh();
+    const [response] = await chrome.scripting.executeScript({target: {tabId: current.tabId, documentIds: [current.documentId]},
+      func: interactWithATSPage, args: [{action: 'fill', expectedUrl: current.url, approved}]});
+    unchanged();
+    if (response?.result?.submitted !== false || !Array.isArray(response.result.filled)
+        || !Array.isArray(response.result.skipped)) throw new Error('Fill result is uncertain. Inspect the original page. Nothing was submitted by JobPilot.');
+    $('ats-result').textContent = `Filled ${response.result.filled.length}; skipped ${response.result.skipped.length}. Check every answer on the original site. Nothing was submitted.`;
+  });
+});
 $('fill').addEventListener('click', () => {
   if (busy || !snapshot) return;
   // The click approves only this visible draft, never later edits during session validation.
@@ -409,8 +473,9 @@ $('check-result').addEventListener('click', () => run(async unchanged => {
 let restoreVersion = 0;
 async function restoreConnection() {
   const version = ++restoreVersion;
-  for (const id of ['settings', 'local-profile', 'original-tools', 'advanced-submission']) $(id).open = false;
+  for (const id of ['settings', 'local-profile', 'original-tools', 'advanced-submission', 'ats-tools']) $(id).open = false;
   clearDraft();
+  clearAtsReview();
   const saved = (await chrome.storage.session.get('jobpilotSession')).jobpilotSession;
   if (version !== restoreVersion) return;
   session = saved?.token?.startsWith('jpx_') && DEPLOYMENTS[saved.site] === saved.api ? saved : null;
@@ -437,6 +502,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'session' && changes.jobpilotSession) {
     restoreVersion++;
     session = null; clearDraft(); clearDeviceView(); $('workspace').hidden = true; $('login').hidden = false;
+    clearAtsReview();
     if (changes.jobpilotSession.newValue) restoreConnection();
     else refresh();
   }

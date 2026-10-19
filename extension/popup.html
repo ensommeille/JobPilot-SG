@@ -25,6 +25,15 @@
     <button id="enable-embedded" class="secondary" type="button" hidden>Enable embedded InternSG access</button>
     <p id="embedded-help" class="field-reason" hidden>Allow JobPilot and InternSG access to fill the form you review. Other websites are not read.</p>
   </section>
+  <details id="ats-tools">
+    <summary>Greenhouse / Lever — review & fill</summary>
+    <p>Open a hosted application form in the active tab. Read only your saved name, email and phone, review each answer here, then fill. Files, custom questions, consent and final submission stay manual.</p>
+    <button id="ats-inspect" class="secondary" type="button">Read form & load saved details</button>
+    <p id="ats-target" class="field-reason"></p>
+    <div id="ats-fields"></div>
+    <button id="ats-fill" type="button" disabled>Fill reviewed fields only</button>
+    <p id="ats-result" role="status" aria-live="polite">Nothing was submitted.</p>
+  </details>
   <details id="original-tools">
   <summary>Original-site tools</summary>
   <p>Use these fallback tools if you cannot fill from JobPilot.</p>

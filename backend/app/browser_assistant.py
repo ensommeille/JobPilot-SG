@@ -1,4 +1,4 @@
-"""Read-only profile suggestions for the user-controlled InternSG extension."""
+"""Read-only profile suggestions for user-reviewed original-site form filling."""
 
 import re
 from typing import Annotated
@@ -25,21 +25,33 @@ SUPPORTED = {
 
 class DraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    page_url: str = Field(max_length=200)
+    page_url: str = Field(max_length=500)
     field_ids: list[str] = Field(min_length=1, max_length=5)
 
     @field_validator("page_url")
     @classmethod
     def allowed_page(cls, value: str) -> str:
         parsed = urlsplit(value)
-        if (
-            parsed.scheme != "https"
-            or parsed.netloc not in {"www.internsg.com", "internsg.com"}
-            or not re.fullmatch(r"/job-apply/[0-9]+/?", parsed.path)
-            or parsed.query
-            or parsed.fragment
-        ):
-            raise ValueError("Only canonical InternSG application pages are supported")
+        internsg = (
+            parsed.netloc in {"www.internsg.com", "internsg.com"}
+            and bool(re.fullmatch(r"/job-apply/[0-9]+/?", parsed.path))
+            and not parsed.query
+        )
+        greenhouse_path = re.fullmatch(r"/[A-Za-z0-9_-]+/jobs/([0-9]+)/?", parsed.path)
+        greenhouse = (
+            parsed.netloc in {"job-boards.greenhouse.io", "boards.greenhouse.io"}
+            and bool(greenhouse_path)
+            and (not parsed.query or parsed.query == f"gh_jid={greenhouse_path.group(1)}")
+        )
+        lever = (
+            parsed.netloc in {"jobs.lever.co", "jobs.eu.lever.co"}
+            and bool(re.fullmatch(r"/[A-Za-z0-9_-]+/[A-Za-z0-9-]+/apply/?", parsed.path))
+            and not parsed.query
+        )
+        if parsed.scheme != "https" or parsed.fragment or not (internsg or greenhouse or lever):
+            raise ValueError(
+                "Only canonical InternSG, Greenhouse or Lever application pages are supported"
+            )
         return value
 
     @field_validator("field_ids")

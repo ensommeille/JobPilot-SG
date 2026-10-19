@@ -41,6 +41,33 @@ def test_auth_profile_isolation_and_no_submission(client, db):
 @pytest.mark.parametrize(
     "url",
     [
+        "https://job-boards.greenhouse.io/acme/jobs/12345?gh_jid=12345",
+        "https://boards.greenhouse.io/acme/jobs/12345",
+        "https://jobs.lever.co/acme/abc-123/apply",
+        "https://jobs.eu.lever.co/acme/abc-123/apply",
+    ],
+)
+def test_public_ats_draft_is_read_only(client, db, url):
+    from sqlalchemy import func, select
+
+    from app.db.models import Application
+
+    headers = auth_headers(client)
+    response = client.post(
+        "/browser-assistant/draft",
+        headers=headers,
+        json=body(
+            page_url=url, field_ids=["applicant_name", "applicant_email", "applicant_contact"]
+        ),
+    )
+    assert response.status_code == 200
+    assert response.json()["submission_supported"] is False
+    assert db.scalar(select(func.count()).select_from(Application)) == 0
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
         "http://www.internsg.com/job-apply/1",
         "https://www.internsg.com.evil.test/job-apply/1",
         "https://www.internsg.com@evil.test/job-apply/1",
@@ -48,6 +75,11 @@ def test_auth_profile_isolation_and_no_submission(client, db):
         URL + "?next=evil",
         URL + "#x",
         "https://www.internsg.com/jobs/",
+        "https://job-boards.greenhouse.io/acme/jobs/not-a-number",
+        "https://job-boards.greenhouse.io/acme/jobs/123?gh_jid=456",
+        "https://job-boards.greenhouse.io.evil.test/acme/jobs/123",
+        "https://jobs.lever.co/acme/abc-123/apply?redirect=evil",
+        "https://jobs.lever.co/acme/abc-123/not-apply",
     ],
 )
 def test_rejects_bad_urls(client, url):
