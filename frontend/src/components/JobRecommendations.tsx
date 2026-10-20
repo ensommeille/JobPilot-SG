@@ -52,7 +52,7 @@ interface Report {
 const messages = {
   profile_needed: 'Add specific skills or describe work you have done in your saved experience. General traits and learning goals alone do not generate suggestions; uploaded resume files are not read.',
   no_candidates: 'No active, unexpired jobs fit these filters. Clear a filter or browse all jobs below.',
-  no_evidence: 'Jobs were found, but none has a current real requirements extraction for reliable comparison. Refreshing or uploading a resume will not create one. This is not a rejection; a project administrator must run the extraction workflow before evidence-based suggestions can appear.',
+  no_evidence: 'Jobs were found, but their requirements are not ready for reliable comparison. Refreshing or uploading a resume will not create an extraction. This is not a rejection; a project administrator must run the extraction workflow before evidence-based suggestions can appear.',
   no_matches: 'No clear skill or project-activity overlaps were found in the jobs evaluated. Recognition is limited to named skills and described work, not every possible meaning. This is not a rejection: review your saved profile or browse all jobs.',
   ready: 'Suggestions to investigate — not an assessment of eligibility.',
 }
