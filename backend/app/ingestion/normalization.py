@@ -65,11 +65,11 @@ def normalize_job_types(value: str | None) -> list[str]:
     result: list[str] = []
     mappings = (
         (r"\bintern(?:ship)?\b", "internship"),
-        (r"\bts\b", "temporary"),
+        (r"(?:^|/)\s*ts\s*(?:/|$)", "temporary"),
         (r"\btemp(?:orary)?\b", "temporary"),
-        (r"\bfull(?:[ -]?time)?\b", "full-time"),
+        (r"\bfull[ -]?time\b|(?:^|/)\s*full\s*(?:/|$)", "full-time"),
         (r"\bperm(?:anent)?\b", "permanent"),
-        (r"\bpart(?:[ -]?time)?\b", "part-time"),
+        (r"\bpart[ -]?time\b|(?:^|/)\s*part\s*(?:/|$)", "part-time"),
         (r"\bcontract(?:or)?\b", "contract"),
     )
     for pattern, normalized in mappings:

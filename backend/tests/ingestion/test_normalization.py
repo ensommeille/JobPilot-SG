@@ -25,4 +25,6 @@ def test_job_type_mapping_is_stable_and_unique() -> None:
     assert normalize_job_types("Full/Perm") == ["full-time", "permanent"]
     assert normalize_job_types("Internal Auditor") == []
     assert normalize_job_types("Business Partnership") == []
+    assert normalize_job_types("Full Stack Engineer") == []
+    assert normalize_job_types("TS Developer") == []
     assert normalize_job_types("Software Engineer Intern") == ["internship"]
