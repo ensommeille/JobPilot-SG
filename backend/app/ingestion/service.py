@@ -17,6 +17,7 @@ from app.db.models import AuditLog, CrawlRun, CrawlRunStatus, JobSource, User
 from app.ingestion.db_repository import SqlAlchemyJobRepository
 from app.ingestion.internsg_adapter import InternSGAdapter, default_internsg_config
 from app.ingestion.models import SourceConfig, SourceType
+from app.ingestion.public_ats_adapter import PublicATSAdapter, ats_provider
 from app.ingestion.schemas import SourceCreate
 from app.ingestion.source_adapter import SourceAdapter
 
@@ -101,6 +102,24 @@ def build_source_adapter(source: JobSource) -> SourceAdapter:
     """Build the currently supported live adapter from persisted source policy."""
     if not source.enabled:
         raise SourceRunError("Source is disabled")
+    if source.source_type == SourceType.API.value:
+        try:
+            provider = ats_provider(source.base_url)
+        except ValueError as exc:
+            raise SourceRunError("No live adapter is available for this source") from exc
+        return PublicATSAdapter(
+            SourceConfig(
+                source_id=str(source.id),
+                name=source.name,
+                source_type=SourceType.API,
+                base_url=source.base_url,
+                allowed_hosts=frozenset({
+                    "boards-api.greenhouse.io" if provider == "greenhouse" else "api.lever.co"
+                }),
+                user_agent="JobPilot-SWE5006/0.2 (bounded academic project)",
+                enforce_robots=False,  # These are documented public job-board APIs.
+            )
+        )
     parsed = urlparse(source.base_url)
     host = (parsed.hostname or "").casefold().rstrip(".")
     if source.source_type != SourceType.HTML.value or host not in {
@@ -156,13 +175,21 @@ def run_source(
     try:
         batch = adapter.collect(max_links=max_links, max_details=max_details)
         records = [item.known_fields for item in batch.items]
-        stats = SqlAlchemyJobRepository(db, source).upsert(records)
+        repository = SqlAlchemyJobRepository(db, source)
+        stats = repository.upsert(records)
+        closed = 0
+        if (
+            source.source_type == SourceType.API.value
+            and batch.status.value == "succeeded"
+            and 0 < batch.discovered_count == batch.attempted_count == len(records)
+        ):
+            closed = repository.close_missing({record.external_id for record in records})
         crawl_run = _reload_run(db, run_id)
         crawl_run.status = CrawlRunStatus(batch.status.value)
         crawl_run.finished_at = datetime.now(UTC)
         crawl_run.items_found = batch.discovered_count
         crawl_run.items_new = stats.items_new
-        crawl_run.items_updated = stats.items_updated
+        crawl_run.items_updated = stats.items_updated + closed
         crawl_run.items_failed = len(batch.failures)
         crawl_run.error_summary = [failure.model_dump(mode="json") for failure in batch.failures]
         source.status = {

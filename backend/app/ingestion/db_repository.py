@@ -64,6 +64,21 @@ class SqlAlchemyJobRepository:
             total_stored=total_stored,
         )
 
+    def close_missing(self, external_ids: set[str]) -> int:
+        """Close vanished postings after a complete, successful API listing only."""
+        if not external_ids:
+            return 0  # A transient empty feed must not close every stored job.
+        jobs = self.db.scalars(
+            select(JobPosting).where(
+                JobPosting.source_id == self.source.id,
+                JobPosting.status == "active",
+                JobPosting.external_id.not_in(external_ids),
+            )
+        ).all()
+        for job in jobs:
+            job.status = "closed"
+        return len(jobs)
+
     def _copy_record(self, job: JobPosting, record: JobRecord) -> None:
         job.external_id = record.external_id
         job.title = record.title
