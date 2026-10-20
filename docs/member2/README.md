@@ -13,6 +13,7 @@ progress report.
 | 4 | M3 ingestion to PostgreSQL, source administration, crawl-run audit | Idempotent upsert, failure preservation, RBAC, API and startup tests | Complete |
 | 5 | Repeatable local demo bootstrap | Idempotent admin, source, job, tag and form creation | Complete |
 | 6 | Per-job AI form availability | API flag, eager loading, UI action guard, regression tests | Complete |
+| 7 | Public ATS job-data expansion | Singapore-only Greenhouse/Lever import, audit, safe refresh and idempotent tests | Complete |
 
 ## Reports
 
@@ -22,3 +23,4 @@ progress report.
 - [进展报告 4](BLOCK_4_INGESTION_DATABASE_INTEGRATION_PROGRESS_REPORT_ZH.md)
 - [进展报告 5](BLOCK_5_LOCAL_DEMO_BOOTSTRAP_PROGRESS_REPORT_ZH.md)
 - [进展报告 6](BLOCK_6_APPLICATION_AVAILABILITY_PROGRESS_REPORT_ZH.md)
+- [进展报告 7](BLOCK_7_PUBLIC_ATS_INGESTION_PROGRESS_REPORT_ZH.md)
