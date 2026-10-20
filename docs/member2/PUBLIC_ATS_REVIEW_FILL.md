@@ -1,6 +1,6 @@
 # Greenhouse and Lever public sources — review and fill
 
-Status: implemented on `feat/public-ats-review-fill`; installed-extension acceptance of the **basic contact fields** on two hosted original-site forms and one profile-backed Greenhouse text question was completed on 20 October 2026. Other question types and companies still need their own acceptance. This is a JobPilot project feature, not a record of anyone's personal applications.
+Status: implemented on `feat/public-ats-review-fill`; installed-extension acceptance of selected basic fields and profile-backed LinkedIn fields was completed on four hosted original-site forms across Greenhouse and Lever on 20 October 2026. Other question types and companies still need their own acceptance. This is a JobPilot project feature, not a record of anyone's personal applications.
 
 ## What it does
 
@@ -39,6 +39,17 @@ This verifies the installed extension's limited **review-and-fill** behavior on 
 The isolated backend was rebuilt and its `/health` returned 200; the new `/browser-assistant/ats-evidence` endpoint rejected an unauthenticated request with 401. The extension was reloaded from this worktree and Chrome showed version 0.8.2, with the same extension ID. A synthetic LinkedIn URL was saved in the isolated `admin@jobpilot.sg` demo profile. On the same hosted Figma Greenhouse form, the extension showed the exact **LinkedIn Profile** question, proposed the URL with source `JobPilot profile · LinkedIn link`, and required its own checkbox. After confirmation it reported `Filled 1; skipped 0. ... Nothing was submitted.` The original-site LinkedIn input independently displayed the same synthetic URL; existing name/email/phone stayed populated, while the employer-specific motivation field and résumé remained untouched. The original page still displayed its Submit button, which was **not clicked**. This verifies one common custom text question on one live hosted form, not all question categories or complete employer delivery.
 
 Evidence: [installed extension result](assets/ats-question-live-popup-20261020.jpg) and [original-site LinkedIn field](assets/ats-question-live-original-20261020.jpg). Both contain only synthetic test data. The popup screenshot was taken before the manual-question list was condensed into a disclosure control; the fill result is unchanged.
+
+### Additional company acceptance — installed Chrome 0.8.2, 20 October 2026
+
+The same isolated demo and fictional applicant details were used on two more directly hosted original-site forms. Every filled answer was individually checked in the extension before filling; no employer application was submitted.
+
+| Hosted original-site form | Extension result | Independently observed on original page | Still manual |
+| --- | --- | --- | --- |
+| [Palantir Technologies / Lever, Software Engineer Internship](https://jobs.lever.co/palantir/3531977a-9b2f-40a0-a486-4eeb38e75fc1/apply) | Full name, email, phone and LinkedIn URL selected; `Filled 4; skipped 0. ... Nothing was submitted.` | Fictional name and LinkedIn URL displayed; email and phone were populated in the browser accessibility state. | Résumé, current location, work authorization, citizenship/PR, school/degree and long answers. |
+| [Appian Corporation / Greenhouse, Software Engineering Intern](https://job-boards.greenhouse.io/appian/jobs/8041237) | First name, last name, email, phone and LinkedIn Profile selected; `Filled 5; skipped 0. ... Nothing was submitted.` | Fictional name and LinkedIn URL displayed; email and phone were populated in the accessibility state. Role-specific motivation, address and authorization stayed empty. A second read labelled all five filled fields `Already filled on the website; left unchanged.` | Résumé, transcript, writing sample, selectors and other required questions. |
+
+Evidence: [Palantir popup](assets/ats-palantir-popup-20261020.jpg), [Palantir original page](assets/ats-palantir-original-20261020.jpg), [Appian popup](assets/ats-appian-popup-20261020.jpg), [Appian original page](assets/ats-appian-original-20261020.jpg). Screenshots contain only synthetic data and show a field region or extension result, **not** a submission receipt. Palantir's popup listed four manual questions despite the form having many other unanswered radio/select/checkbox fields. Appian listed 19 but also had unsupported uploads. The scan only considers bounded visible text inputs and text areas, so the count is **not** a complete-form status. The popup copy has since been changed to say `scanned fields` and warn that other unanswered controls may be omitted; these screenshots predate that wording change. These jobs were test surfaces, not personal job recommendations.
 
 ## Manual acceptance checklist
 

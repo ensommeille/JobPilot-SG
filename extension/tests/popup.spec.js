@@ -128,10 +128,11 @@ test('public ATS popup reviews profile before one fill and never submits', async
   await page.getByRole('button', {name: 'Read form & load saved details'}).click();
   await expect(page.locator('#ats-full_name')).toHaveValue('Fictional Applicant');
   await expect(page.locator('#ats-custom\\:0')).toHaveValue('https://www.linkedin.com/in/fictional');
-  await expect(page.locator('#ats-manual > summary')).toContainText('1 original-site question needs manual answer');
+  await expect(page.locator('#ats-manual > summary')).toContainText('1 scanned field needs manual review (not all unanswered fields)');
   await expect(page.locator('#ats-manual')).not.toHaveAttribute('open');
   await page.locator('#ats-manual > summary').click();
   await expect(page.locator('#ats-manual')).toContainText('Why this company?');
+  await expect(page.locator('#ats-manual')).toContainText('Dropdowns, checkboxes and uploads may not appear here. Check the complete original form.');
   const fill = page.getByRole('button', {name: 'Fill reviewed fields only'});
   await expect(fill).toBeDisabled();
   await page.locator('#ats-fields .check input').first().check();

@@ -335,12 +335,14 @@ $('ats-inspect').addEventListener('click', () => run(async unchanged => {
   if (review.manualQuestions?.length) {
     const title = document.createElement('summary');
     const count = review.manualQuestions.length;
-    title.textContent = `${count} original-site ${count === 1 ? 'question needs' : 'questions need'} manual ${count === 1 ? 'answer' : 'answers'}`;
+    title.textContent = `${count} scanned ${count === 1 ? 'field needs' : 'fields need'} manual review (not all unanswered fields)`;
+    const limit = document.createElement('p');
+    limit.textContent = 'Dropdowns, checkboxes and uploads may not appear here. Check the complete original form.';
     const list = document.createElement('ul');
     for (const question of review.manualQuestions) {
       const item = document.createElement('li'); item.textContent = question; list.append(item);
     }
-    $('ats-manual').append(title, list); $('ats-manual').hidden = false;
+    $('ats-manual').append(title, limit, list); $('ats-manual').hidden = false;
   }
   atsReview = {...review, tabId: tab.id, documentId: response.documentId};
   $('ats-target').textContent = `${review.provider} — ${review.url}`;
