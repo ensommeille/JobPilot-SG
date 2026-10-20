@@ -78,7 +78,10 @@ or teamwork alone cannot satisfy either gate, even when the profile contains an
 unrelated specific skill.
 
 Sort lexicographically by absence of any explicit skill gap, number of distinct
-specific skill IDs descending, then candidate recency/ID. Candidate recency means
+exact supported specific skill IDs descending, total distinct specific skill
+overlap IDs descending, then candidate recency/ID. Exact entries outrank partial
+mentions because the latter retain unverified qualifiers or compound conditions;
+neither verifies proficiency or complete suitability. Candidate recency means
 posted_at descending (null last), created_at descending, then job ID ascending.
 Deduplicate IDs across all supported and partial facts: aliases, repeated facts,
 and repeated required/preferred labels do not inflate counts. General traits and

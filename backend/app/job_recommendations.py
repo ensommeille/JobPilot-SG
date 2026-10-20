@@ -143,6 +143,7 @@ def recommend(
         concrete = specific_overlap_ids(analysis.items)
         if not concrete:
             continue
+        exact = specific_overlap_ids(supported)
         gaps = [i for i in analysis.items if i.outcome == "gap"]
         overlaps = [i for i in analysis.items if i.outcome == "unknown" and i.skill_overlaps]
         item = Recommendation(
@@ -157,9 +158,11 @@ def recommend(
             overlaps=overlaps,
             work_constraints=analysis.work_constraints,
         )
-        # Model-assigned required/preferred labels are unverified and do not affect
-        # rank. Generic soft skills, duplicates and synonyms cannot inflate rank.
-        ordered.append(((bool(gaps), -len(concrete), index), item))
+        # Distinct exact skill entries are stronger evidence than partial mentions,
+        # whose qualifiers or compound conditions remain unknown. Neither is a
+        # proficiency claim. Generic traits, aliases and model-assigned priorities
+        # cannot inflate rank; explicit gaps still take precedence.
+        ordered.append(((bool(gaps), -len(exact), -len(concrete), index), item))
     ordered.sort(key=lambda pair: pair[0])
     report.matched = len(ordered)
     report.items = [item for _, item in ordered[: payload.limit]]

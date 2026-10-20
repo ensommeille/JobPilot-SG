@@ -8,7 +8,9 @@ import pytest
 from sqlalchemy import event, func, select
 
 from app.db.models import JobExtractionRun, JobPosting, UserProfile
+from app.job_extraction.models import JobExtractionSchema
 from app.job_extraction.persistence import job_input
+from app.job_extraction.quality import assess_quality
 from app.job_matching import MatchItem, SkillOverlap
 from app.job_recommendations import specific_overlap_ids
 from tests.test_job_matching import sample as matching_sample  # noqa: F401
@@ -185,6 +187,40 @@ def test_rank_prefers_no_gaps_and_has_stable_limit(client, db, live):
     assert data["matched"] == 2
     assert data["items"][0]["job_id"] == str(other.id)
     assert request(client, live, limit=1).json() == data
+
+
+def test_rank_prefers_exact_skill_evidence_over_more_partial_mentions(client, db, live):
+    client.put("/profile", headers=live[0], json={"skills": ["Python", "SQL", "Docker"]})
+    partial_job, partial_run = clone(db, live, title="More partial mentions")
+    partial_job.description = (
+        "Advanced Python required. Advanced SQL required. Advanced Docker required."
+    )
+    extraction = deepcopy(partial_run.result_json["extraction"])
+    extraction["required_skills"] = [
+        {"value": skill, "evidence": f"Advanced {skill} required."}
+        for skill in ("Python", "SQL", "Docker")
+    ]
+    extraction["preferred_skills"] = []
+    current = job_input(partial_job)
+    partial_run.input_hash = current.input_hash
+    partial_run.input_json = current.model_dump()
+    partial_run.result_json = {
+        **partial_run.result_json,
+        "input_hash": current.input_hash,
+        "extraction": extraction,
+        "quality": assess_quality(
+            JobExtractionSchema.model_validate(extraction), partial_job.description
+        ).model_dump(),
+    }
+    db.commit()
+
+    report = request(client, live).json()
+    assert report["status"] == "ready"
+    assert report["matched"] == 2
+    assert report["items"][0]["job_id"] == str(live[1].id)
+    assert len(report["items"][0]["supported"]) == 2
+    assert report["items"][1]["job_id"] == str(partial_job.id)
+    assert len(report["items"][1]["overlaps"]) == 3
 
 
 def test_latest_failed_run_does_not_fall_back(client, db, live):

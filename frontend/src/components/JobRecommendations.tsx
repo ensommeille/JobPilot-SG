@@ -38,7 +38,7 @@ interface Report {
 const messages = {
   profile_needed: 'Add specific tools or domain skills to your saved profile, such as Excel, AutoCAD or Python. Short descriptions are supported. General traits or learning goals alone do not generate suggestions; uploaded resumes are not read.',
   no_candidates: 'No active, unexpired jobs fit these filters. Clear a filter or browse all jobs below.',
-  no_evidence: 'Jobs were found, but their requirements are not ready for reliable comparison. You can still browse them below; updated, non-mock extraction is needed.',
+  no_evidence: 'Jobs were found, but their requirements are not ready for reliable comparison. This means job evidence is missing or unusable, not that your profile failed. You can still browse below; updated, non-mock extraction is needed.',
   no_matches: 'No explicit tool or domain-skill overlaps were found in the jobs evaluated. Recognition is limited to named skills, not every possible meaning. This is not a rejection: review your saved skills or browse all jobs.',
   ready: 'Suggestions to investigate — not an assessment of eligibility.',
 }
@@ -125,7 +125,7 @@ export default function JobRecommendations() {
         </details>}
       </>}
       {report.status === 'ready' && <>
-        <p className="recommendation-caveat">Preliminary: extraction is not human-verified. Order: no explicit gaps first, then more distinct tool or domain-skill overlaps, then newest postings. Generic traits and model-assigned priorities do not improve rank. Proficiency, years, alternatives, education and other conditions still need review.</p>
+        <p className="recommendation-caveat">Preliminary: extraction is not human-verified. Order: no explicit gaps first, then more distinct exact named-skill entries, then more distinct partial skill overlaps, then newest postings. Exact entries do not verify proficiency or complete requirements. Generic traits and model-assigned priorities do not improve rank. Years, alternatives, education and other conditions still need review.</p>
         <ol className="recommendation-list">
           {report.items.map(job => <li key={job.job_id}>
             <h3><Link to={'/jobs/' + job.job_id}>{job.title}</Link></h3>
