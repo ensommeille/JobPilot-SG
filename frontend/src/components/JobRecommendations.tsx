@@ -29,6 +29,14 @@ interface Suggestion {
   work_constraints?: WorkConstraintEvidence[]
   responsibility_matches?: ResponsibilityMatch[]
 }
+interface UnreviewedJob {
+  job_id: string
+  title: string
+  company: string
+  city: string | null
+  job_type: string | null
+  mentioned_skills: string[]
+}
 interface Report {
   status: 'ready' | 'profile_needed' | 'no_candidates' | 'no_evidence' | 'no_matches'
   scanned: number
@@ -39,11 +47,12 @@ interface Report {
   preferred_job_type: 'internship' | null
   excluded: Record<string, number>
   items: Suggestion[]
+  unreviewed_items: UnreviewedJob[]
 }
 const messages = {
   profile_needed: 'Add specific skills or describe work you have done in your saved experience. General traits and learning goals alone do not generate suggestions; uploaded resume files are not read.',
   no_candidates: 'No active, unexpired jobs fit these filters. Clear a filter or browse all jobs below.',
-  no_evidence: 'Jobs were found, but their requirements are not ready for reliable comparison. This means job evidence is missing or unusable, not that your profile failed. You can still browse below; updated, non-mock extraction is needed.',
+  no_evidence: 'Jobs were found, but their requirements are not ready for reliable comparison. This is not a rejection. You can still browse all jobs below; updated, non-mock extraction is needed for evidence-based suggestions.',
   no_matches: 'No clear skill or project-activity overlaps were found in the jobs evaluated. Recognition is limited to named skills and described work, not every possible meaning. This is not a rejection: review your saved profile or browse all jobs.',
   ready: 'Suggestions to investigate — not an assessment of eligibility.',
 }
@@ -161,6 +170,16 @@ export default function JobRecommendations() {
           </li>)}
         </ol>
       </>}
+      {!!report.unreviewed_items?.length && <section aria-label="Unreviewed jobs to inspect">
+        <h3>Unreviewed jobs to inspect</h3>
+        <p className="recommendation-caveat">These public job descriptions mention skills in your saved profile, but their requirements have not been extracted or checked. This is keyword discovery, not a match, score, recommendation, or eligibility decision. Internships appear first by default; use the job type filter for other roles. Open each job and verify the original posting.</p>
+        <ol className="recommendation-list">{report.unreviewed_items.map(job => <li key={job.job_id}>
+          <h3><Link to={'/jobs/' + job.job_id}>{job.title}</Link></h3>
+          <p className="muted">{job.company} · {job.city || 'City unspecified'} · {job.job_type || 'Type unspecified'}</p>
+          <p>Terms mentioned in the job description and your saved Skills list: {job.mentioned_skills.join(', ')}. Their context and importance have not been verified.</p>
+          <Link to={'/jobs/' + job.job_id}>Review job and original source</Link>
+        </li>)}</ol>
+      </section>}
     </div>}
   </section>
 }

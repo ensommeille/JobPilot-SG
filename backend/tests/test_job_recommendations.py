@@ -12,7 +12,11 @@ from app.job_extraction.models import JobExtractionSchema
 from app.job_extraction.persistence import job_input
 from app.job_extraction.quality import assess_quality
 from app.job_matching import MatchItem, SkillOverlap
-from app.job_recommendations import explicit_job_type_preference, specific_overlap_ids
+from app.job_recommendations import (
+    explicit_job_type_preference,
+    explicit_role_focus,
+    specific_overlap_ids,
+)
 from tests.test_job_matching import sample as matching_sample  # noqa: F401
 from tests.test_profiles_applications_assistant import auth_headers
 
@@ -150,6 +154,90 @@ def test_unavailable_exclusions(client, db, live, change, reason):
     report = request(client, live).json()
     assert report["status"] == "no_evidence"
     assert report["excluded"] == {reason: 1}
+
+
+def test_missing_public_extraction_yields_clearly_separate_lexical_lead(client, db, live):
+    _, job, run = live
+    job.source.source_type = "api"
+    job.description = "Python required. SQL preferred."
+    db.delete(run)
+    db.commit()
+
+    report = request(client, live).json()
+    assert report["status"] == "no_evidence"
+    assert report["evaluated"] == report["matched"] == 0
+    assert report["items"] == []
+    assert report["excluded"] == {"missing_extraction": 1}
+    assert report["unreviewed_items"] == [
+        {
+            "job_id": str(job.id),
+            "title": job.title,
+            "company": job.company,
+            "city": job.city,
+            "job_type": job.job_type,
+            "mentioned_skills": ["Python", "SQL"],
+        }
+    ]
+
+
+def test_unreviewed_leads_exclude_sandbox_and_do_not_invent_skills(client, db, live):
+    _, job, run = live
+    db.delete(run)
+    db.commit()
+    assert request(client, live).json()["unreviewed_items"] == []
+
+    job.source.source_type = "api"
+    job.description = "No named skills in this posting."
+    db.commit()
+    assert request(client, live).json()["unreviewed_items"] == []
+
+
+def test_unreviewed_public_leads_put_internships_first_without_claiming_a_match(
+    client, db, live
+):
+    _, job, run = live
+    job.source.source_type = "api"
+    job.job_type = "full-time"
+    job.description = "Python and SQL required."
+    intern, intern_run = clone(db, live, title="Software Engineer Intern")
+    intern.job_type = "internship"
+    intern.description = "Python required."
+    db.delete(run)
+    db.delete(intern_run)
+    db.commit()
+
+    report = request(client, live).json()
+    assert report["status"] == "no_evidence"
+    assert report["items"] == []
+    assert [item["job_id"] for item in report["unreviewed_items"]] == [
+        str(intern.id), str(job.id)
+    ]
+
+
+def test_unreviewed_leads_respect_explicit_role_interest_before_keyword_count(client, db, live):
+    _, job, run = live
+    job.source.source_type = "api"
+    job.title = "Marketing Intern"
+    job.description = "Python and SQL required."
+    technical, technical_run = clone(db, live, title="Software Engineer Intern")
+    technical.job_type = "internship"
+    technical.description = "Python required."
+    profile = db.scalar(select(UserProfile))
+    profile.resume_summary = "Seeking a software engineering internship in Singapore."
+    db.delete(run)
+    db.delete(technical_run)
+    db.commit()
+
+    report = request(client, live).json()
+    assert [item["job_id"] for item in report["unreviewed_items"]] == [
+        str(technical.id), str(job.id)
+    ]
+
+
+def test_role_focus_does_not_infer_from_negated_search(client, db, live):
+    profile = db.scalar(select(UserProfile))
+    profile.resume_summary = "Not looking for a software engineering internship."
+    assert explicit_role_focus(profile) == set()
 
 
 def test_filters_are_literal_and_expired_closed_jobs_are_excluded(client, db, live):
