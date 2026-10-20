@@ -1,5 +1,6 @@
 """Bounded, evidence-led discovery. No LLM calls, persisted scores or eligibility claims."""
 
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID
@@ -17,6 +18,15 @@ from app.skill_signals import mentions, positive_profile
 
 router = APIRouter(tags=["job-recommendations"])
 CANDIDATE_LIMIT = 500
+_INTERNSHIP_INTENT = re.compile(
+    r"\b(?:seeking|looking for|applying for|available for)\b"
+    r"[^.;:!?\n]{0,120}\b(?:internship|intern role|intern position)\b",
+    re.IGNORECASE,
+)
+_NEGATED_INTENT = re.compile(r"\b(?:not|never|no longer|except|after|before)\b", re.IGNORECASE)
+_INVALID_INTENT_PREFIX = re.compile(
+    r"\b(?:not|never|no longer|previously|formerly|was|were)\s*$", re.IGNORECASE
+)
 
 
 class RecommendationRequest(BaseModel):
@@ -49,6 +59,8 @@ class RecommendationReport(BaseModel):
     evaluated: int = 0
     truncated: bool = False
     matched: int = 0
+    profile_skill_count: int = 0
+    preferred_job_type: Literal["internship"] | None = None
     excluded: dict[str, int] = Field(default_factory=dict)
     items: list[Recommendation] = Field(default_factory=list)
 
@@ -62,6 +74,20 @@ def specific_overlap_ids(items: list[MatchItem]) -> set[str]:
     }
 
 
+def explicit_job_type_preference(profile: UserProfile | None) -> Literal["internship"] | None:
+    """Use only an affirmative job-search/availability statement, not a past role."""
+    if profile is None:
+        return None
+    for text in (profile.resume_summary or "", profile.availability_period or ""):
+        for match in _INTERNSHIP_INTENT.finditer(text):
+            prefix = text[max(0, match.start() - 20) : match.start()]
+            if not _NEGATED_INTENT.search(match.group()) and not _INVALID_INTENT_PREFIX.search(
+                prefix
+            ):
+                return "internship"
+    return None
+
+
 @router.post("/jobs/recommendations", response_model=RecommendationReport)
 def recommend(
     payload: RecommendationRequest, response: Response, db: Database, user: CurrentUser
@@ -69,20 +95,25 @@ def recommend(
     response.headers["Cache-Control"] = "no-store"
     profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
     affirmative = positive_profile(profile.skills) if profile else {}
-    has_skills = any(
-        mention.skill_id in affirmative and mention.kind == "specific"
+    specific_profile_ids = {
+        mention.skill_id
         for text in (profile.skills if profile else [])
         for mention in mentions(text)
-    )
+        if mention.skill_id in affirmative and mention.kind == "specific"
+    }
+    profile_skill_count = len(specific_profile_ids)
+    preference = explicit_job_type_preference(profile)
     # Request-local only: avoid parsing personal project text once per candidate.
     projects = (
         prepare_project_evidence(profile.experience if profile else None)
         if payload.include_experience
         else {}
     )
-    if not has_skills and not projects:
+    if not profile_skill_count and not projects:
         return RecommendationReport(
             status="profile_needed",
+            profile_skill_count=0,
+            preferred_job_type=preference,
             version="evidence-discovery-v3"
             if payload.include_experience
             else "evidence-discovery-v2",
@@ -116,7 +147,12 @@ def recommend(
             .limit(CANDIDATE_LIMIT + 1)
         )
     )
-    report = RecommendationReport(status="no_candidates", truncated=len(jobs) > CANDIDATE_LIMIT)
+    report = RecommendationReport(
+        status="no_candidates",
+        truncated=len(jobs) > CANDIDATE_LIMIT,
+        profile_skill_count=profile_skill_count,
+        preferred_job_type=preference,
+    )
     if payload.include_experience:
         report.version = "evidence-discovery-v3"
     jobs = jobs[:CANDIDATE_LIMIT]
@@ -181,6 +217,7 @@ def recommend(
         }
         if not concrete and not activities:
             continue
+        exact = specific_overlap_ids(supported)
         gaps = [i for i in analysis.items if i.outcome == "gap"]
         overlaps = [i for i in analysis.items if i.outcome == "unknown" and i.skill_overlaps]
         item = Recommendation(
@@ -196,11 +233,14 @@ def recommend(
             work_constraints=analysis.work_constraints,
             responsibility_matches=analysis.responsibility_matches,
         )
-        # Model-assigned required/preferred labels are unverified and do not affect
-        # rank. Generic soft skills, duplicates and synonyms cannot inflate rank.
-        # Project activities are a separate, deduplicated discovery signal. They
-        # never become satisfied requirements or override explicit skill gaps.
-        ordered.append(((bool(gaps), -len(concrete), -len(activities), index), item))
+        # Distinct exact skill entries are stronger evidence than partial mentions.
+        # Project activities are a separate, deduplicated discovery signal. Neither
+        # is a proficiency claim; generic traits, aliases and model-assigned
+        # priorities cannot inflate rank, and explicit gaps still take precedence.
+        type_mismatch = preference is not None and (job.job_type or "").casefold() != preference
+        ordered.append(
+            ((bool(gaps), type_mismatch, -len(exact), -len(concrete), -len(activities), index), item)
+        )
     ordered.sort(key=lambda pair: pair[0])
     report.matched = len(ordered)
     report.items = [item for _, item in ordered[: payload.limit]]

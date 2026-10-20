@@ -35,14 +35,16 @@ interface Report {
   evaluated: number
   truncated: boolean
   matched: number
+  profile_skill_count: number
+  preferred_job_type: 'internship' | null
   excluded: Record<string, number>
   items: Suggestion[]
 }
 const messages = {
   profile_needed: 'Add specific skills or describe work you have done in your saved experience. General traits and learning goals alone do not generate suggestions; uploaded resume files are not read.',
   no_candidates: 'No active, unexpired jobs fit these filters. Clear a filter or browse all jobs below.',
-  no_evidence: 'Jobs were found, but their requirements are not ready for reliable comparison. You can still browse them below; updated, non-mock extraction is needed.',
-  no_matches: 'No clear skill or project-activity overlaps were found in the jobs evaluated. Recognition is limited, so this is not a rejection. Review your saved profile or browse all jobs.',
+  no_evidence: 'Jobs were found, but their requirements are not ready for reliable comparison. This means job evidence is missing or unusable, not that your profile failed. You can still browse below; updated, non-mock extraction is needed.',
+  no_matches: 'No clear tool, domain-skill or project-activity overlaps were found in the jobs evaluated. Recognition is limited to named skills and described work, not every possible meaning. This is not a rejection: review your saved profile or browse all jobs.',
   ready: 'Suggestions to investigate — not an assessment of eligibility.',
 }
 
@@ -102,7 +104,7 @@ export default function JobRecommendations() {
 
   return <section className="job-recommendations" aria-labelledby="recommendations-title" aria-busy={busy}>
     <h2 id="recommendations-title">For you</h2>
-    <p>Find jobs with skills or activities related to your saved profile. See the evidence before deciding what to explore.</p>
+    <p>Find jobs with tools, domain skills or activities related to your saved profile and real job descriptions. Shared terms are a reason to investigate, not proof that you meet every requirement. Skill evidence comes from your saved Skills list, not an uploaded resume file.</p>
     <form onSubmit={findJobs}>
       <div className="recommendation-filters">
         <label>Role or company (optional)<input className="input" maxLength={200} value={filters.keyword} onChange={e => changeFilter('keyword', e.target.value)} /></label>
@@ -119,6 +121,8 @@ export default function JobRecommendations() {
     {error && <p role="alert">{error}</p>}
     {report && <div>
       <p role="status"><strong>{messages[report.status]}</strong></p>
+      <p className="muted">Using {report.profile_skill_count} distinct named tool or domain {report.profile_skill_count === 1 ? 'skill' : 'skills'} from your saved Skills list. Resume files are not parsed.</p>
+      {report.preferred_job_type === 'internship' && <p className="muted">Your saved introduction or availability explicitly mentions seeking an internship. Internship jobs appear before other job types when the skill-gap evidence is otherwise comparable; other jobs remain visible.</p>}
       {report.status !== 'profile_needed' && <>
         <p>{report.evaluated} of {report.scanned} candidate jobs evaluated. {report.matched} with related evidence; showing {report.items.length}.</p>
         {report.truncated && <p>Only the newest 500 candidates were scanned. Narrow your filters to explore others.</p>}
@@ -128,8 +132,7 @@ export default function JobRecommendations() {
         </details>}
       </>}
       {report.status === 'ready' && <>
-        <p className="recommendation-caveat">Preliminary evidence, not verified eligibility. Skills and project activities are shown separately.</p>
-        <details><summary>How suggestions are ordered</summary><p>No explicit gaps first, then more distinct concrete skill overlaps, then related project activities, then newest postings. Generic traits and model-assigned priorities do not improve rank. Secondary and conditional duties are kept for context, not ranking. Proficiency and other conditions still need review.</p></details>
+        <p className="recommendation-caveat">Preliminary: extraction is not human-verified. Order: no explicit gaps first, then an explicitly stated internship preference if present, more distinct exact named-skill entries, more distinct concrete skill overlaps, then related project activities, then newest postings. Exact entries do not verify proficiency or complete requirements. Generic traits and model-assigned priorities do not improve rank. Years, alternatives, education and other conditions still need review.</p>
         <ol className="recommendation-list">
           {report.items.map(job => <li key={job.job_id}>
             <h3><Link to={'/jobs/' + job.job_id}>{job.title}</Link></h3>

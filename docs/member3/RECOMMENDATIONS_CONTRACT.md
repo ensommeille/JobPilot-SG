@@ -106,8 +106,15 @@ whose complete requirement remains unknown. General traits such as communication
 or teamwork alone cannot satisfy either gate, even when the profile contains an
 unrelated specific skill.
 
-Sort lexicographically by absence of any explicit skill gap, number of distinct
-specific skill IDs descending, then candidate recency/ID. Candidate recency means
+Sort lexicographically by absence of any explicit skill gap, a matching internship
+job type when the saved introduction or availability affirmatively and explicitly
+seeks an internship, number of distinct exact supported specific skill IDs
+descending, total distinct specific skill overlap IDs descending, then candidate
+recency/ID. The internship preference reorders but never excludes other job types;
+past internship experience, negated intent and uploaded files do not imply it.
+Exact entries outrank partial
+mentions because the latter retain unverified qualifiers or compound conditions;
+neither verifies proficiency or complete suitability. Candidate recency means
 posted_at descending (null last), created_at descending, then job ID ascending.
 Deduplicate IDs across all supported and partial facts: aliases, repeated facts,
 and repeated required/preferred labels do not inflate counts. General traits and
@@ -127,6 +134,10 @@ overlap gate. scanned is the bounded candidate count; evaluated counts jobs with
 usable non-mock extracted requirements; matched counts all jobs passing the overlap
 gate in that pool, before limit. excluded groups unavailable reasons. truncated
 indicates that the candidate pool exceeded 500 jobs.
+profile_skill_count is the number of distinct recognized affirmative specific skills
+in the saved Skills list, not the number of entries or uploaded-resume skills.
+preferred_job_type is `internship` only for an explicit affirmative saved intent;
+otherwise it is null. These fields make the comparison scope visible to the user.
 
 items contain job identity/title/company/city/type and supported/gaps/unknown lists
 of the existing MatchItem shape. Each MatchItem adds skill_overlaps, a list of
