@@ -44,7 +44,7 @@ const messages = {
   profile_needed: 'Add specific skills or describe work you have done in your saved experience. General traits and learning goals alone do not generate suggestions; uploaded resume files are not read.',
   no_candidates: 'No active, unexpired jobs fit these filters. Clear a filter or browse all jobs below.',
   no_evidence: 'Jobs were found, but their requirements are not ready for reliable comparison. This means job evidence is missing or unusable, not that your profile failed. You can still browse below; updated, non-mock extraction is needed.',
-  no_matches: 'No clear tool, domain-skill or project-activity overlaps were found in the jobs evaluated. Recognition is limited to named skills and described work, not every possible meaning. This is not a rejection: review your saved profile or browse all jobs.',
+  no_matches: 'No clear skill or project-activity overlaps were found in the jobs evaluated. Recognition is limited to named skills and described work, not every possible meaning. This is not a rejection: review your saved profile or browse all jobs.',
   ready: 'Suggestions to investigate — not an assessment of eligibility.',
 }
 
@@ -132,7 +132,8 @@ export default function JobRecommendations() {
         </details>}
       </>}
       {report.status === 'ready' && <>
-        <p className="recommendation-caveat">Preliminary: extraction is not human-verified. Order: no explicit gaps first, then an explicitly stated internship preference if present, more distinct exact named-skill entries, more distinct concrete skill overlaps, then related project activities, then newest postings. Exact entries do not verify proficiency or complete requirements. Generic traits and model-assigned priorities do not improve rank. Years, alternatives, education and other conditions still need review.</p>
+        <p className="recommendation-caveat">Preliminary: extraction is not human-verified. Skills and project activities are shown separately.</p>
+        <details><summary>How suggestions are ordered</summary><p>No explicit gaps first, then an explicitly stated internship preference if present, more distinct exact named-skill entries, more distinct concrete skill overlaps, then related project activities, then newest postings. Exact entries do not verify proficiency or complete requirements. Generic traits and model-assigned priorities do not improve rank. Years, alternatives, education and other conditions still need review.</p></details>
         <ol className="recommendation-list">
           {report.items.map(job => <li key={job.job_id}>
             <h3><Link to={'/jobs/' + job.job_id}>{job.title}</Link></h3>
