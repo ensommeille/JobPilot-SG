@@ -1,5 +1,34 @@
 # Evidence-led recommendations v2
 
+## Opt-in project evidence — 2026-10-19
+
+Requests may add strict boolean `include_experience`, default false. Legacy
+requests keep the skill-only gates and ordering described below. Opt-in reports
+use `evidence-discovery-v3`; each suggestion adds the independent
+`responsibility_matches` collection defined in [the matching contract](MATCH_ANALYSIS_CONTRACT.md).
+No database changes, paid calls or new sources are involved.
+
+With the switch enabled, a saved profile may enter discovery through recognized
+performed-project activity in `experience`, even without specific skill tags.
+A job must have either the existing concrete skill intersection or related
+project evidence for at least one non-conditional, non-secondary duty. Generic
+traits, technology lists, hypothetical/learning-only project text and unsupported
+activities cannot satisfy the new gate. Missing project evidence is not a gap.
+
+Sort by explicit gaps first (none preferred), then distinct concrete skill IDs,
+then distinct eligible activity IDs, then the existing recency/ID ordering.
+Duplicated duty or project text cannot increase the activity count. Duties are
+not appended to `supported`, `gaps`, `unknown` or `overlaps`; those remain applicant
+requirements. Model priority does not boost rank; secondary/conditional scope
+can only restrict the new evidence path.
+
+Valid duties-only jobs may now be evaluated on the opted-in path. Missing, stale,
+failed, invalid and mock extractions remain excluded. Candidate limits, constant
+query count, account isolation and explicit user-triggered requests are unchanged.
+This is an inspectable, limited activity-matching heuristic, not an exhaustive
+semantic model or an employment eligibility decision. Historical validation and
+the v2 default behavior below remain documented as earlier checkpoints.
+
 ## Typed requirement-group refinement — 2026-10-16
 
 This refinement starts from `feat/course-closeout` / `e2fe853`, which already
@@ -77,8 +106,15 @@ whose complete requirement remains unknown. General traits such as communication
 or teamwork alone cannot satisfy either gate, even when the profile contains an
 unrelated specific skill.
 
-Sort lexicographically by absence of any explicit skill gap, number of distinct
-specific skill IDs descending, then candidate recency/ID. Candidate recency means
+Sort lexicographically by absence of any explicit skill gap, a matching internship
+job type when the saved introduction or availability affirmatively and explicitly
+seeks an internship, number of distinct exact supported specific skill IDs
+descending, total distinct specific skill overlap IDs descending, then candidate
+recency/ID. The internship preference reorders but never excludes other job types;
+past internship experience, negated intent and uploaded files do not imply it.
+Exact entries outrank partial
+mentions because the latter retain unverified qualifiers or compound conditions;
+neither verifies proficiency or complete suitability. Candidate recency means
 posted_at descending (null last), created_at descending, then job ID ascending.
 Deduplicate IDs across all supported and partial facts: aliases, repeated facts,
 and repeated required/preferred labels do not inflate counts. General traits and
@@ -98,6 +134,10 @@ overlap gate. scanned is the bounded candidate count; evaluated counts jobs with
 usable non-mock extracted requirements; matched counts all jobs passing the overlap
 gate in that pool, before limit. excluded groups unavailable reasons. truncated
 indicates that the candidate pool exceeded 500 jobs.
+profile_skill_count is the number of distinct recognized affirmative specific skills
+in the saved Skills list, not the number of entries or uploaded-resume skills.
+preferred_job_type is `internship` only for an explicit affirmative saved intent;
+otherwise it is null. These fields make the comparison scope visible to the user.
 
 items contain job identity/title/company/city/type and supported/gaps/unknown lists
 of the existing MatchItem shape. Each MatchItem adds skill_overlaps, a list of

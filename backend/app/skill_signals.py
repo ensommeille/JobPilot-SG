@@ -44,6 +44,15 @@ _SPECIFIC = (
     ("php", "PHP", ()),
     ("ruby", "Ruby", ("Ruby programming",)),
     ("sql", "SQL", ()),
+    ("pandas", "Pandas", ()),
+    ("numpy", "NumPy", ()),
+    ("scikit_learn", "scikit-learn", ("scikit learn", "sklearn")),
+    ("matplotlib", "Matplotlib", ()),
+    ("rest_api", "REST API", ("REST APIs", "RESTful API", "RESTful APIs")),
+    ("linux", "Linux", ()),
+    ("spark", "Apache Spark", ("Spark",)),
+    ("hadoop", "Apache Hadoop", ("Hadoop",)),
+    ("kafka", "Apache Kafka", ("Kafka",)),
     ("postgresql", "PostgreSQL", ("Postgres",)),
     ("mysql", "MySQL", ()),
     ("sqlite", "SQLite", ()),
@@ -183,6 +192,8 @@ _AMBIGUOUS = frozenset(
         "flask",
         "illustrator",
         "ts",
+        "spark",
+        "pandas",
     }
 )
 _BEFORE_CONTEXT = re.compile(

@@ -32,6 +32,70 @@ def test_real_job_prose_and_verbatim_terms():
     assert not is_uncertain_or_negative(text)
 
 
+def test_named_data_engineering_tools_from_a_technical_profile():
+    skills = [
+        "Pandas",
+        "NumPy",
+        "scikit-learn",
+        "Matplotlib",
+        "REST APIs",
+        "Linux",
+        "Apache Spark",
+        "Hadoop",
+        "Kafka",
+    ]
+    assert set(positive_profile(skills)) == {
+        "pandas",
+        "numpy",
+        "scikit_learn",
+        "matplotlib",
+        "rest_api",
+        "linux",
+        "spark",
+        "hadoop",
+        "kafka",
+    }
+    assert ids("Experience with Pandas, NumPy, scikit-learn, Spark and Kafka required.") == [
+        "pandas",
+        "numpy",
+        "scikit_learn",
+        "spark",
+        "kafka",
+    ]
+
+
+def test_anonymized_software_data_profile_has_full_named_skill_coverage():
+    skills = [
+        "Python",
+        "SQL",
+        "Java",
+        "Pandas",
+        "NumPy",
+        "scikit-learn",
+        "Excel",
+        "Power BI",
+        "Matplotlib",
+        "FastAPI",
+        "Vue 3",
+        "REST APIs",
+        "MySQL",
+        "MongoDB",
+        "Git",
+        "Docker",
+        "Linux",
+        "Spark",
+        "Hadoop",
+        "Kafka",
+        "Data Analysis",
+    ]
+    assert len(positive_profile(skills)) == len(skills)
+
+
+def test_ordinary_spark_and_pandas_are_not_technical_skill_evidence():
+    assert ids("Spark curiosity and protect pandas in the wild.") == []
+    assert positive_profile(["Learning Spark", "No experience with Kafka"]) == {}
+
+
 @pytest.mark.parametrize(
     "text, expected",
     [

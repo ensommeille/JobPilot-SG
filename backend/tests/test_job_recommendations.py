@@ -8,9 +8,15 @@ import pytest
 from sqlalchemy import event, func, select
 
 from app.db.models import JobExtractionRun, JobPosting, UserProfile
+from app.job_extraction.models import JobExtractionSchema
 from app.job_extraction.persistence import job_input
+from app.job_extraction.quality import assess_quality
 from app.job_matching import MatchItem, SkillOverlap
-from app.job_recommendations import specific_overlap_ids
+from app.job_recommendations import (
+    explicit_job_type_preference,
+    explicit_role_focus,
+    specific_overlap_ids,
+)
 from tests.test_job_matching import sample as matching_sample  # noqa: F401
 from tests.test_profiles_applications_assistant import auth_headers
 
@@ -73,6 +79,7 @@ def test_ready_private_read_only_and_explicit_evidence(client, db, live):
     assert result.headers["cache-control"] == "no-store"
     data = result.json()
     assert data["status"] == "ready"
+    assert data["profile_skill_count"] == 2
     assert data["evaluated"] == data["scanned"] == data["matched"] == 1
     item = data["items"][0]
     assert [i["requirement"] for i in item["supported"]] == ["Python", "SQL"]
@@ -149,6 +156,90 @@ def test_unavailable_exclusions(client, db, live, change, reason):
     assert report["excluded"] == {reason: 1}
 
 
+def test_missing_public_extraction_yields_clearly_separate_lexical_lead(client, db, live):
+    _, job, run = live
+    job.source.source_type = "api"
+    job.description = "Python required. SQL preferred."
+    db.delete(run)
+    db.commit()
+
+    report = request(client, live).json()
+    assert report["status"] == "no_evidence"
+    assert report["evaluated"] == report["matched"] == 0
+    assert report["items"] == []
+    assert report["excluded"] == {"missing_extraction": 1}
+    assert report["unreviewed_items"] == [
+        {
+            "job_id": str(job.id),
+            "title": job.title,
+            "company": job.company,
+            "city": job.city,
+            "job_type": job.job_type,
+            "mentioned_skills": ["Python", "SQL"],
+        }
+    ]
+
+
+def test_unreviewed_leads_exclude_sandbox_and_do_not_invent_skills(client, db, live):
+    _, job, run = live
+    db.delete(run)
+    db.commit()
+    assert request(client, live).json()["unreviewed_items"] == []
+
+    job.source.source_type = "api"
+    job.description = "No named skills in this posting."
+    db.commit()
+    assert request(client, live).json()["unreviewed_items"] == []
+
+
+def test_unreviewed_public_leads_put_internships_first_without_claiming_a_match(
+    client, db, live
+):
+    _, job, run = live
+    job.source.source_type = "api"
+    job.job_type = "full-time"
+    job.description = "Python and SQL required."
+    intern, intern_run = clone(db, live, title="Software Engineer Intern")
+    intern.job_type = "internship"
+    intern.description = "Python required."
+    db.delete(run)
+    db.delete(intern_run)
+    db.commit()
+
+    report = request(client, live).json()
+    assert report["status"] == "no_evidence"
+    assert report["items"] == []
+    assert [item["job_id"] for item in report["unreviewed_items"]] == [
+        str(intern.id), str(job.id)
+    ]
+
+
+def test_unreviewed_leads_respect_explicit_role_interest_before_keyword_count(client, db, live):
+    _, job, run = live
+    job.source.source_type = "api"
+    job.title = "Marketing Intern"
+    job.description = "Python and SQL required."
+    technical, technical_run = clone(db, live, title="Software Engineer Intern")
+    technical.job_type = "internship"
+    technical.description = "Python required."
+    profile = db.scalar(select(UserProfile))
+    profile.resume_summary = "Seeking a software engineering internship in Singapore."
+    db.delete(run)
+    db.delete(technical_run)
+    db.commit()
+
+    report = request(client, live).json()
+    assert [item["job_id"] for item in report["unreviewed_items"]] == [
+        str(technical.id), str(job.id)
+    ]
+
+
+def test_role_focus_does_not_infer_from_negated_search(client, db, live):
+    profile = db.scalar(select(UserProfile))
+    profile.resume_summary = "Not looking for a software engineering internship."
+    assert explicit_role_focus(profile) == set()
+
+
 def test_filters_are_literal_and_expired_closed_jobs_are_excluded(client, db, live):
     assert (
         request(client, live, keyword="FICTIONAL", city="singapore", job_type="internship").json()[
@@ -185,6 +276,128 @@ def test_rank_prefers_no_gaps_and_has_stable_limit(client, db, live):
     assert data["matched"] == 2
     assert data["items"][0]["job_id"] == str(other.id)
     assert request(client, live, limit=1).json() == data
+
+
+def test_rank_prefers_exact_skill_evidence_over_more_partial_mentions(client, db, live):
+    client.put("/profile", headers=live[0], json={"skills": ["Python", "SQL", "Docker"]})
+    partial_job, partial_run = clone(db, live, title="More partial mentions")
+    partial_job.description = (
+        "Advanced Python required. Advanced SQL required. Advanced Docker required."
+    )
+    extraction = deepcopy(partial_run.result_json["extraction"])
+    extraction["required_skills"] = [
+        {"value": skill, "evidence": f"Advanced {skill} required."}
+        for skill in ("Python", "SQL", "Docker")
+    ]
+    extraction["preferred_skills"] = []
+    current = job_input(partial_job)
+    partial_run.input_hash = current.input_hash
+    partial_run.input_json = current.model_dump()
+    partial_run.result_json = {
+        **partial_run.result_json,
+        "input_hash": current.input_hash,
+        "extraction": extraction,
+        "quality": assess_quality(
+            JobExtractionSchema.model_validate(extraction), partial_job.description
+        ).model_dump(),
+    }
+    db.commit()
+
+    report = request(client, live).json()
+    assert report["status"] == "ready"
+    assert report["matched"] == 2
+    assert report["items"][0]["job_id"] == str(live[1].id)
+    assert len(report["items"][0]["supported"]) == 2
+    assert report["items"][1]["job_id"] == str(partial_job.id)
+    assert len(report["items"][1]["overlaps"]) == 3
+
+
+def test_data_internship_uses_named_cv_like_tools_not_only_generic_python(client, db, live):
+    response = client.put(
+        "/profile",
+        headers=live[0],
+        json={"skills": ["Python", "SQL", "Pandas", "NumPy", "Kafka"]},
+    )
+    assert response.status_code == 200
+    data_job, data_run = clone(db, live, title="Data engineering internship")
+    data_job.description = "Pandas required. NumPy required. Kafka required."
+    extraction = JobExtractionSchema.model_validate(
+        {
+            "summary": None,
+            "responsibilities": [],
+            "required_skills": [
+                {"value": skill, "evidence": f"{skill} required."}
+                for skill in ("Pandas", "NumPy", "Kafka")
+            ],
+            "preferred_skills": [],
+            "required_qualifications": [],
+            "preferred_qualifications": [],
+            "languages": [],
+            "education": {"degree": None, "enrollment": None, "fields_of_study": []},
+            "experience": {"requirement": None, "minimum_years": None},
+        }
+    )
+    current = job_input(data_job)
+    data_run.input_hash = current.input_hash
+    data_run.input_json = current.model_dump()
+    data_run.result_json = {
+        **data_run.result_json,
+        "input_hash": current.input_hash,
+        "extraction": extraction.model_dump(),
+        "quality": assess_quality(extraction, data_job.description).model_dump(),
+    }
+    db.commit()
+
+    report = request(client, live).json()
+    assert report["status"] == "ready"
+    assert report["profile_skill_count"] == 5
+    assert report["items"][0]["job_id"] == str(data_job.id)
+    assert {item["requirement"] for item in report["items"][0]["supported"]} == {
+        "Pandas",
+        "NumPy",
+        "Kafka",
+    }
+
+
+def test_explicit_internship_goal_breaks_equal_evidence_tie(client, db, live):
+    full_time, _ = clone(db, live, title="Newer full-time role")
+    full_time.job_type = "full-time"
+    full_time.created_at = live[1].created_at + timedelta(seconds=5)
+    db.commit()
+    assert request(client, live).json()["items"][0]["job_id"] == str(full_time.id)
+
+    response = client.put(
+        "/profile",
+        headers=live[0],
+        json={
+            "skills": ["Python", "SQL"],
+            "resume_summary": "Seeking a software engineering internship.",
+            "availability_period": "Available for an internship in summer 2030.",
+        },
+    )
+    assert response.status_code == 200
+    report = request(client, live).json()
+    assert report["status"] == "ready"
+    assert report["preferred_job_type"] == "internship"
+    assert report["items"][0]["job_id"] == str(live[1].id)
+    assert report["items"][1]["job_id"] == str(full_time.id)
+
+
+@pytest.mark.parametrize(
+    "summary,availability,expected",
+    [
+        ("Seeking a software internship.", None, "internship"),
+        (None, "Available for a full-time, on-site internship next summer.", "internship"),
+        ("Completed a data internship; seeking a full-time role.", None, None),
+        ("Not seeking an internship.", None, None),
+        ("Seeking a full-time role after an internship.", None, None),
+        (None, "Not available for an internship.", None),
+        (None, "Previously available for an internship.", None),
+    ],
+)
+def test_only_explicit_affirmative_internship_intent_is_used(summary, availability, expected):
+    profile = UserProfile(resume_summary=summary, availability_period=availability)
+    assert explicit_job_type_preference(profile) == expected
 
 
 def test_latest_failed_run_does_not_fall_back(client, db, live):

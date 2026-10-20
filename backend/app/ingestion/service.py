@@ -172,13 +172,21 @@ def run_source(
     try:
         batch = adapter.collect(max_links=max_links, max_details=max_details)
         records = [item.known_fields for item in batch.items]
-        stats = SqlAlchemyJobRepository(db, source).upsert(records)
+        repository = SqlAlchemyJobRepository(db, source)
+        stats = repository.upsert(records)
+        closed = 0
+        if (
+            source.source_type == SourceType.JSON.value
+            and batch.status.value == "succeeded"
+            and 0 < batch.discovered_count == batch.attempted_count == len(records)
+        ):
+            closed = repository.close_missing({record.external_id for record in records})
         crawl_run = _reload_run(db, run_id)
         crawl_run.status = CrawlRunStatus(batch.status.value)
         crawl_run.finished_at = datetime.now(UTC)
         crawl_run.items_found = batch.discovered_count
         crawl_run.items_new = stats.items_new
-        crawl_run.items_updated = stats.items_updated
+        crawl_run.items_updated = stats.items_updated + closed
         crawl_run.items_failed = len(batch.failures)
         crawl_run.error_summary = [failure.model_dump(mode="json") for failure in batch.failures]
         source.status = {
