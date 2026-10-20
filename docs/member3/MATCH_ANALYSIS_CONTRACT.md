@@ -1,5 +1,38 @@
 # Offline job matching v2
 
+## Opt-in project evidence — 2026-10-19
+
+`POST /jobs/{job_id}/match-analysis` additionally accepts
+`{"include_experience": true}`. The switch is a strict boolean, defaults to false,
+and does not accept client-supplied experience, model settings or account IDs.
+Legacy requests retain the v2 comparison and status behavior. Opt-in responses
+use `evidence-overlap-v3` and add `responsibility_matches` independently of `items`.
+The new collection defaults to empty for old requests.
+
+Each row contains `responsibility`, `job_evidence`, `priority`, `condition`,
+`outcome` (`related_evidence` or `unknown`), `reason`, `activities` (stable IDs),
+and `profile_evidence` (original excerpts from the authenticated user's saved
+`experience`). Duties never become satisfied applicant requirements, explicit
+gaps or a match percentage. The existing skill and work-condition meanings stay
+unchanged. A duties-only, non-mock extraction can now yield a preliminary
+comparison when opted in; no comparable project evidence remains unknown.
+
+The deterministic recognizer checks bounded activity/object patterns, not just
+shared technology words. Source quotes and their surrounding context must agree
+with the current JD. Plans, learning goals, uncertain/negative claims and bare
+technology lists are not performed-project evidence. Unsupported wording stays
+unknown. A related activity does not establish the full scope of a compound duty,
+seniority, proficiency or eligibility. Conditional/secondary scope stays visible;
+it cannot independently admit or improve a recommendation.
+
+This reads existing profile text only: it does not parse uploaded PDFs, infer new
+resume claims, call a model, write data or migrate the database. Existing latest-run,
+freshness, authentication and no-store protections still apply. The UI explicitly
+opts in and keeps project evidence separate from skill counts. Tests live in
+`test_responsibility_matching.py`, `test_experience_matching_api.py` and the existing
+matching/recommendation browser suites. The sections below describe the legacy
+default path and historical checkpoints, not a claim of universal semantic matching.
+
 ## Typed extraction refinement — 2026-10-16
 
 The starting branch for this change is `feat/course-closeout` at `e2fe853`.

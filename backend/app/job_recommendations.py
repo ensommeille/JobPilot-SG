@@ -13,6 +13,7 @@ from sqlalchemy.orm import joinedload
 from app.auth.dependencies import CurrentUser
 from app.db.models import JobExtractionRun, JobPosting, UserProfile
 from app.job_matching import Database, MatchItem, build_analysis
+from app.responsibility_matching import ResponsibilityMatch, prepare_project_evidence
 from app.skill_signals import mentions, positive_profile
 
 router = APIRouter(tags=["job-recommendations"])
@@ -34,6 +35,7 @@ class RecommendationRequest(BaseModel):
     city: str = Field(default="", max_length=120)
     job_type: str = Field(default="", max_length=80)
     limit: int = Field(default=10, ge=1, le=20)
+    include_experience: bool = False
 
 
 class Recommendation(BaseModel):
@@ -47,6 +49,7 @@ class Recommendation(BaseModel):
     unknown: list[MatchItem]
     overlaps: list[MatchItem] = Field(default_factory=list)
     work_constraints: list[MatchItem] = Field(default_factory=list)
+    responsibility_matches: list[ResponsibilityMatch] = Field(default_factory=list)
 
 
 class RecommendationReport(BaseModel):
@@ -100,11 +103,20 @@ def recommend(
     }
     profile_skill_count = len(specific_profile_ids)
     preference = explicit_job_type_preference(profile)
-    if not profile_skill_count:
+    # Request-local only: avoid parsing personal project text once per candidate.
+    projects = (
+        prepare_project_evidence(profile.experience if profile else None)
+        if payload.include_experience
+        else {}
+    )
+    if not profile_skill_count and not projects:
         return RecommendationReport(
             status="profile_needed",
             profile_skill_count=0,
             preferred_job_type=preference,
+            version="evidence-discovery-v3"
+            if payload.include_experience
+            else "evidence-discovery-v2",
         )
     today = datetime.now(timezone(timedelta(hours=8))).date()
     conditions = [
@@ -141,6 +153,8 @@ def recommend(
         profile_skill_count=profile_skill_count,
         preferred_job_type=preference,
     )
+    if payload.include_experience:
+        report.version = "evidence-discovery-v3"
     jobs = jobs[:CANDIDATE_LIMIT]
     report.scanned = len(jobs)
     if not jobs:
@@ -170,9 +184,22 @@ def recommend(
     ordered = []
     for index, job in enumerate(jobs):
         run = runs.get(job.id)
-        analysis = build_analysis(job, run, profile)
+        analysis = build_analysis(
+            job,
+            run,
+            profile,
+            include_experience=payload.include_experience,
+            project_evidence=projects,
+        )
         reason = analysis.reason
-        if analysis.status == "preliminary" and run.result_json.get("execution_mode") == "mock":
+        if (
+            run is not None
+            and (
+                analysis.status == "preliminary"
+                or (payload.include_experience and reason == "no_requirements")
+            )
+            and run.result_json.get("execution_mode") == "mock"
+        ):
             reason = "mock_extraction"
         if reason:
             report.excluded[reason] = report.excluded.get(reason, 0) + 1
@@ -180,7 +207,15 @@ def recommend(
         report.evaluated += 1
         supported = [i for i in analysis.items if i.outcome == "supported"]
         concrete = specific_overlap_ids(analysis.items)
-        if not concrete:
+        activities = {
+            activity
+            for match in analysis.responsibility_matches
+            if match.outcome == "related_evidence"
+            and match.priority not in {"conditional", "secondary"}
+            and match.condition is None
+            for activity in match.activities
+        }
+        if not concrete and not activities:
             continue
         exact = specific_overlap_ids(supported)
         gaps = [i for i in analysis.items if i.outcome == "gap"]
@@ -196,13 +231,16 @@ def recommend(
             unknown=[i for i in analysis.items if i.outcome == "unknown"],
             overlaps=overlaps,
             work_constraints=analysis.work_constraints,
+            responsibility_matches=analysis.responsibility_matches,
         )
-        # Distinct exact skill entries are stronger evidence than partial mentions,
-        # whose qualifiers or compound conditions remain unknown. Neither is a
-        # proficiency claim. Generic traits, aliases and model-assigned priorities
-        # cannot inflate rank; explicit gaps still take precedence.
+        # Distinct exact skill entries are stronger evidence than partial mentions.
+        # Project activities are a separate, deduplicated discovery signal. Neither
+        # is a proficiency claim; generic traits, aliases and model-assigned
+        # priorities cannot inflate rank, and explicit gaps still take precedence.
         type_mismatch = preference is not None and (job.job_type or "").casefold() != preference
-        ordered.append(((bool(gaps), type_mismatch, -len(exact), -len(concrete), index), item))
+        ordered.append(
+            ((bool(gaps), type_mismatch, -len(exact), -len(concrete), -len(activities), index), item)
+        )
     ordered.sort(key=lambda pair: pair[0])
     report.matched = len(ordered)
     report.items = [item for _, item in ordered[: payload.limit]]

@@ -1,5 +1,34 @@
 # Evidence-led recommendations v2
 
+## Opt-in project evidence — 2026-10-19
+
+Requests may add strict boolean `include_experience`, default false. Legacy
+requests keep the skill-only gates and ordering described below. Opt-in reports
+use `evidence-discovery-v3`; each suggestion adds the independent
+`responsibility_matches` collection defined in [the matching contract](MATCH_ANALYSIS_CONTRACT.md).
+No database changes, paid calls or new sources are involved.
+
+With the switch enabled, a saved profile may enter discovery through recognized
+performed-project activity in `experience`, even without specific skill tags.
+A job must have either the existing concrete skill intersection or related
+project evidence for at least one non-conditional, non-secondary duty. Generic
+traits, technology lists, hypothetical/learning-only project text and unsupported
+activities cannot satisfy the new gate. Missing project evidence is not a gap.
+
+Sort by explicit gaps first (none preferred), then distinct concrete skill IDs,
+then distinct eligible activity IDs, then the existing recency/ID ordering.
+Duplicated duty or project text cannot increase the activity count. Duties are
+not appended to `supported`, `gaps`, `unknown` or `overlaps`; those remain applicant
+requirements. Model priority does not boost rank; secondary/conditional scope
+can only restrict the new evidence path.
+
+Valid duties-only jobs may now be evaluated on the opted-in path. Missing, stale,
+failed, invalid and mock extractions remain excluded. Candidate limits, constant
+query count, account isolation and explicit user-triggered requests are unchanged.
+This is an inspectable, limited activity-matching heuristic, not an exhaustive
+semantic model or an employment eligibility decision. Historical validation and
+the v2 default behavior below remain documented as earlier checkpoints.
+
 ## Typed requirement-group refinement — 2026-10-16
 
 This refinement starts from `feat/course-closeout` / `e2fe853`, which already

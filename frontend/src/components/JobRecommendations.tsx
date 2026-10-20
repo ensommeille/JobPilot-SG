@@ -4,6 +4,8 @@ import api from '../services/api'
 import { getToken, watchSession } from '../services/auth'
 import { RequirementConditions, WorkConstraints } from './RequirementEvidence'
 import type { StructuredRequirement, WorkConstraintEvidence } from './RequirementEvidence'
+import ResponsibilityEvidence from './ResponsibilityEvidence'
+import type { ResponsibilityMatch } from './ResponsibilityEvidence'
 import './JobRecommendations.css'
 
 interface Evidence extends StructuredRequirement {
@@ -25,6 +27,7 @@ interface Suggestion {
   unknown: Evidence[]
   overlaps?: Evidence[]
   work_constraints?: WorkConstraintEvidence[]
+  responsibility_matches?: ResponsibilityMatch[]
 }
 interface Report {
   status: 'ready' | 'profile_needed' | 'no_candidates' | 'no_evidence' | 'no_matches'
@@ -38,10 +41,10 @@ interface Report {
   items: Suggestion[]
 }
 const messages = {
-  profile_needed: 'Add specific tools or domain skills to your saved profile, such as Excel, AutoCAD or Python. Short descriptions are supported. General traits or learning goals alone do not generate suggestions; uploaded resumes are not read.',
+  profile_needed: 'Add specific skills or describe work you have done in your saved experience. General traits and learning goals alone do not generate suggestions; uploaded resume files are not read.',
   no_candidates: 'No active, unexpired jobs fit these filters. Clear a filter or browse all jobs below.',
   no_evidence: 'Jobs were found, but their requirements are not ready for reliable comparison. This means job evidence is missing or unusable, not that your profile failed. You can still browse below; updated, non-mock extraction is needed.',
-  no_matches: 'No explicit tool or domain-skill overlaps were found in the jobs evaluated. Recognition is limited to named skills, not every possible meaning. This is not a rejection: review your saved skills or browse all jobs.',
+  no_matches: 'No clear skill or project-activity overlaps were found in the jobs evaluated. Recognition is limited to named skills and described work, not every possible meaning. This is not a rejection: review your saved profile or browse all jobs.',
   ready: 'Suggestions to investigate — not an assessment of eligibility.',
 }
 
@@ -87,7 +90,7 @@ export default function JobRecommendations() {
     controller.current = request
     setBusy(true); setReport(null); setError('')
     try {
-      const response = await api.post<Report>('/jobs/recommendations', {...filters, limit: 10},
+      const response = await api.post<Report>('/jobs/recommendations', {...filters, limit: 10, include_experience: true},
         {signal: request.signal, timeout: 15000, headers: {Authorization: `Bearer ${token}`}})
       if (request.signal.aborted) return
       if (getToken() !== token) { setError('Account changed. Find jobs again.'); return }
@@ -101,7 +104,7 @@ export default function JobRecommendations() {
 
   return <section className="job-recommendations" aria-labelledby="recommendations-title" aria-busy={busy}>
     <h2 id="recommendations-title">For you</h2>
-    <p>Find tools and domain skills shared by your saved profile and real job descriptions. Shared terms are a reason to investigate, not proof that you meet every requirement. Skill evidence comes from your saved Skills list, not an uploaded resume file.</p>
+    <p>Find jobs with tools, domain skills or activities related to your saved profile and real job descriptions. Shared terms are a reason to investigate, not proof that you meet every requirement. Skill evidence comes from your saved Skills list, not an uploaded resume file.</p>
     <form onSubmit={findJobs}>
       <div className="recommendation-filters">
         <label>Role or company (optional)<input className="input" maxLength={200} value={filters.keyword} onChange={e => changeFilter('keyword', e.target.value)} /></label>
@@ -114,14 +117,14 @@ export default function JobRecommendations() {
       </div>
     </form>
     <p className="muted">These filters apply only to For you and are not saved. After editing your profile, find jobs again.</p>
-    {busy && <p role="status">Comparing your saved skills with current job requirements…</p>}
+    {busy && <p role="status">Comparing your saved skills and project experience with current jobs…</p>}
     {error && <p role="alert">{error}</p>}
     {report && <div>
       <p role="status"><strong>{messages[report.status]}</strong></p>
       <p className="muted">Using {report.profile_skill_count} distinct named tool or domain {report.profile_skill_count === 1 ? 'skill' : 'skills'} from your saved Skills list. Resume files are not parsed.</p>
       {report.preferred_job_type === 'internship' && <p className="muted">Your saved introduction or availability explicitly mentions seeking an internship. Internship jobs appear before other job types when the skill-gap evidence is otherwise comparable; other jobs remain visible.</p>}
       {report.status !== 'profile_needed' && <>
-        <p>{report.evaluated} of {report.scanned} candidate jobs evaluated. {report.matched} with explicit skill overlaps; showing {report.items.length}.</p>
+        <p>{report.evaluated} of {report.scanned} candidate jobs evaluated. {report.matched} with related evidence; showing {report.items.length}.</p>
         {report.truncated && <p>Only the newest 500 candidates were scanned. Narrow your filters to explore others.</p>}
         {Object.keys(report.excluded).length > 0 && <details>
           <summary>Why some jobs were not evaluated</summary>
@@ -129,13 +132,16 @@ export default function JobRecommendations() {
         </details>}
       </>}
       {report.status === 'ready' && <>
-        <p className="recommendation-caveat">Preliminary: extraction is not human-verified. Order: no explicit gaps first, then an explicitly stated internship preference if present, more distinct exact named-skill entries, more distinct partial skill overlaps, then newest postings. Exact entries do not verify proficiency or complete requirements. Generic traits and model-assigned priorities do not improve rank. Years, alternatives, education and other conditions still need review.</p>
+        <p className="recommendation-caveat">Preliminary: extraction is not human-verified. Skills and project activities are shown separately.</p>
+        <details><summary>How suggestions are ordered</summary><p>No explicit gaps first, then an explicitly stated internship preference if present, more distinct exact named-skill entries, more distinct concrete skill overlaps, then related project activities, then newest postings. Exact entries do not verify proficiency or complete requirements. Generic traits and model-assigned priorities do not improve rank. Years, alternatives, education and other conditions still need review.</p></details>
         <ol className="recommendation-list">
           {report.items.map(job => <li key={job.job_id}>
             <h3><Link to={'/jobs/' + job.job_id}>{job.title}</Link></h3>
             <p className="muted">{job.company} · {job.city || 'City unspecified'} · {job.job_type || 'Type unspecified'}</p>
-            <p><strong>Why shown:</strong> {sharedSkills(job).join(', ')} named in both the JD and your saved skills.</p>
+            {!!sharedSkills(job).length && <p><strong>Shared skills:</strong> {sharedSkills(job).join(', ')} named in both the JD and your saved skills.</p>}
+            {job.responsibility_matches?.some(item => item.outcome === 'related_evidence') && <p><strong>Why shown:</strong> Your saved project experience includes related activities.</p>}
             <p>{job.gaps.length} explicit gaps · {job.unknown.length} requirements still need more information or manual review.</p>
+            <ResponsibilityEvidence items={job.responsibility_matches?.filter(item => item.outcome === 'related_evidence')} showUnknown={false} />
             <details>
               <summary>Review reasons and evidence</summary>
               {([['Exact skill entry', job.supported], ['Skill overlap — conditions unverified', job.overlaps || []], ['Explicit gap', job.gaps], ['Unknown', job.unknown.filter(i => !job.overlaps?.length || !i.skill_overlaps?.length)]] as const).map(([label, items]) =>
@@ -149,6 +155,7 @@ export default function JobRecommendations() {
                     <dt>Your profile</dt><dd>{item.profile_evidence || 'No comparable explicit evidence used.'}</dd></dl>
                 </div>))}
               <WorkConstraints items={job.work_constraints} />
+              <ResponsibilityEvidence items={job.responsibility_matches?.filter(item => item.outcome === 'unknown')} showRelated={false} />
             </details>
             <Link to={'/jobs/' + job.job_id}>View job and full analysis</Link>
           </li>)}
