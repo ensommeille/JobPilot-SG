@@ -41,6 +41,28 @@ class ExtractionConfig(StrictModel):
     max_output_tokens: int = Field(default=8000, ge=1, le=16000)
 
 
+def _safe_validation_issues(exc: ValidationError, schema_version: SchemaVersion) -> list[str]:
+    """Persist only schema-owned top-level fields and Pydantic error types."""
+    allowed_fields = payload_model(schema_version).model_fields
+    issues: list[str] = []
+    for error in exc.errors(include_input=False, include_url=False, include_context=False):
+        location = error.get("loc", ())
+        first = location[0] if location else None
+        field = first if isinstance(first, str) and first in allowed_fields else "root"
+        raw_type = error.get("type")
+        error_type = (
+            raw_type
+            if isinstance(raw_type, str) and re.fullmatch(r"[a-z0-9_]{1,48}", raw_type)
+            else "unknown"
+        )
+        issue = f"{field}:{error_type}"
+        if issue not in issues:
+            issues.append(issue)
+        if len(issues) == 12:
+            break
+    return issues
+
+
 class JobExtractionService:
     def __init__(self, provider: LLMProvider, config: ExtractionConfig | None = None) -> None:
         provider_name = provider.name
@@ -99,6 +121,7 @@ class JobExtractionService:
             response: StructuredGenerationResponse | None = None
             data: ExtractionPayload | None = None
             retry = False
+            validation_issues: list[str] = []
             try:
                 candidate = await asyncio.wait_for(
                     self.provider.generate_structured(request),
@@ -122,6 +145,7 @@ class JobExtractionService:
                     outcome = "provider_contract_error"
                 else:
                     outcome = "schema_validation_failed"
+                    validation_issues = _safe_validation_issues(exc, self.config.schema_version)
                     repair_codes = [
                         error["type"]
                         for error in exc.errors(
@@ -168,6 +192,7 @@ class JobExtractionService:
                     usage=response.usage
                     if isinstance(response, StructuredGenerationResponse)
                     else None,
+                    validation_issues=validation_issues,
                 )
             )
             if data is not None:
