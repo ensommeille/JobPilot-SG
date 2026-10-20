@@ -96,7 +96,7 @@ function clearDraft() {
 }
 function clearAtsReview() {
   atsReview = null; atsEditors.clear(); $('ats-fields').replaceChildren();
-  $('ats-manual').replaceChildren(); $('ats-manual').hidden = true;
+  $('ats-manual').replaceChildren(); $('ats-manual').hidden = true; $('ats-manual').open = false;
   $('ats-target').textContent = ''; $('ats-result').textContent = 'Nothing was submitted.';
   refresh();
 }
@@ -333,7 +333,9 @@ $('ats-inspect').addEventListener('click', () => run(async unchanged => {
     $('ats-fields').append(row);
   }
   if (review.manualQuestions?.length) {
-    const title = document.createElement('p'); title.textContent = 'These original-site text questions need manual answers:';
+    const title = document.createElement('summary');
+    const count = review.manualQuestions.length;
+    title.textContent = `${count} original-site ${count === 1 ? 'question needs' : 'questions need'} manual ${count === 1 ? 'answer' : 'answers'}`;
     const list = document.createElement('ul');
     for (const question of review.manualQuestions) {
       const item = document.createElement('li'); item.textContent = question; list.append(item);

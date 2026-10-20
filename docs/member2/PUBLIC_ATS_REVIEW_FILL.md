@@ -1,6 +1,6 @@
 # Greenhouse and Lever public sources — review and fill
 
-Status: implemented on `feat/public-ats-review-fill`; installed-extension acceptance of the **basic contact fields** on two hosted original-site forms was completed on 20 October 2026. The subsequent common-question expansion has automated fixture/API coverage, but needs a fresh installed-extension acceptance before claiming live-site verification. This is a JobPilot project feature, not a record of anyone's personal applications.
+Status: implemented on `feat/public-ats-review-fill`; installed-extension acceptance of the **basic contact fields** on two hosted original-site forms and one profile-backed Greenhouse text question was completed on 20 October 2026. Other question types and companies still need their own acceptance. This is a JobPilot project feature, not a record of anyone's personal applications.
 
 ## What it does
 
@@ -17,7 +17,7 @@ On a supported original-site application page, open the installed JobPilot exten
 
 ## Scope and verification
 
-For the 0.8.2 common-question expansion, backend tests passed 751 with one Docker-CLI-dependent test skipped inside the isolated test container; Ruff passed. Extension tests passed 100 with 110 existing environment-dependent tests skipped; the targeted popup and ATS tests passed after the final manual-question indicator change. These are automated fixture/API results, **not** installed Chrome acceptance of the new question types on a live employer page.
+For the 0.8.2 common-question expansion, backend tests passed 751 with one Docker-CLI-dependent test skipped inside the isolated test container; Ruff passed. Extension tests passed 100 with 110 existing environment-dependent tests skipped; the targeted popup and ATS tests passed after the manual-question indicator change. These are automated fixture/API results, distinct from the narrow installed-Chrome check below.
 
 The API and extension use separate allowlists for source and form domains. A Greenhouse board may redirect its application URL to a custom company domain; the extension deliberately refuses that page, so the applicant fills it manually. This is not universal Greenhouse form support.
 
@@ -33,6 +33,12 @@ With explicit user approval, Chrome loaded the unpacked extension from this bran
 | [ShopBack / Lever, Software Engineer Intern (H1 2027)](https://jobs.lever.co/shopback-2/1804a30e-2d2e-4631-9e85-614c91806ddf/apply) | `Filled 3; skipped 0. ... Nothing was submitted.` | Full name `JobPilot Test Applicant`, Email `jobpilot-acceptance@example.com`, Phone `00000000`; current location and company remained blank | No résumé, custom question, declaration checkbox, or final Submit |
 
 This verifies the installed extension's limited **review-and-fill** behavior on two live, directly hosted ATS pages, not a complete employer application or a production deployment. The positions are test surfaces only and are not personal job recommendations. Their content and availability may change. The extension did not create a JobPilot submitted-application record, because no employer submission was attempted.
+
+### New question-type acceptance — installed Chrome 0.8.2, 20 October 2026
+
+The isolated backend was rebuilt and its `/health` returned 200; the new `/browser-assistant/ats-evidence` endpoint rejected an unauthenticated request with 401. The extension was reloaded from this worktree and Chrome showed version 0.8.2, with the same extension ID. A synthetic LinkedIn URL was saved in the isolated `admin@jobpilot.sg` demo profile. On the same hosted Figma Greenhouse form, the extension showed the exact **LinkedIn Profile** question, proposed the URL with source `JobPilot profile · LinkedIn link`, and required its own checkbox. After confirmation it reported `Filled 1; skipped 0. ... Nothing was submitted.` The original-site LinkedIn input independently displayed the same synthetic URL; existing name/email/phone stayed populated, while the employer-specific motivation field and résumé remained untouched. The original page still displayed its Submit button, which was **not clicked**. This verifies one common custom text question on one live hosted form, not all question categories or complete employer delivery.
+
+Evidence: [installed extension result](assets/ats-question-live-popup-20261020.jpg) and [original-site LinkedIn field](assets/ats-question-live-original-20261020.jpg). Both contain only synthetic test data. The popup screenshot was taken before the manual-question list was condensed into a disclosure control; the fill result is unchanged.
 
 ## Manual acceptance checklist
 
