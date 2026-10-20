@@ -69,8 +69,9 @@ GET    /audit-logs
   and treat repeated create or delete requests idempotently.
 - Source and crawl-run routes require the `admin` role. `POST /sources/{id}/run` executes one bounded
   crawl synchronously, stores normalized jobs and a `CrawlRun`, and returns the completed run. The
-  live adapter currently accepts enabled InternSG HTML sources only; fixture/mock adapters remain
-  injectable for deterministic tests.
+  live adapters accept enabled InternSG HTML sources and exact public Greenhouse/Lever JSON board
+  API URLs; fixture/mock adapters remain injectable for deterministic tests. The JSON adapter reads
+  published internship posts and stores hosted application links, but never submits applications.
 - Ingestion maps the first normalized job type to `job_postings.job_type` and preserves every
   normalized job type/tag through `job_posting_tags`. A missing apply URL falls back to the public
   source URL. Repeated `(source_id, external_id)` records update only when `raw_hash` changes.

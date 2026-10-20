@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from app.db.models import JobSource, User, UserRole
 from app.db.session import SessionLocal
 from app.ingestion.models import SourceType
-from app.ingestion.public_ats_adapter import ats_provider
+from app.ingestion.public_ats_adapter import public_ats_identity
 from app.ingestion.schemas import SourceCreate
 from app.ingestion.service import build_source_adapter, create_source, run_source
 
@@ -27,10 +27,11 @@ def _source_argument(value: str) -> tuple[str, str]:
     if not separator or not name:
         raise argparse.ArgumentTypeError("Use --source 'Employer=https://...'")
     try:
-        SourceCreate(name=name, source_type=SourceType.API, base_url=url)
-        ats_provider(url)
+        SourceCreate(name=name, source_type=SourceType.JSON, base_url=url)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(str(exc)) from exc
+    if public_ats_identity(url) is None:
+        raise argparse.ArgumentTypeError("Unsupported public ATS API URL")
     return name, url
 
 
@@ -61,10 +62,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if source is None:
                 source = create_source(
                     db,
-                    payload=SourceCreate(name=name, source_type=SourceType.API, base_url=url),
+                    payload=SourceCreate(name=name, source_type=SourceType.JSON, base_url=url),
                     actor=actor,
                 )
-            elif source.source_type != SourceType.API.value or source.base_url != url:
+            elif source.source_type != SourceType.JSON.value or source.base_url != url:
                 parser.error(f"Existing source {name!r} has a different type or URL")
             run = run_source(
                 db,
