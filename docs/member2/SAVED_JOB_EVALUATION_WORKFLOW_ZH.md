@@ -12,6 +12,15 @@
 python -m app.extract_saved_jobs --actor-id <现有管理员 UUID> --job-type internship --limit 3
 ```
 
+若预览的最新岗位与验收目标无关，可从数据库或 Jobs 页核对真实岗位 ID，
+用 `--job-id` 精确限定，避免为同来源的其他岗位付费。可重复该参数，
+但不同 ID 的数量不得超过 `--limit`；来源、类型、活跃状态、截止日期及
+sandbox 排除条件仍然生效。先预览并确认标题，再加付费参数：
+
+```bash
+python -m app.extract_saved_jobs --actor-id <现有管理员 UUID> --job-id <真实岗位 UUID> --job-type internship --limit 1
+```
+
 正式处理时，先由运营者在**自己的终端**设置数据库连接和服务端配置，再运行：
 
 ```bash

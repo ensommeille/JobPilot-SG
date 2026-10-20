@@ -59,6 +59,12 @@ def test_preview_selects_real_jobs_and_skips_current_live_results(db, stored):
     assert {job.id for job in pending_jobs(db, limit=10)} == {first.id, second.id}
 
 
+def test_preview_can_target_one_stored_job_without_paying_for_earlier_jobs(db, stored):
+    _, first, second = stored
+    assert [job.id for job in pending_jobs(db, limit=1, job_ids=[second.id])] == [second.id]
+    assert [job.id for job in pending_jobs(db, limit=1, job_ids=[first.id])] == [first.id]
+
+
 def test_live_preparation_stops_after_authentication_failure(db, stored):
     actor, first, second = stored
     calls = []

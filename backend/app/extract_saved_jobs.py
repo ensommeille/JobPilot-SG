@@ -28,6 +28,7 @@ def pending_jobs(
     limit: int,
     source_id: UUID | None = None,
     job_type: str | None = None,
+    job_ids: list[UUID] | None = None,
 ) -> list[JobPosting]:
     """Select bounded real jobs without a current successful live extraction."""
     if not 1 <= limit <= 10:
@@ -41,6 +42,10 @@ def pending_jobs(
         conditions.append(JobPosting.source_id == source_id)
     if job_type is not None:
         conditions.append(func.lower(JobPosting.job_type) == job_type.casefold())
+    if job_ids is not None:
+        if not job_ids:
+            return []
+        conditions.append(JobPosting.id.in_(job_ids))
     jobs = list(
         db.scalars(
             select(JobPosting)
@@ -144,17 +149,31 @@ def main() -> None:
     parser.add_argument("--actor-id", type=UUID, required=True)
     parser.add_argument("--source-id", type=UUID)
     parser.add_argument("--job-type", type=str, help="Exact job type, e.g. internship")
+    parser.add_argument(
+        "--job-id", type=UUID, action="append",
+        help="Only process this stored job; repeat for an explicitly reviewed batch",
+    )
     parser.add_argument("--limit", type=int, choices=range(1, 11), default=3)
     parser.add_argument("--allow-paid", action="store_true")
     parser.add_argument("--prompt-key", action="store_true")
     args = parser.parse_args()
+    if args.job_id and len(set(args.job_id)) > args.limit:
+        parser.error("--limit must cover every distinct --job-id")
     from app.db.session import SessionLocal
 
     with SessionLocal() as db:
         actor = db.get(User, args.actor_id)
         if actor is None or not actor.is_active or actor.role != UserRole.ADMIN:
             parser.error("An existing active administrator is required")
-        jobs = pending_jobs(db, limit=args.limit, source_id=args.source_id, job_type=args.job_type)
+        jobs = pending_jobs(
+            db,
+            limit=args.limit,
+            source_id=args.source_id,
+            job_type=args.job_type,
+            job_ids=args.job_id,
+        )
+        if args.job_id and {job.id for job in jobs} != set(args.job_id):
+            parser.error("One or more selected jobs are unavailable or already current")
         if not args.allow_paid:
             print(
                 json.dumps(
