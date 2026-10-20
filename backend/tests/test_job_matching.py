@@ -101,6 +101,15 @@ def request(client, sample, **body):
     return client.post(f"/jobs/{sample[1].id}/match-analysis", headers=sample[0], json=body)
 
 
+@pytest.mark.parametrize(
+    "skill",
+    ["Pandas", "NumPy", "scikit-learn", "Kafka", "Vue 3", "Power BI", "Data Analysis"],
+)
+def test_named_technical_skill_comparison_keeps_qualifiers_unknown(skill):
+    assert compare_skill(skill, f"{skill} required.", [skill])[0] == "supported"
+    assert compare_skill(skill, f"Advanced {skill} required.", [skill])[0] == "unknown"
+
+
 def test_supported_gap_unknown_with_evidence_and_no_writes(client, db, sample):
     client.put(
         "/profile", headers=sample[0], json={"skills": ["Python", "No experience with Java"]}

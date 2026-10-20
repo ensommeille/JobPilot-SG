@@ -7,6 +7,7 @@ const evidence = {
 };
 const report = {
   status: 'ready', scanned: 3, evaluated: 2, matched: 1, truncated: false,
+  profile_skill_count: 2, preferred_job_type: null,
   excluded: {missing_extraction: 1},
   items: [{job_id: 'fixture', title: 'Fictional Python intern — test only', company: 'Demo only',
     city: 'Singapore', job_type: 'internship', supported: [evidence], gaps: [],
@@ -25,6 +26,7 @@ test('explicit request, evidence, detail link and responsive layout', async ({pa
   expect(calls).toBe(0);
   await page.getByRole('button', {name: 'Find jobs for me'}).click();
   await expect(page.locator('.recommendation-list')).toContainText('Python named in both the JD and your saved skills.');
+  await expect(page.locator('.job-recommendations')).toContainText('Using 2 distinct named tool or domain skills');
   await page.getByText('Review reasons and evidence', {exact: true}).click();
   await expect(page.locator('.recommendation-evidence dd').first()).toHaveText('Python required.');
   await expect(page.getByRole('link', {name: 'View job and full analysis'})).toHaveAttribute('href', '/jobs/fixture');
@@ -106,4 +108,12 @@ test('natural-language overlaps never claim the compound requirement is satisfie
     await page.screenshot({path: `../output/natural-recommendations-${name}.png`, fullPage: true});
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
+});
+
+test('explicit internship preference and profile evidence scope are explained', async ({page}) => {
+  await setup(page, route => route.fulfill({json: {...report, profile_skill_count: 1, preferred_job_type: 'internship'}}));
+  await page.getByRole('button', {name: 'Find jobs for me'}).click();
+  await expect(page.locator('.job-recommendations')).toContainText('Using 1 distinct named tool or domain skill');
+  await expect(page.locator('.job-recommendations')).toContainText('Internship jobs appear before other job types');
+  await expect(page.locator('.job-recommendations')).toContainText('Resume files are not parsed');
 });
