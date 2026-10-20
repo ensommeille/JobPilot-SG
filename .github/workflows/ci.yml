@@ -115,10 +115,13 @@ jobs:
       - run: npm audit --audit-level=high
 
   docker:
-    name: Docker build (backend)
+    name: Docker build (backend + frontend)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - name: Build backend image
         if: hashFiles('backend/Dockerfile') != ''
         run: docker build -t jobpilot-sg-backend ./backend
+      - name: Build frontend image
+        if: hashFiles('frontend/Dockerfile') != ''
+        run: docker build -t jobpilot-sg-frontend ./frontend
