@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.applications.schemas import (
@@ -11,12 +11,14 @@ from app.applications.schemas import (
     ApplicationRead,
     ApplicationStatusUpdate,
     ManualApplicationCreate,
+    SavedApplicationAnswers,
 )
 from app.applications.service import (
     ApplicationConflictError,
     InvalidApplicationTransitionError,
     create_manual_application,
     get_application,
+    get_saved_application_answers,
     list_applications,
     update_application_status,
 )
@@ -78,6 +80,23 @@ def read_application(
     if application is None:
         raise HTTPException(status_code=404, detail="Application not found")
     return ApplicationRead.model_validate(application)
+
+
+@router.get("/applications/{application_id}/answers", response_model=SavedApplicationAnswers)
+def read_application_answers(
+    application_id: UUID,
+    db: DatabaseSession,
+    current_user: CurrentUser,
+    response: Response,
+) -> SavedApplicationAnswers:
+    response.headers["Cache-Control"] = "no-store"
+    application = get_application(db, user=current_user, application_id=application_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    answers = get_saved_application_answers(db, application=application)
+    if answers is None:
+        raise HTTPException(status_code=404, detail="Saved answers not found")
+    return SavedApplicationAnswers(application_id=application.id, answers=answers)
 
 
 @router.patch("/applications/{application_id}", response_model=ApplicationRead)

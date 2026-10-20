@@ -332,3 +332,62 @@ def test_assistant_application_requires_confirmation_and_owns_mapping(
     mapping_id = created.json()["mapping"]["id"]
     assert client.get(f"/assistant/mappings/{mapping_id}", headers=alice).status_code == 200
     assert client.get(f"/assistant/mappings/{mapping_id}", headers=bob).status_code == 404
+
+
+def test_saved_assistant_answers_show_only_final_values_to_owner(
+    client: TestClient, application_context: tuple[JobPosting, ApplicationForm]
+) -> None:
+    job, form = application_context
+    alice = auth_headers(client, "answers-alice@example.com")
+    bob = auth_headers(client, "answers-bob@example.com")
+    created = client.post(
+        "/assistant/applications",
+        headers=alice,
+        json={
+            "job_id": str(job.id),
+            "form_id": str(form.id),
+            "mapping_version": "mapping-v1",
+            "provider": "mock",
+            "prompt_version": "prompt-v1",
+            "mapping_draft": {
+                "mapping": [
+                    {"field_id": "name", "label": "Full Name", "value": "Alice Example", "confidence": 0.9, "needs_review": False},
+                    {"field_id": "email", "label": "Email", "value": "old@example.com", "confidence": 0.8, "needs_review": True},
+                    {"field_id": "note", "label": "Note", "value": "Unconfirmed suggestion", "confidence": 0.7, "needs_review": True},
+                ],
+                "unmapped_fields": [],
+                "missing_profile_fields": [],
+            },
+            "confirmed_field_ids": ["name"],
+            "edited_values": {"email": "final@example.com"},
+        },
+    )
+    assert created.status_code == 201
+    application_id = created.json()["application"]["id"]
+    url = f"/applications/{application_id}/answers"
+
+    assert client.get(url).status_code == 401
+    assert client.get(url, headers=bob).status_code == 404
+    own = client.get(url, headers=alice)
+    assert own.status_code == 200
+    assert own.headers["cache-control"] == "no-store"
+    assert own.json() == {
+        "application_id": application_id,
+        "answers": [
+            {"field_id": "name", "label": "Full Name", "value": "Alice Example"},
+            {"field_id": "email", "label": "Email", "value": "final@example.com"},
+        ],
+    }
+    history = client.get("/applications", headers=alice).json()
+    assert "answers" not in history["items"][0]
+
+
+def test_manual_application_has_no_saved_assistant_answers(
+    client: TestClient, application_context: tuple[JobPosting, ApplicationForm]
+) -> None:
+    job, _ = application_context
+    headers = auth_headers(client, "manual-no-answers@example.com")
+    created = client.post(f"/jobs/{job.id}/applications", headers=headers, json={})
+    assert created.status_code == 201
+    application_id = created.json()["id"]
+    assert client.get(f"/applications/{application_id}/answers", headers=headers).status_code == 404
