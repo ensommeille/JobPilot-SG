@@ -101,12 +101,34 @@ ALIASES = {
     "ts": "typescript",
     "java": "java",
     "sql": "sql",
+    "pandas": "pandas",
+    "numpy": "numpy",
+    "scikit-learn": "scikit_learn",
+    "scikit learn": "scikit_learn",
+    "sklearn": "scikit_learn",
+    "matplotlib": "matplotlib",
+    "rest api": "rest_api",
+    "rest apis": "rest_api",
+    "restful api": "rest_api",
+    "restful apis": "rest_api",
+    "linux": "linux",
+    "apache spark": "spark",
+    "spark": "spark",
+    "apache hadoop": "hadoop",
+    "hadoop": "hadoop",
+    "apache kafka": "kafka",
+    "kafka": "kafka",
     "postgresql": "postgresql",
     "postgres": "postgresql",
     "mysql": "mysql",
+    "mongodb": "mongodb",
     "react": "react",
     "react.js": "react",
     "reactjs": "react",
+    "vue": "vue",
+    "vue.js": "vue",
+    "vuejs": "vue",
+    "vue 3": "vue",
     "node.js": "node.js",
     "nodejs": "node.js",
     "html": "html",
@@ -127,6 +149,9 @@ ALIASES = {
     "tensorflow": "tensorflow",
     "excel": "excel",
     "microsoft excel": "excel",
+    "power bi": "power_bi",
+    "microsoft power bi": "power_bi",
+    "data analysis": "data_analysis",
     "figma": "figma",
 }
 
@@ -476,9 +501,8 @@ def _compare_v2(data: JobExtractionSchemaV2, description: str, profile) -> list[
     for group in data.requirement_groups:
         language_key = _singleton_language_key(group)
         if language_key is not None:
-            if (
-                language_key in seen_singleton_languages
-                or (group.requirements[0].kind != "language" and language_key in language_typed_keys)
+            if language_key in seen_singleton_languages or (
+                group.requirements[0].kind != "language" and language_key in language_typed_keys
             ):
                 continue
             seen_singleton_languages.add(language_key)
