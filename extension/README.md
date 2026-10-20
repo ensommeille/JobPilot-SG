@@ -1,5 +1,19 @@
 # JobPilot SG — Review & Fill (InternSG pilot)
 
+## Version 0.8.2: reviewed common questions on hosted ATS forms
+
+The Greenhouse/Lever popup now recognizes a limited set of clearly labelled text
+questions: LinkedIn, GitHub, availability, education/experience summaries,
+skills and a short self-introduction. Suggestions come only from fields already
+saved in the connected JobPilot profile; a résumé file is neither parsed nor
+uploaded. The original question, proposed answer and profile source are shown
+in the popup. Every answer requires its own checkbox before **Fill reviewed
+fields only**; edits clear that checkbox. Empty or overlong evidence is not
+silently invented or truncated. Unrecognized, legal, visa, demographic, pay,
+company-motivation, file, CAPTCHA and consent controls remain manual. The fill
+operation never submits an employer application. Reload the unpacked extension
+after updating this directory.
+
 ## Version 0.8.0: a compact companion and one-click filling
 
 The platform profile is now the source for name, email, phone, user-written

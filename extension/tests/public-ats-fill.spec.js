@@ -55,3 +55,53 @@ test('only exact hosted application origins are accepted', async ({page}) => {
   await fixture(page, spoof, '<input name="name">');
   await expect(page.evaluate(interactWithATSPage, {action: 'inspect'})).rejects.toThrow('supported');
 });
+
+test('reviewed profile-backed questions fill while legal and unsupported questions remain untouched', async ({page}) => {
+  await fixture(page, lever, `<input name="name"><input name="email">
+    <label for="linkedin">LinkedIn Profile</label><input id="linkedin" name="urls[LinkedIn]" type="url">
+    <label for="skills">Relevant technical skills</label><textarea id="skills" name="questions[1]"></textarea>
+    <label for="visa">Will you need visa sponsorship?</label><textarea id="visa" name="questions[2]"></textarea>
+    <label for="why">Why this company?</label><textarea id="why" name="questions[3]"></textarea>
+    <label for="missing">Which technical skills do you not have?</label><textarea id="missing" name="questions[4]"></textarea>
+    <input name="resume" type="file"><input name="agree" type="checkbox">`);
+  const review = await page.evaluate(interactWithATSPage, {action: 'inspect'});
+  expect(review.fields.filter(field => field.evidenceKey).map(field => field.evidenceKey)).toEqual(['linkedin', 'skills']);
+  expect(review.manualQuestions).toEqual(['Will you need visa sponsorship?', 'Why this company?', 'Which technical skills do you not have?']);
+  const [linkedin, skills] = review.fields.filter(field => field.evidenceKey);
+  const result = await page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: lever, approved: [
+    {id: linkedin.id, key: linkedin.key, label: linkedin.label, evidenceKey: linkedin.evidenceKey, value: 'https://www.linkedin.com/in/example', confirmed: true},
+    {id: skills.id, key: skills.key, label: skills.label, evidenceKey: skills.evidenceKey, value: 'Python, SQL', confirmed: true},
+  ]});
+  expect(result).toEqual({filled: [linkedin.id, skills.id], skipped: [], submitted: false});
+  await expect(page.locator('#linkedin')).toHaveValue('https://www.linkedin.com/in/example');
+  await expect(page.locator('#skills')).toHaveValue('Python, SQL');
+  await expect(page.locator('#visa')).toHaveValue('');
+  await expect(page.locator('#why')).toHaveValue('');
+  await expect(page.locator('#missing')).toHaveValue('');
+  expect(await page.evaluate(() => window.submits)).toBe(0);
+});
+
+test('custom question label changes invalidate review and never fill a different question', async ({page}) => {
+  await fixture(page, greenhouse, `<input name="first_name"><label for="skills">Relevant skills</label><textarea id="skills" name="questions[1]"></textarea>`);
+  const review = await page.evaluate(interactWithATSPage, {action: 'inspect'});
+  const field = review.fields.find(item => item.evidenceKey === 'skills');
+  await page.locator('label[for="skills"]').evaluate(node => { node.textContent = 'Why this company?'; });
+  await expect(page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: greenhouse, approved: [
+    {id: field.id, key: field.key, label: field.label, evidenceKey: field.evidenceKey, value: 'Python', confirmed: true},
+  ]})).rejects.toThrow('Invalid reviewed');
+  await expect(page.locator('#skills')).toHaveValue('');
+});
+
+test('occupied custom answer is not overwritten and unlabeled field is ignored', async ({page}) => {
+  await fixture(page, greenhouse, `<input name="first_name"><label for="summary">Tell us about yourself</label>
+    <textarea id="summary" name="questions[1]">Existing answer</textarea><textarea name="questions[2]"></textarea>`);
+  const review = await page.evaluate(interactWithATSPage, {action: 'inspect'});
+  const field = review.fields.find(item => item.evidenceKey === 'summary');
+  expect(field.occupied).toBe(true);
+  expect(review.fields.some(item => item.key === 'name:questions[2]')).toBe(false);
+  const result = await page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: greenhouse, approved: [
+    {id: field.id, key: field.key, label: field.label, evidenceKey: field.evidenceKey, value: 'New answer', confirmed: true},
+  ]});
+  expect(result.skipped).toEqual([field.id]);
+  await expect(page.locator('#summary')).toHaveValue('Existing answer');
+});

@@ -1,6 +1,6 @@
 # Greenhouse and Lever public sources — review and fill
 
-Status: implemented on `feat/public-ats-review-fill`; installed-extension acceptance on two hosted original-site forms was completed on 20 October 2026. This is a JobPilot project feature, not a record of anyone's personal applications.
+Status: implemented on `feat/public-ats-review-fill`; installed-extension acceptance of the **basic contact fields** on two hosted original-site forms was completed on 20 October 2026. The subsequent common-question expansion has automated fixture/API coverage, but needs a fresh installed-extension acceptance before claiming live-site verification. This is a JobPilot project feature, not a record of anyone's personal applications.
 
 ## What it does
 
@@ -13,9 +13,11 @@ Supported board URL shapes:
 
 The existing admin source endpoint is `POST /sources` with `name`, `source_type: "json"`, `base_url`, and `enabled: true`. `POST /sources/{id}/run` accepts `max_links` and `max_details` (1–100, with details no greater than links). The adapter checks the provider's robots policy, refuses redirects to other hosts, limits response size, and does not fetch arbitrary company domains.
 
-On a supported original-site application page, open the installed JobPilot extension. Its **Greenhouse / Lever — review & fill** section reads the visible field labels and loads limited saved contact details from the connected JobPilot profile. Review or edit them in the popup, then click **Fill reviewed fields only**. The extension fills only empty, unambiguous first/last/full name, email and phone fields on exact Greenhouse or Lever hosted pages. It will not click Apply/Submit, solve CAPTCHA, accept legal terms, upload a résumé, or fill custom questions. Any actual employer submission remains a manual user action. JobPilot does not create a submitted application record from filling a form.
+On a supported original-site application page, open the installed JobPilot extension. Its **Greenhouse / Lever — review & fill** section reads visible, explicitly labelled text questions and limited saved profile evidence. It can propose answers for name/email/phone and certain common LinkedIn/GitHub, availability, education, experience, skills and introduction questions. The popup shows each original question, suggestion and source. Each nonempty answer needs its own confirmation checkbox; changing the answer clears the checkbox. Only confirmed empty fields are filled. The extension does **not** parse or upload a résumé file; facts must first be saved in the JobPilot profile. Unsupported, sensitive or employer-specific questions are manual. It will not click Apply/Submit, solve CAPTCHA, accept legal terms or upload files. Any actual employer submission remains a manual user action. JobPilot does not create a submitted application record from filling a form.
 
 ## Scope and verification
+
+For the 0.8.2 common-question expansion, backend tests passed 751 with one Docker-CLI-dependent test skipped inside the isolated test container; Ruff passed. Extension tests passed 100 with 110 existing environment-dependent tests skipped; the targeted popup and ATS tests passed after the final manual-question indicator change. These are automated fixture/API results, **not** installed Chrome acceptance of the new question types on a live employer page.
 
 The API and extension use separate allowlists for source and form domains. A Greenhouse board may redirect its application URL to a custom company domain; the extension deliberately refuses that page, so the applicant fills it manually. This is not universal Greenhouse form support.
 
@@ -36,8 +38,8 @@ This verifies the installed extension's limited **review-and-fill** behavior on 
 
 1. Pull the branch and rebuild the backend/frontend and reload the unpacked extension. To test without disturbing a separate `5173/8000` JobPilot checkout, the extension also offers **Isolated ATS acceptance** at `127.0.0.1:5174` with API `127.0.0.1:8002`; configure the backend's approved extension ID and web origin for that pair.
 2. Log in to the local demo, register and run a current public board with the admin API, and confirm the source run plus imported jobs.
-3. Open a hosted Greenhouse/Lever apply link, connect the extension to the local JobPilot account, and review basic contact fields. Use test-only details on a test or explicitly authorized form.
-4. Confirm only the reviewed empty fields are populated; custom questions, uploads, consent and final Submit remain untouched. Do not send a synthetic application to an employer.
+3. Open a hosted Greenhouse/Lever apply link, connect the extension to the local JobPilot account, and review contact fields plus any recognized common text questions and their profile evidence. Check the explicit manual-question list. Use test-only details on a test or explicitly authorized form.
+4. Confirm only the individually checked empty fields are populated. Verify that unsupported custom/legal questions, uploads, consent and final Submit remain untouched. Do not send a synthetic application to an employer.
 5. Verify a custom-domain redirect or changed/unrecognized page is refused rather than silently filled.
 
 The October 19 hosted-page candidates for this test were a [Figma Greenhouse form](https://job-boards.greenhouse.io/figma/jobs/6178851004?gh_jid=6178851004) and a [ShopBack Lever software-engineering form](https://jobs.lever.co/shopback-2/1804a30e-2d2e-4631-9e85-614c91806ddf/apply). Both resolved to their hosted ATS domain and displayed basic contact fields when inspected. These are test surfaces, not personal job recommendations; check their availability again before a later acceptance run.

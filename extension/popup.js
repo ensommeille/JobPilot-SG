@@ -69,7 +69,7 @@ function refresh() {
   $('check-result').disabled = busy || !session?.userId;
   $('send-application').disabled = busy || !submissionReview?.captchaReady || !$('submit-consent').checked;
   $('ats-inspect').disabled = busy;
-  $('ats-fill').disabled = busy || !atsReview || ![...atsEditors.values()].some(input => input.value.trim());
+  $('ats-fill').disabled = busy || !atsReview || ![...atsEditors.values()].some(editor => editor.confirm.checked && editor.input.value.trim());
 }
 async function run(task, validate = true) {
   if (busy) return;
@@ -96,6 +96,7 @@ function clearDraft() {
 }
 function clearAtsReview() {
   atsReview = null; atsEditors.clear(); $('ats-fields').replaceChildren();
+  $('ats-manual').replaceChildren(); $('ats-manual').hidden = true;
   $('ats-target').textContent = ''; $('ats-result').textContent = 'Nothing was submitted.';
   refresh();
 }
@@ -295,35 +296,61 @@ $('ats-inspect').addEventListener('click', () => run(async unchanged => {
     field_ids: ['applicant_name', 'applicant_email', 'applicant_contact']});
   unchanged();
   if (data.profile_source !== 'jobpilot') throw new Error('Could not read this JobPilot profile.');
+  const evidenceKeys = [...new Set(review.fields.map(field => field.evidenceKey).filter(Boolean))];
+  const evidence = evidenceKeys.length ? await api('/browser-assistant/ats-evidence', {
+    page_url: review.url, evidence_keys: evidenceKeys,
+  }) : {values: {}, source_labels: {}, profile_source: 'jobpilot'};
+  unchanged();
+  if (evidence.profile_source !== 'jobpilot') throw new Error('Could not verify saved evidence.');
   const name = (data.values?.applicant_name || '').trim().split(/\s+/);
   const values = {first_name: name.length > 1 ? name[0] : '', last_name: name.length > 1 ? name.slice(1).join(' ') : '',
     full_name: data.values?.applicant_name || '', email: data.values?.applicant_email || '', phone: data.values?.applicant_contact || ''};
   for (const field of review.fields) {
     const row = document.createElement('div'); row.className = 'field';
-    const label = document.createElement('label'); label.textContent = ({first_name: 'First name', last_name: 'Last name', full_name: 'Full name', email: 'Email', phone: 'Phone'})[field.id] || field.id;
+    const label = document.createElement('label'); label.textContent = field.label || ({first_name: 'First name', last_name: 'Last name', full_name: 'Full name', email: 'Email', phone: 'Phone'})[field.id] || field.id;
     row.append(label);
     if (!field.available || field.occupied) {
       const note = document.createElement('p'); note.textContent = field.occupied ? 'Already filled on the website; left unchanged.' : 'Unavailable or ambiguous on this page; fill manually.';
       row.append(note);
     } else {
-      const input = document.createElement('input'); input.id = 'ats-' + field.id;
-      input.maxLength = field.maxLength; input.value = values[field.id] || '';
-      input.type = field.id === 'email' ? 'email' : field.id === 'phone' ? 'tel' : 'text';
-      label.htmlFor = input.id; input.addEventListener('input', refresh);
-      row.append(input); atsEditors.set(field.id, input);
+      const input = document.createElement(field.evidenceKey && !['linkedin', 'github'].includes(field.evidenceKey) ? 'textarea' : 'input');
+      input.id = 'ats-' + field.id; input.maxLength = field.maxLength;
+      const suggestion = field.evidenceKey ? evidence.values?.[field.evidenceKey] || '' : values[field.id] || '';
+      input.value = suggestion.length <= field.maxLength ? suggestion : '';
+      if (input instanceof HTMLInputElement) input.type = field.id === 'email' ? 'email' : field.id === 'phone' ? 'tel' : field.evidenceKey ? 'url' : 'text';
+      label.htmlFor = input.id;
+      const source = document.createElement('p'); source.className = 'field-reason';
+      source.textContent = suggestion.length > field.maxLength ? 'Saved evidence exceeds this field limit; write a shorter answer yourself.'
+        : field.evidenceKey ? (evidence.source_labels?.[field.evidenceKey] || 'No saved evidence; enter manually after checking the original question.')
+        : `JobPilot profile · ${field.id.replaceAll('_', ' ')}`;
+      const checkLabel = document.createElement('label'); checkLabel.className = 'check';
+      const confirm = document.createElement('input'); confirm.type = 'checkbox';
+      checkLabel.append(confirm, document.createTextNode('I checked this answer against the original question.'));
+      input.addEventListener('input', () => { confirm.checked = false; refresh(); });
+      confirm.addEventListener('change', refresh);
+      row.append(source, input, checkLabel); atsEditors.set(field.id, {input, confirm, field});
     }
     $('ats-fields').append(row);
   }
+  if (review.manualQuestions?.length) {
+    const title = document.createElement('p'); title.textContent = 'These original-site text questions need manual answers:';
+    const list = document.createElement('ul');
+    for (const question of review.manualQuestions) {
+      const item = document.createElement('li'); item.textContent = question; list.append(item);
+    }
+    $('ats-manual').append(title, list); $('ats-manual').hidden = false;
+  }
   atsReview = {...review, tabId: tab.id, documentId: response.documentId};
   $('ats-target').textContent = `${review.provider} — ${review.url}`;
-  $('ats-result').textContent = 'Review the shown values, then choose Fill reviewed fields only. Nothing has been sent.';
+  $('ats-result').textContent = 'Only individually checked, non-empty answers will be filled. Questions without saved evidence stay manual. Nothing has been sent.';
   refresh();
 }));
 $('ats-fill').addEventListener('click', () => {
   if (busy || !atsReview) return;
   const current = atsReview;
-  const approved = [...atsEditors].filter(([, input]) => input.value.trim())
-    .map(([id, input]) => ({id, value: input.value.trim(), confirmed: true}));
+  const approved = [...atsEditors].filter(([, editor]) => editor.confirm.checked && editor.input.value.trim())
+    .map(([id, editor]) => ({id, value: editor.input.value.trim(), confirmed: true,
+      ...(editor.field.evidenceKey ? {key: editor.field.key, label: editor.field.label, evidenceKey: editor.field.evidenceKey} : {})}));
   run(async unchanged => {
     if (atsReview !== current || !approved.length) throw new Error('Read and review the form again.');
     // A single attempt only. If the page changes or reports an uncertain result,
