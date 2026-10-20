@@ -52,7 +52,7 @@ interface Report {
 const messages = {
   profile_needed: 'Add specific skills or describe work you have done in your saved experience. General traits and learning goals alone do not generate suggestions; uploaded resume files are not read.',
   no_candidates: 'No active, unexpired jobs fit these filters. Clear a filter or browse all jobs below.',
-  no_evidence: 'Jobs were found, but their requirements are not ready for reliable comparison. This is not a rejection. You can still browse all jobs below; updated, non-mock extraction is needed for evidence-based suggestions.',
+  no_evidence: 'Jobs were found, but none has a current real requirements extraction for reliable comparison. Refreshing or uploading a resume will not create one. This is not a rejection; a project administrator must run the extraction workflow before evidence-based suggestions can appear.',
   no_matches: 'No clear skill or project-activity overlaps were found in the jobs evaluated. Recognition is limited to named skills and described work, not every possible meaning. This is not a rejection: review your saved profile or browse all jobs.',
   ready: 'Suggestions to investigate — not an assessment of eligibility.',
 }
@@ -172,7 +172,7 @@ export default function JobRecommendations() {
       </>}
       {!!report.unreviewed_items?.length && <section aria-label="Unreviewed jobs to inspect">
         <h3>Unreviewed jobs to inspect</h3>
-        <p className="recommendation-caveat">These public job descriptions mention skills in your saved profile, but their requirements have not been extracted or checked. This is keyword discovery, not a match, score, recommendation, or eligibility decision. Internships appear first by default; use the job type filter for other roles. Open each job and verify the original posting.</p>
+        <p className="recommendation-caveat">These public job descriptions mention skills in your saved profile, but their requirements have not been extracted or checked. New crawled jobs do not automatically become evaluated jobs: an administrator must prepare their requirements first. This is keyword discovery, not a match, score, recommendation, or eligibility decision. Internships appear first by default; use the job type filter for other roles. Open each job and verify the original posting.</p>
         <ol className="recommendation-list">{report.unreviewed_items.map(job => <li key={job.job_id}>
           <h3><Link to={'/jobs/' + job.job_id}>{job.title}</Link></h3>
           <p className="muted">{job.company} · {job.city || 'City unspecified'} · {job.job_type || 'Type unspecified'}</p>

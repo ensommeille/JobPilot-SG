@@ -64,15 +64,15 @@ def normalize_job_types(value: str | None) -> list[str]:
     lowered = value.casefold()
     result: list[str] = []
     mappings = (
-        ("intern", "internship"),
-        ("ts", "temporary"),
-        ("temp", "temporary"),
-        ("full", "full-time"),
-        ("perm", "permanent"),
-        ("part", "part-time"),
-        ("contract", "contract"),
+        (r"\bintern(?:ship)?\b", "internship"),
+        (r"\bts\b", "temporary"),
+        (r"\btemp(?:orary)?\b", "temporary"),
+        (r"\bfull(?:[ -]?time)?\b", "full-time"),
+        (r"\bperm(?:anent)?\b", "permanent"),
+        (r"\bpart(?:[ -]?time)?\b", "part-time"),
+        (r"\bcontract(?:or)?\b", "contract"),
     )
-    for token, normalized in mappings:
-        if token in lowered and normalized not in result:
+    for pattern, normalized in mappings:
+        if re.search(pattern, lowered) and normalized not in result:
             result.append(normalized)
     return result
