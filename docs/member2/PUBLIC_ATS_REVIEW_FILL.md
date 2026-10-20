@@ -1,6 +1,6 @@
 # Greenhouse and Lever public sources — review and fill
 
-Status: implemented locally on `feat/public-ats-review-fill` on 19 October 2026. This is a JobPilot project feature, not a record of anyone's personal applications.
+Status: implemented on `feat/public-ats-review-fill`; installed-extension acceptance on two hosted original-site forms was completed on 20 October 2026. This is a JobPilot project feature, not a record of anyone's personal applications.
 
 ## What it does
 
@@ -20,6 +20,17 @@ On a supported original-site application page, open the installed JobPilot exten
 The API and extension use separate allowlists for source and form domains. A Greenhouse board may redirect its application URL to a custom company domain; the extension deliberately refuses that page, so the applicant fills it manually. This is not universal Greenhouse form support.
 
 On 19 October 2026 an isolated four-service Docker smoke test registered public Figma/Greenhouse and ShopBack/Lever boards and ran bounded ingestion. Both source runs succeeded; two postings per source were stored alongside two sandbox posts. Read-only browser inspection found the expected basic contact fields on one hosted Greenhouse and one hosted Lever page. No live employer form was filled or submitted during this smoke test. Browser unit tests use synthetic fixtures; they are not evidence of live employer acceptance. The recommendation pipeline still requires valid requirement extraction and separate matching validation; ingestion alone is not proof of a successful recommendation.
+
+### Installed Chrome acceptance — 20 October 2026
+
+With explicit user approval, Chrome loaded the unpacked extension from this branch as version `0.8.1` (ID `nehlleiobnlajcfgcgldimgjlbiadnjk`) alongside the existing `0.8.0` extension. It connected to the isolated `127.0.0.1:5174` JobPilot demo and `127.0.0.1:8002` API as `admin@jobpilot.sg`. The isolated profile contained only fictional test details: `JobPilot Test Applicant`, `jobpilot-acceptance@example.com`, and `00000000`. The demo login had expired between test sessions; signing in again restored the extension connection without a code change.
+
+| Hosted original-site form | Extension result | Independently observed on original page | Not done |
+| --- | --- | --- | --- |
+| [Figma / Greenhouse, Data Engineer Intern (2027)](https://job-boards.greenhouse.io/figma/jobs/6178851004?gh_jid=6178851004) | `Filled 4; skipped 0. ... Nothing was submitted.` | First Name `JobPilot`, Last Name `Test Applicant`, Email `jobpilot-acceptance@example.com`, Phone `00000000` | No résumé, custom question, country/location, CAPTCHA, consent, or final Submit |
+| [ShopBack / Lever, Software Engineer Intern (H1 2027)](https://jobs.lever.co/shopback-2/1804a30e-2d2e-4631-9e85-614c91806ddf/apply) | `Filled 3; skipped 0. ... Nothing was submitted.` | Full name `JobPilot Test Applicant`, Email `jobpilot-acceptance@example.com`, Phone `00000000`; current location and company remained blank | No résumé, custom question, declaration checkbox, or final Submit |
+
+This verifies the installed extension's limited **review-and-fill** behavior on two live, directly hosted ATS pages, not a complete employer application or a production deployment. The positions are test surfaces only and are not personal job recommendations. Their content and availability may change. The extension did not create a JobPilot submitted-application record, because no employer submission was attempted.
 
 ## Manual acceptance checklist
 
