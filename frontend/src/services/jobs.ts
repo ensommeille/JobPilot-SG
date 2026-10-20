@@ -7,7 +7,7 @@ export const fetchJobs = (params?: {
   q?: string; tags?: string; city?: string
   type?: string; deadline_from?: string; deadline_to?: string
   page?: number; page_size?: number
-}) => api.get('/jobs', { params })
+}, config?: AxiosRequestConfig) => api.get('/jobs', { ...config, params: { ...config?.params, ...params } })
 
 export const fetchJobById = (id: JobId, config?: AxiosRequestConfig) => api.get(`/jobs/${id}`, config)
 
@@ -89,6 +89,20 @@ export const normalizeJob = (raw: RawJob): JobView => {
 export const normalizeJobList = (data: unknown): JobView[] => {
   const items = Array.isArray(data) ? data : (data as { items?: unknown[] })?.items ?? []
   return (items as RawJob[]).map(normalizeJob)
+}
+
+// The API caps each response at 100 jobs. Load every page before applying the
+// sidebar filters, otherwise a successful crawl silently hides later pages.
+export const fetchAllJobs = async (q: string, signal?: AbortSignal): Promise<JobView[]> => {
+  const jobs = new Map<JobId, JobView>()
+  for (let page = 1; ; page += 1) {
+    const response = await fetchJobs({ q: q || undefined, page, page_size: 100 }, { signal })
+    for (const job of normalizeJobList(response.data)) jobs.set(job.id, job)
+    const reportedPages = Number(response.data?.pages)
+    if (!Number.isSafeInteger(reportedPages) || reportedPages < 0 || reportedPages > 1000) throw new Error('Invalid job page count')
+    if (page >= reportedPages) break
+  }
+  return [...jobs.values()]
 }
 
 export const normalizeFavoriteList = (data: unknown): JobView[] => {

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'reac
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import JobRecommendations from '../components/JobRecommendations'
-import { fetchJobs, fetchFavorites, addFavorite, removeFavorite, normalizeJobList, normalizeFavoriteList } from '../services/jobs'
+import { fetchAllJobs, fetchFavorites, addFavorite, removeFavorite, normalizeFavoriteList } from '../services/jobs'
 import type { JobId, JobView } from '../services/jobs'
 import { getToken, watchSession } from '../services/auth'
 
@@ -121,20 +121,21 @@ const JobListPage = () => {
   const [pageState, setPageState] = useState({ key: '', page: 1 })
 
   useEffect(() => {
+    const request = new AbortController()
     const load = async () => {
       setLoading(true)
       setError('')
       try {
-        const res = await fetchJobs({ q: search || undefined, page_size: 100 })
-        setJobs(normalizeJobList(res.data))
+        const all = await fetchAllJobs(search, request.signal)
+        if (!request.signal.aborted) setJobs(all)
       } catch {
-        setError('Failed to load jobs. Please try again.')
+        if (!request.signal.aborted) setError('Failed to load jobs. Please try again.')
       } finally {
-        setLoading(false)
+        if (!request.signal.aborted) setLoading(false)
       }
     }
     const timer = setTimeout(load, 300)
-    return () => clearTimeout(timer)
+    return () => { clearTimeout(timer); request.abort() }
   }, [search])
 
   useEffect(() => {
@@ -263,7 +264,7 @@ const JobListPage = () => {
 
         <JobRecommendations />
         <h2 style={{marginBottom: 'var(--s-4)'}}>Browse jobs</h2>
-        <p className="muted" style={{ marginBottom: 'var(--s-4)' }}>Showing up to the first 100 results for each search. Sidebar filters apply to those loaded results.</p>
+        <p className="muted" style={{ marginBottom: 'var(--s-4)' }}>Browse all currently stored jobs. Sidebar filters apply to the full result set.</p>
         <form className="searchbar" onSubmit={e => e.preventDefault()} role="search">
           <label className="searchbar-field searchbar-main">
             <SearchIcon />

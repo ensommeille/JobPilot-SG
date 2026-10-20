@@ -27,6 +27,16 @@ _NEGATED_INTENT = re.compile(r"\b(?:not|never|no longer|except|after|before)\b",
 _INVALID_INTENT_PREFIX = re.compile(
     r"\b(?:not|never|no longer|previously|formerly|was|were)\s*$", re.IGNORECASE
 )
+_ROLE_INTENT = re.compile(
+    r"\b(?:seeking|looking for|applying for)\b[^.;:!?\n]{0,150}", re.IGNORECASE
+)
+_ROLE_DOMAINS = {
+    "software": re.compile(r"\b(?:software|developer|backend|frontend|full[ -]?stack)\b", re.I),
+    "data": re.compile(r"\b(?:data|analytics?|scientist)\b", re.I),
+    "ai": re.compile(r"\b(?:ai|artificial intelligence|machine learning|ml)\b", re.I),
+    "security": re.compile(r"\b(?:security|cybersecurity|infosec)\b", re.I),
+    "cloud": re.compile(r"\b(?:cloud|platform|site reliability|sre)\b", re.I),
+}
 
 
 class RecommendationRequest(BaseModel):
@@ -52,6 +62,17 @@ class Recommendation(BaseModel):
     responsibility_matches: list[ResponsibilityMatch] = Field(default_factory=list)
 
 
+class UnreviewedJob(BaseModel):
+    """A lexical lead, never a requirement match or eligibility judgment."""
+
+    job_id: UUID
+    title: str
+    company: str
+    city: str | None
+    job_type: str | None
+    mentioned_skills: list[str]
+
+
 class RecommendationReport(BaseModel):
     version: str = "evidence-discovery-v2"
     status: Literal["ready", "profile_needed", "no_candidates", "no_evidence", "no_matches"]
@@ -63,6 +84,7 @@ class RecommendationReport(BaseModel):
     preferred_job_type: Literal["internship"] | None = None
     excluded: dict[str, int] = Field(default_factory=dict)
     items: list[Recommendation] = Field(default_factory=list)
+    unreviewed_items: list[UnreviewedJob] = Field(default_factory=list)
 
 
 def specific_overlap_ids(items: list[MatchItem]) -> set[str]:
@@ -88,6 +110,20 @@ def explicit_job_type_preference(profile: UserProfile | None) -> Literal["intern
     return None
 
 
+def explicit_role_focus(profile: UserProfile | None) -> set[str]:
+    """Use a stated target role, not past positions or arbitrary CV keywords."""
+    if profile is None:
+        return set()
+    focus = set()
+    for match in _ROLE_INTENT.finditer(profile.resume_summary or ""):
+        phrase = match.group()
+        prefix = (profile.resume_summary or "")[max(0, match.start() - 20) : match.start()]
+        if _NEGATED_INTENT.search(phrase) or _INVALID_INTENT_PREFIX.search(prefix):
+            continue
+        focus.update(name for name, pattern in _ROLE_DOMAINS.items() if pattern.search(phrase))
+    return focus
+
+
 @router.post("/jobs/recommendations", response_model=RecommendationReport)
 def recommend(
     payload: RecommendationRequest, response: Response, db: Database, user: CurrentUser
@@ -103,6 +139,7 @@ def recommend(
     }
     profile_skill_count = len(specific_profile_ids)
     preference = explicit_job_type_preference(profile)
+    role_focus = explicit_role_focus(profile)
     # Request-local only: avoid parsing personal project text once per candidate.
     projects = (
         prepare_project_evidence(profile.experience if profile else None)
@@ -182,6 +219,7 @@ def recommend(
         )
     }
     ordered = []
+    unreviewed = []
     for index, job in enumerate(jobs):
         run = runs.get(job.id)
         analysis = build_analysis(
@@ -203,6 +241,43 @@ def recommend(
             reason = "mock_extraction"
         if reason:
             report.excluded[reason] = report.excluded.get(reason, 0) + 1
+            # A missing extraction should not make all crawled jobs disappear.
+            # Show exact named-skill mentions from the raw JD separately, with
+            # no requirement, suitability, gap, or score claim. Never use mock
+            # and sandbox sources as public preliminary leads.
+            if (
+                reason == "missing_extraction"
+                and specific_profile_ids
+                and job.source.source_type not in {"mock", "sandbox"}
+            ):
+                found = {
+                    mention.skill_id: mention.label
+                    for mention in mentions(job.description)
+                    if mention.kind == "specific" and mention.skill_id in specific_profile_ids
+                }
+                if found:
+                    # This discovery page is internship-led. For these
+                    # unverified leads, show internships first unless the
+                    # request itself narrows to another type; this does not
+                    # alter evidence-based recommendation ordering.
+                    preview_type = payload.job_type or preference or "internship"
+                    type_mismatch = (job.job_type or "").casefold() != preview_type.casefold()
+                    title_focus = not role_focus or any(
+                        _ROLE_DOMAINS[domain].search(job.title) for domain in role_focus
+                    )
+                    unreviewed.append(
+                        (
+                            (type_mismatch, not title_focus, -len(found), index),
+                            UnreviewedJob(
+                                job_id=job.id,
+                                title=job.title,
+                                company=job.company,
+                                city=job.city,
+                                job_type=job.job_type,
+                                mentioned_skills=sorted(found.values()),
+                            ),
+                        )
+                    )
             continue
         report.evaluated += 1
         supported = [i for i in analysis.items if i.outcome == "supported"]
@@ -244,5 +319,7 @@ def recommend(
     ordered.sort(key=lambda pair: pair[0])
     report.matched = len(ordered)
     report.items = [item for _, item in ordered[: payload.limit]]
+    unreviewed.sort(key=lambda pair: pair[0])
+    report.unreviewed_items = [item for _, item in unreviewed[: payload.limit]]
     report.status = "ready" if ordered else "no_matches" if report.evaluated else "no_evidence"
     return report
