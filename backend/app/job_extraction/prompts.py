@@ -55,6 +55,10 @@ never reduce 'advanced Python and SQL' to an unconditional Python match.
 Education degree, fields_of_study and enrollment are different. Student or fresh graduate does not
 imply a bachelor's degree. Preserve alternatives. Experience 'a plus' is not mandatory; unknown
 minimum_years is null. Set numeric years only for a supported explicit minimum, never a range.
+For an unstated experience requirement, the exact JSON member is
+"experience": {"requirement": null, "minimum_years": null}.
+Replace either null only with a source-backed fact of the schema's required shape.
+Do not add other keys inside experience, even if the source mentions preferred experience.
 In work_constraints retain the stated schedule as text. hours uses only stated numeric per-day or
 per-week bounds, never inferred from a clock-time schedule. minimum_duration keeps the original
 unit (days/weeks/months/years), never converts months to days. Both retain conditional scope such

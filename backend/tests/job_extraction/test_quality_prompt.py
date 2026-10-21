@@ -88,6 +88,13 @@ def test_prompt_keeps_untrusted_text_in_data_envelope(job):
     assert "Do not infer a language" in messages[0].content
 
 
+def test_prompt_supplies_exact_experience_shape_to_json_mode(job):
+    system_message = build_messages(job)[0].content
+
+    assert '"experience": {"requirement": null, "minimum_years": null}' in system_message
+    assert "Do not add other keys inside experience" in system_message
+
+
 def test_repair_codes_are_bounded(job):
     messages = build_messages(job, ["missing"] * 50)
     data = json.loads(messages[1].content)
