@@ -115,13 +115,19 @@ jobs:
       - run: npm audit --audit-level=high
 
   docker:
-    name: Docker build (backend + frontend)
+    name: Docker build + deploy smoke check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Build backend image
-        if: hashFiles('backend/Dockerfile') != ''
-        run: docker build -t jobpilot-sg-backend ./backend
-      - name: Build frontend image
-        if: hashFiles('frontend/Dockerfile') != ''
-        run: docker build -t jobpilot-sg-frontend ./frontend
+      - name: Build and start full stack
+        run: docker compose up -d --build
+      - name: Wait for backend and smoke check API
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:8000/health && break
+            sleep 3
+          done
+          curl -fsS http://127.0.0.1:8000/health
+          curl -fsS "http://127.0.0.1:8000/jobs?page=1&page_size=5" | head -c 300
+      - name: Smoke check frontend
+        run: curl -fsS http://127.0.0.1:5173/ | head -c 100
