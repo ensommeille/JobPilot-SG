@@ -48,3 +48,14 @@ class ApplicationPage(BaseModel):
     page_size: int = Field(ge=1)
     total: int = Field(ge=0)
     pages: int = Field(ge=0)
+
+
+class SavedApplicationAnswer(BaseModel):
+    field_id: str
+    label: str
+    value: str
+
+
+class SavedApplicationAnswers(BaseModel):
+    application_id: UUID
+    answers: list[SavedApplicationAnswer]
