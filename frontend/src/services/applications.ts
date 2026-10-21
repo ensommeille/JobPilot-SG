@@ -23,11 +23,25 @@ export interface ApplicationPage {
   pages: number
 }
 
+export interface SavedApplicationAnswer {
+  field_id: string
+  label: string
+  value: string
+}
+
+export interface SavedApplicationAnswers {
+  application_id: string
+  answers: SavedApplicationAnswer[]
+}
+
 export const fetchApplications = (page = 1, pageSize = 20, config?: ApplicationRequestConfig) =>
   api.get<ApplicationPage>('/applications', { ...config, params: { page, page_size: pageSize } })
 
 export const fetchApplication = (applicationId: string, config?: ApplicationRequestConfig) =>
   api.get<ApplicationRecord>(`/applications/${applicationId}`, config)
+
+export const fetchApplicationAnswers = (applicationId: string, config?: ApplicationRequestConfig) =>
+  api.get<SavedApplicationAnswers>(`/applications/${applicationId}/answers`, config)
 
 export const createManualApplication = (jobId: string, config?: ApplicationRequestConfig) =>
   api.post<ApplicationRecord>(`/jobs/${jobId}/applications`, { status: 'submitted' }, config)

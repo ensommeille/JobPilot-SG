@@ -110,6 +110,14 @@ def test_scopes_identity_compatibility_and_hash_storage(client, db):
             "field_ids": ["applicant_summary"],
         },
     ).json()["values"] == {"applicant_summary": "My text"}
+    assert client.post(
+        "/browser-assistant/ats-evidence",
+        headers=restricted,
+        json={
+            "page_url": "https://jobs.lever.co/acme/abc-123/apply",
+            "evidence_keys": ["summary"],
+        },
+    ).json()["values"] == {"summary": "My text"}
     assert (
         client.post(
             "/profile/import-local",

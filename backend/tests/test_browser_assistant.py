@@ -41,6 +41,33 @@ def test_auth_profile_isolation_and_no_submission(client, db):
 @pytest.mark.parametrize(
     "url",
     [
+        "https://job-boards.greenhouse.io/acme/jobs/12345?gh_jid=12345",
+        "https://boards.greenhouse.io/acme/jobs/12345",
+        "https://jobs.lever.co/acme/abc-123/apply",
+        "https://jobs.eu.lever.co/acme/abc-123/apply",
+    ],
+)
+def test_public_ats_draft_is_read_only(client, db, url):
+    from sqlalchemy import func, select
+
+    from app.db.models import Application
+
+    headers = auth_headers(client)
+    response = client.post(
+        "/browser-assistant/draft",
+        headers=headers,
+        json=body(
+            page_url=url, field_ids=["applicant_name", "applicant_email", "applicant_contact"]
+        ),
+    )
+    assert response.status_code == 200
+    assert response.json()["submission_supported"] is False
+    assert db.scalar(select(func.count()).select_from(Application)) == 0
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
         "http://www.internsg.com/job-apply/1",
         "https://www.internsg.com.evil.test/job-apply/1",
         "https://www.internsg.com@evil.test/job-apply/1",
@@ -48,6 +75,11 @@ def test_auth_profile_isolation_and_no_submission(client, db):
         URL + "?next=evil",
         URL + "#x",
         "https://www.internsg.com/jobs/",
+        "https://job-boards.greenhouse.io/acme/jobs/not-a-number",
+        "https://job-boards.greenhouse.io/acme/jobs/123?gh_jid=456",
+        "https://job-boards.greenhouse.io.evil.test/acme/jobs/123",
+        "https://jobs.lever.co/acme/abc-123/apply?redirect=evil",
+        "https://jobs.lever.co/acme/abc-123/not-apply",
     ],
 )
 def test_rejects_bad_urls(client, url):
@@ -87,3 +119,47 @@ def test_summary_is_manual_only_even_when_legacy_flag_enabled(client, monkeypatc
     assert result.status_code == 200
     assert result.json()["summary_status"] == "manual_only"
     assert "applicant_summary" not in result.json()["values"]
+
+
+def test_ats_evidence_is_scoped_to_saved_profile_and_requested_keys(client):
+    first = auth_headers(client, "ats-first@example.com")
+    second = auth_headers(client, "ats-second@example.com")
+    client.put(
+        "/profile", headers=first, json={
+            "education": "BSc in Software Engineering",
+            "experience": "Built a course project in Python.",
+            "skills": ["Python", "SQL"],
+            "links": {"LinkedIn": "https://www.linkedin.com/in/test-applicant"},
+            "availability_period": "June to August 2027",
+        },
+    )
+    payload = {
+        "page_url": "https://jobs.lever.co/acme/abc-123/apply",
+        "evidence_keys": ["education", "experience", "skills", "linkedin", "github", "availability"],
+    }
+    assert client.post("/browser-assistant/ats-evidence", json=payload).status_code == 401
+    response = client.post("/browser-assistant/ats-evidence", headers=first, json=payload)
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    result = response.json()
+    assert result["values"] == {
+        "education": "BSc in Software Engineering",
+        "experience": "Built a course project in Python.",
+        "skills": "Python, SQL",
+        "linkedin": "https://www.linkedin.com/in/test-applicant",
+        "availability": "June to August 2027",
+    }
+    assert result["submission_supported"] is False
+    assert client.post("/browser-assistant/ats-evidence", headers=second, json=payload).json()["values"] == {}
+
+
+@pytest.mark.parametrize("change", [
+    {"page_url": URL},
+    {"page_url": "https://jobs.lever.co.evil.test/acme/abc-123/apply"},
+    {"evidence_keys": ["visa"]},
+    {"evidence_keys": ["skills", "skills"]},
+    {"resume_file": "ignored.pdf"},
+])
+def test_ats_evidence_rejects_unsupported_scope(client, change):
+    payload = {"page_url": "https://jobs.lever.co/acme/abc-123/apply", "evidence_keys": ["skills"], **change}
+    assert client.post("/browser-assistant/ats-evidence", headers=auth_headers(client), json=payload).status_code == 422

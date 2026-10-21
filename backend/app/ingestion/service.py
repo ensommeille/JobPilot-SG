@@ -17,7 +17,7 @@ from app.db.models import AuditLog, CrawlRun, CrawlRunStatus, JobSource, User
 from app.ingestion.db_repository import SqlAlchemyJobRepository
 from app.ingestion.internsg_adapter import InternSGAdapter, default_internsg_config
 from app.ingestion.models import SourceConfig, SourceType
-from app.ingestion.public_ats_adapter import PublicATSAdapter, ats_provider
+from app.ingestion.public_ats_adapter import PublicATSAdapter, public_ats_identity
 from app.ingestion.schemas import SourceCreate
 from app.ingestion.source_adapter import SourceAdapter
 
@@ -102,26 +102,23 @@ def build_source_adapter(source: JobSource) -> SourceAdapter:
     """Build the currently supported live adapter from persisted source policy."""
     if not source.enabled:
         raise SourceRunError("Source is disabled")
-    if source.source_type == SourceType.API.value:
-        try:
-            provider = ats_provider(source.base_url)
-        except ValueError as exc:
-            raise SourceRunError("No live adapter is available for this source") from exc
-        return PublicATSAdapter(
-            SourceConfig(
-                source_id=str(source.id),
-                name=source.name,
-                source_type=SourceType.API,
-                base_url=source.base_url,
-                allowed_hosts=frozenset({
-                    "boards-api.greenhouse.io" if provider == "greenhouse" else "api.lever.co"
-                }),
-                user_agent="JobPilot-SWE5006/0.2 (bounded academic project)",
-                enforce_robots=False,  # These are documented public job-board APIs.
-            )
-        )
     parsed = urlparse(source.base_url)
     host = (parsed.hostname or "").casefold().rstrip(".")
+    if source.source_type == SourceType.JSON.value:
+        identity = public_ats_identity(source.base_url)
+        if identity is None:
+            raise SourceRunError(
+                "Only canonical Greenhouse and Lever public API boards are supported"
+            )
+        config = SourceConfig(
+            source_id=str(source.id),
+            name=source.name,
+            source_type=SourceType.JSON,
+            base_url=source.base_url,
+            allowed_hosts=frozenset({host}),
+            user_agent="JobPilot-SWE5006/0.3 (low-frequency academic project)",
+        )
+        return PublicATSAdapter(config, provider=identity[0])
     if source.source_type != SourceType.HTML.value or host not in {
         "internsg.com",
         "www.internsg.com",
@@ -179,7 +176,7 @@ def run_source(
         stats = repository.upsert(records)
         closed = 0
         if (
-            source.source_type == SourceType.API.value
+            source.source_type == SourceType.JSON.value
             and batch.status.value == "succeeded"
             and 0 < batch.discovered_count == batch.attempted_count == len(records)
         ):

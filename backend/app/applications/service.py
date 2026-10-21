@@ -8,8 +8,15 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from app.applications.schemas import ManualApplicationCreate
-from app.db.models import Application, ApplicationMethod, ApplicationStatus, JobPosting, User
+from app.applications.schemas import ManualApplicationCreate, SavedApplicationAnswer
+from app.db.models import (
+    Application,
+    ApplicationMethod,
+    ApplicationStatus,
+    FormMappingRecord,
+    JobPosting,
+    User,
+)
 
 ALLOWED_TRANSITIONS: dict[ApplicationStatus, set[ApplicationStatus]] = {
     ApplicationStatus.DRAFT: {ApplicationStatus.SUBMITTED, ApplicationStatus.WITHDRAWN},
@@ -52,6 +59,52 @@ def get_application(db: Session, *, user: User, application_id: UUID) -> Applica
         .where(Application.id == application_id, Application.user_id == user.id)
     )
     return db.scalar(statement)
+
+
+def get_saved_application_answers(
+    db: Session, *, application: Application
+) -> list[SavedApplicationAnswer] | None:
+    """Resolve the user's final confirmed answers, not unconfirmed AI suggestions."""
+    if application.method != ApplicationMethod.ASSISTANT:
+        return None
+    statement = (
+        select(FormMappingRecord)
+        .options(selectinload(FormMappingRecord.form))
+        .where(
+            FormMappingRecord.application_id == application.id,
+            FormMappingRecord.user_id == application.user_id,
+        )
+        .order_by(FormMappingRecord.created_at.desc(), FormMappingRecord.id.desc())
+    )
+    mapping = db.scalar(statement)
+    if mapping is None:
+        return None
+
+    confirmation = application.confirmation_json
+    confirmed = set(confirmation.get("confirmed_field_ids", []))
+    edited = confirmation.get("edited_values", {})
+    selected = confirmed | set(edited)
+    suggestions = {
+        item["field_id"]: item.get("value")
+        for item in mapping.result_json.get("mapping", [])
+        if isinstance(item, dict) and isinstance(item.get("field_id"), str)
+    }
+    answers: list[SavedApplicationAnswer] = []
+    for field in mapping.form.fields_json:
+        if not isinstance(field, dict):
+            continue
+        field_id = field.get("field_id")
+        if not isinstance(field_id, str) or field_id not in selected:
+            continue
+        value = edited[field_id] if field_id in edited else suggestions.get(field_id)
+        answers.append(
+            SavedApplicationAnswer(
+                field_id=field_id,
+                label=str(field.get("label") or field_id),
+                value="" if value is None else str(value),
+            )
+        )
+    return answers
 
 
 def get_application_for_job(db: Session, *, user: User, job_id: UUID) -> Application | None:

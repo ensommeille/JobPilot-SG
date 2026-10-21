@@ -1,4 +1,9 @@
-"""Bounded Singapore-only collection from documented public ATS job-board APIs."""
+"""Bounded, read-only adapters for public Greenhouse and Lever job boards.
+
+The source URL is an exact API-board URL, never an arbitrary user-supplied URL.
+Only published internship posts are retained. Application links are stored, not
+fetched or submitted by this adapter.
+"""
 
 from __future__ import annotations
 
@@ -7,13 +12,13 @@ import re
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
 from urllib.parse import urlparse
+from urllib.robotparser import RobotFileParser
 
 import httpx
 from bs4 import BeautifulSoup
 
-from app.ingestion.models import (
+from .models import (
     AdapterBatch,
     ItemFailure,
     JobRecord,
@@ -22,79 +27,102 @@ from app.ingestion.models import (
     SourceConfig,
     SourceType,
 )
-from app.ingestion.normalization import normalize_job_types, sha256_text
-from app.ingestion.source_adapter import SourceAdapter
+from .normalization import build_dedup_hash, infer_city, normalize_job_types, sha256_text
+from .source_adapter import SourceAdapter
 
-PARSER_VERSION = "public-ats-v1"
-_GREENHOUSE = re.compile(r"/v1/boards/([a-z0-9][a-z0-9-]*)")
-_LEVER = re.compile(r"/v0/postings/([a-z0-9][a-z0-9-]*)")
+PARSER_VERSION = "public-ats-2026-10-v1"
+BOARD_PATHS = {
+    "boards-api.greenhouse.io": ("greenhouse", re.compile(r"/v1/boards/([A-Za-z0-9_-]+)")),
+    "api.lever.co": ("lever", re.compile(r"/v0/postings/([A-Za-z0-9_-]+)")),
+    "api.eu.lever.co": ("lever", re.compile(r"/v0/postings/([A-Za-z0-9_-]+)")),
+}
 
 
-def ats_provider(base_url: str) -> str:
-    """Accept only canonical HTTPS board API roots; never fetch arbitrary admin URLs."""
-    parsed = urlparse(base_url)
+def public_ats_identity(value: str) -> tuple[str, str] | None:
+    """Return (provider, board token) only for exact official HTTPS API URLs."""
+    try:
+        parsed = urlparse(value)
+        host = (parsed.hostname or "").casefold()
+        port = parsed.port
+    except ValueError:
+        return None
+    rule = BOARD_PATHS.get(host)
     if (
         parsed.scheme != "https"
+        or port is not None
         or parsed.username
         or parsed.password
-        or parsed.port
         or parsed.query
         or parsed.fragment
+        or not rule
     ):
-        raise ValueError("Invalid public ATS API URL")
-    host = (parsed.hostname or "").casefold()
-    path = parsed.path.rstrip("/")
-    if host == "boards-api.greenhouse.io" and _GREENHOUSE.fullmatch(path):
-        return "greenhouse"
-    if host == "api.lever.co" and _LEVER.fullmatch(path):
-        return "lever"
-    raise ValueError("Unsupported public ATS API URL")
+        return None
+    match = rule[1].fullmatch(parsed.path.rstrip("/"))
+    return (rule[0], match.group(1)) if match else None
 
 
-def _plain_text(value: str) -> str:
-    return BeautifulSoup(html.unescape(value), "html.parser").get_text("\n", strip=True)
-
-
-def _public_https_url(value: Any) -> str:
+def _public_url(value: object, *, hosts: set[str]) -> str | None:
     if not isinstance(value, str):
-        raise ValueError("Missing public job URL")
-    parsed = urlparse(value)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
-        raise ValueError("Job URL must be public HTTPS")
-    host = parsed.hostname.casefold()
-    if host in {"localhost", "127.0.0.1", "::1"} or host.endswith(".local"):
-        raise ValueError("Job URL must be public HTTPS")
+        return None
+    try:
+        parsed = urlparse(value)
+        host = (parsed.hostname or "").casefold()
+        port = parsed.port
+    except ValueError:
+        return None
+    if (
+        parsed.scheme != "https"
+        or port is not None
+        or parsed.username
+        or parsed.password
+        or host not in hosts
+    ):
+        return None
     return value
 
 
-class PublicATSAdapter(SourceAdapter):
-    """One read-only listing request per run, with per-item validation and no form calls."""
+def _plain(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    return BeautifulSoup(html.unescape(value), "html.parser").get_text(" ", strip=True)
 
+
+def _internship(title: str, record: dict) -> bool:
+    categories = record.get("categories")
+    commitment = categories.get("commitment", "") if isinstance(categories, dict) else ""
+    return bool(re.search(r"\bintern(?:ship)?\b", f"{title} {commitment}", re.I))
+
+
+class PublicATSAdapter(SourceAdapter):
     def __init__(
         self,
         config: SourceConfig,
         *,
+        provider: str,
         client: httpx.Client | None = None,
         sleep: Callable[[float], None] = time.sleep,
         now: Callable[[], datetime] | None = None,
     ) -> None:
-        if config.source_type is not SourceType.API:
-            raise ValueError("PublicATSAdapter requires source_type=api")
-        self.provider = ats_provider(config.base_url)
-        expected_host = (
-            "boards-api.greenhouse.io" if self.provider == "greenhouse" else "api.lever.co"
-        )
-        if config.allowed_hosts != frozenset({expected_host}):
-            raise ValueError("ATS host policy does not match the API URL")
+        identity = public_ats_identity(config.base_url)
+        if (
+            config.source_type is not SourceType.JSON
+            or identity is None
+            or identity[0] != provider
+            or config.allowed_hosts != frozenset({urlparse(config.base_url).hostname})
+        ):
+            raise ValueError("Invalid public ATS source policy")
         self._config = config
-        self._now = now or (lambda: datetime.now(UTC))
+        self.provider = provider
+        self.board = identity[1]
         self._sleep = sleep
+        self._now = now or (lambda: datetime.now(UTC))
         self._owns_client = client is None
         self.client = client or httpx.Client(
             headers={"User-Agent": config.user_agent, "Accept": "application/json"},
             timeout=httpx.Timeout(config.timeout_seconds),
             follow_redirects=False,
         )
+        self._robots: RobotFileParser | None = None
 
     @property
     def config(self) -> SourceConfig:
@@ -104,176 +132,196 @@ class PublicATSAdapter(SourceAdapter):
         if self._owns_client:
             self.client.close()
 
-    def collect(self, *, max_links: int, max_details: int) -> AdapterBatch:
-        if not 1 <= max_links <= 100 or not 1 <= max_details <= max_links:
-            raise ValueError("Limits must satisfy 1 <= max_details <= max_links <= 100")
-        started = self._now()
-        if not self.config.enabled:
-            return self._batch(started, False, 0, 0, [], [
-                self._failure(self.config.base_url, "listing", ValueError("Source disabled"))
-            ])
-
-        try:
-            payload = self._fetch_listing()
-            if self.provider == "greenhouse" and not isinstance(payload, dict):
-                raise ValueError("ATS response is not an object")
-            jobs = payload.get("jobs") if self.provider == "greenhouse" else payload
-            if not isinstance(jobs, list):
-                raise ValueError("ATS response has no jobs array")
-        except (httpx.HTTPError, ValueError) as exc:
-            return self._batch(started, False, 0, 0, [], [
-                self._failure(self.config.base_url, "listing", exc)
-            ])
-
-        singapore_jobs = [job for job in jobs if isinstance(job, dict) and self._in_singapore(job)]
-        sort_key = "updated_at" if self.provider == "greenhouse" else "createdAt"
-        singapore_jobs.sort(key=lambda job: str(job.get(sort_key) or ""), reverse=True)
-        selected = singapore_jobs[:max_links][:max_details]
-        items: list[RawJobItem] = []
-        failures: list[ItemFailure] = []
-        for job in selected:
-            try:
-                items.append(self._to_raw_item(job))
-            except (TypeError, ValueError) as exc:
-                failures.append(self._failure(self.config.base_url, "parse", exc))
-        return self._batch(started, True, len(singapore_jobs), len(selected), items, failures)
-
-    def _fetch_listing(self) -> Any:
-        params = {"content": "true"} if self.provider == "greenhouse" else {"mode": "json"}
-        url = f"{self.config.base_url}/jobs" if self.provider == "greenhouse" else self.config.base_url
+    def _get(self, url: str) -> httpx.Response:
+        parsed = urlparse(url)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname not in self.config.allowed_hosts
+            or parsed.port is not None
+            or parsed.username
+            or parsed.password
+        ):
+            raise ValueError("Request is outside the configured ATS host")
+        if self.config.enforce_robots and not url.endswith("/robots.txt"):
+            if self._robots is None:
+                robots_url = f"https://{parsed.hostname}/robots.txt"
+                try:
+                    response = self.client.get(robots_url)
+                    response.raise_for_status()
+                except httpx.HTTPError as exc:
+                    if self.config.robots_fail_closed:
+                        raise ValueError("ATS robots policy unavailable") from exc
+                    parser = RobotFileParser()
+                    parser.parse([])
+                else:
+                    parser = RobotFileParser()
+                    parser.parse(response.text.splitlines())
+                self._robots = parser
+            if not self._robots.can_fetch(self.config.user_agent, url):
+                raise ValueError("ATS robots policy disallows this request")
         for attempt in range(self.config.retry_count + 1):
             try:
-                response = self.client.get(url, params=params)
-                if response.status_code in {500, 502, 503, 504} and attempt < self.config.retry_count:
-                    self._sleep(0.5 * (attempt + 1))
-                    continue
-                response.raise_for_status()  # 403/429 are never retried.
-                if "json" not in response.headers.get("content-type", "").casefold():
-                    raise ValueError("ATS endpoint did not return JSON")
-                return response.json()
-            except httpx.TransportError:
+                response = self.client.get(url)
+                # A redirect is not followed, even if an API provider changes hosts.
+                if response.is_redirect:
+                    raise ValueError("ATS API redirected unexpectedly")
+                response.raise_for_status()
+                return response
+            except (httpx.TransportError, httpx.TimeoutException):
                 if attempt == self.config.retry_count:
                     raise
                 self._sleep(0.5 * (attempt + 1))
-        raise RuntimeError("Unreachable ATS retry state")
+        raise AssertionError("unreachable")
 
-    def _in_singapore(self, job: dict[str, Any]) -> bool:
-        if self.provider == "greenhouse":
-            location = job.get("location") or {}
-            values = [location.get("name") if isinstance(location, dict) else None]
-        else:
-            categories = job.get("categories") or {}
-            if not isinstance(categories, dict):
-                return False
-            values = [categories.get("location"), *(categories.get("allLocations") or [])]
-        return any(isinstance(value, str) and "singapore" in value.casefold() for value in values)
+    def _json(self, url: str) -> object:
+        response = self._get(url)
+        if "application/json" not in response.headers.get("content-type", "").casefold():
+            raise ValueError("ATS response is not JSON")
+        if len(response.content) > 10_000_000:
+            raise ValueError("ATS response exceeds 10 MB")
+        return response.json()
 
-    def _to_raw_item(self, job: dict[str, Any]) -> RawJobItem:
-        external_id = str(job.get("id") or "").strip()
-        if not external_id:
-            raise ValueError("ATS job has no id")
-        if self.provider == "greenhouse":
-            title = str(job.get("title") or "").strip()
-            location_value = job.get("location") or {}
-            if not isinstance(location_value, dict):
-                raise ValueError("ATS job has invalid location data")
-            location = str(location_value.get("name") or "").strip()
-            description = _plain_text(str(job.get("content") or ""))
-            source_url = _public_https_url(job.get("absolute_url"))
-            apply_url = source_url
-            commitment = title
-        else:
-            title = str(job.get("text") or "").strip()
-            categories = job.get("categories") or {}
-            if not isinstance(categories, dict):
-                raise ValueError("ATS job has invalid categories")
-            location = str(categories.get("location") or "").strip()
-            sections = [str(job.get("descriptionPlain") or "")]
-            lists = job.get("lists") or []
-            if not isinstance(lists, list):
-                raise ValueError("ATS job has invalid description sections")
-            for section in lists:
-                if isinstance(section, dict):
-                    sections.append(f"{section.get('text') or ''}\n{_plain_text(str(section.get('content') or ''))}")
-            description = "\n\n".join(section.strip() for section in sections if section.strip())
-            source_url = _public_https_url(job.get("hostedUrl"))
-            apply_url = _public_https_url(job.get("applyUrl"))
-            commitment = str(categories.get("commitment") or title)
-        if not title or not description:
-            raise ValueError("ATS job is missing a title or description")
-        if not self._in_singapore(job):
-            raise ValueError("ATS job is outside Singapore")
-        if (
-            len(external_id) > 255
-            or len(title) > 300
-            or len(source_url) > 2048
-            or len(apply_url) > 2000
-        ):
-            raise ValueError("ATS job exceeds database field limits")
-        description = description[:20000]
-        raw_text = f"{title}\n{description}"
-        raw_hash = sha256_text(raw_text)
-        job_types = normalize_job_types(commitment)
-        record = JobRecord(
-            source=self.provider,
-            source_id=self.config.source_id,
-            source_type=SourceType.API,
-            external_id=external_id,
-            source_url=source_url,
-            title=title,
-            company=self.config.name,
-            location=location,
-            city="Singapore",
-            job_type=job_types,
-            job_type_raw=commitment,
-            description=description,
-            apply_url=apply_url,
-            raw_hash=raw_hash,
-            dedup_hash=sha256_text(f"{self.config.source_id}\x1f{external_id}"),
-            parser_version=PARSER_VERSION,
-            tags=job_types,
+    def collect(self, *, max_links: int, max_details: int) -> AdapterBatch:
+        if not 1 <= max_details <= max_links <= 100:
+            raise ValueError("Invalid collection limits")
+        started = self._now()
+        items: list[RawJobItem] = []
+        failures: list[ItemFailure] = []
+        discovered = attempted = 0
+        listing_accessible = False
+        url = self.config.base_url + (
+            "/jobs?content=true" if self.provider == "greenhouse" else "?mode=json"
         )
-        return RawJobItem(
-            source_id=self.config.source_id,
-            source_type=SourceType.API,
-            external_id=external_id,
-            source_url=source_url,
-            raw_text=raw_text,
-            raw_hash=raw_hash,
-            known_fields=record,
-            fetched_at=self._now(),
+        try:
+            if not self.config.enabled:
+                raise ValueError("Source is disabled")
+            data = self._json(url)
+            jobs = (
+                data.get("jobs")
+                if self.provider == "greenhouse" and isinstance(data, dict)
+                else data
+            )
+            if not isinstance(jobs, list):
+                raise ValueError("ATS listing has an unexpected shape")
+            listing_accessible = True
+            candidates = [
+                job
+                for job in jobs
+                if isinstance(job, dict)
+                and _internship(str(job.get("title") or job.get("text") or ""), job)
+            ]
+            discovered = len(candidates)
+            for job in candidates[:max_links][:max_details]:
+                attempted += 1
+                if attempted > 1:
+                    self._sleep(self.config.polite_delay_seconds)
+                try:
+                    items.append(self._item(job))
+                except (ValueError, TypeError, KeyError) as exc:
+                    failures.append(
+                        ItemFailure(
+                            url=url, stage="parse", error_type=type(exc).__name__, message=str(exc)
+                        )
+                    )
+        except (httpx.HTTPError, ValueError) as exc:
+            failures.append(
+                ItemFailure(
+                    url=url,
+                    stage="listing",
+                    error_type=type(exc).__name__,
+                    message=str(exc),
+                    retryable=isinstance(exc, httpx.TransportError),
+                )
+            )
+        status = (
+            RunStatus.PARTIAL
+            if items and failures
+            else RunStatus.FAILED
+            if failures
+            else RunStatus.SUCCEEDED
         )
-
-    def _batch(
-        self,
-        started_at: datetime,
-        accessible: bool,
-        discovered: int,
-        attempted: int,
-        items: list[RawJobItem],
-        failures: list[ItemFailure],
-    ) -> AdapterBatch:
-        status = RunStatus.SUCCEEDED
-        if failures:
-            status = RunStatus.PARTIAL if items else RunStatus.FAILED
         return AdapterBatch(
             source_id=self.config.source_id,
             status=status,
-            listing_accessible=accessible,
+            listing_accessible=listing_accessible,
             discovered_count=discovered,
             attempted_count=attempted,
             items=items,
             failures=failures,
-            started_at=started_at,
+            started_at=started,
             finished_at=self._now(),
         )
 
-    @staticmethod
-    def _failure(url: str, stage: str, exc: Exception) -> ItemFailure:
-        return ItemFailure(
-            url=url,
-            stage=stage,  # type: ignore[arg-type]
-            error_type=type(exc).__name__,
-            message=str(exc),
-            retryable=isinstance(exc, (httpx.TransportError, httpx.TimeoutException)),
+    def _item(self, job: dict) -> RawJobItem:
+        if self.provider == "greenhouse":
+            external_id = str(job["id"])
+            if not external_id.isascii() or not external_id.isdecimal():
+                raise ValueError("Greenhouse post has an invalid ID")
+            title = _plain(job.get("title"))
+            original = _public_url(
+                job.get("absolute_url"), hosts={"boards.greenhouse.io", "job-boards.greenhouse.io"}
+            )
+            # Greenhouse can use a custom company URL. Do not fetch arbitrary domains;
+            # construct the canonical hosted board URL from the verified board/id.
+            source_url = (
+                original or f"https://job-boards.greenhouse.io/{self.board}/jobs/{external_id}"
+            )
+            apply_url = source_url
+            location = (
+                _plain((job.get("location") or {}).get("name"))
+                if isinstance(job.get("location"), dict)
+                else ""
+            )
+            raw_html = html.unescape(str(job.get("content") or ""))
+            description = _plain(raw_html)
+            job_type_raw = "Internship"
+        else:
+            external_id = str(job["id"])
+            if not re.fullmatch(r"[A-Za-z0-9-]+", external_id):
+                raise ValueError("Lever post has an invalid ID")
+            title = _plain(job.get("text"))
+            hosts = {"jobs.lever.co", "jobs.eu.lever.co"}
+            source_url = _public_url(job.get("hostedUrl"), hosts=hosts)
+            apply_url = _public_url(job.get("applyUrl"), hosts=hosts)
+            if not source_url or not apply_url:
+                raise ValueError("Lever hosted/apply URL is not a supported HTTPS form")
+            categories = job.get("categories") or {}
+            location = _plain(categories.get("location")) if isinstance(categories, dict) else ""
+            job_type_raw = (
+                _plain(categories.get("commitment")) if isinstance(categories, dict) else ""
+            )
+            raw_html = str(job.get("description") or "")
+            description = _plain(job.get("descriptionPlain") or raw_html)
+        if not external_id or not title or not description:
+            raise ValueError("ATS post is missing ID, title or description")
+        city = infer_city(location)
+        raw_text = f"{title}\n{description}"
+        record = JobRecord(
+            source=self.provider,
+            source_id=self.config.source_id,
+            source_type=SourceType.JSON,
+            external_id=external_id,
+            source_url=source_url,
+            title=title,
+            company=self.config.name,
+            location=location or None,
+            city=city,
+            job_type=normalize_job_types(job_type_raw or title),
+            job_type_raw=job_type_raw,
+            description=description,
+            apply_url=apply_url,
+            raw_hash=sha256_text(raw_text),
+            dedup_hash=build_dedup_hash(self.config.source_id, title, self.config.name, city),
+            parser_version=PARSER_VERSION,
+        )
+        return RawJobItem(
+            source_id=self.config.source_id,
+            source_type=SourceType.JSON,
+            external_id=external_id,
+            source_url=source_url,
+            raw_text=raw_text,
+            raw_html=raw_html or None,
+            raw_hash=record.raw_hash,
+            known_fields=record,
+            fetched_at=self._now(),
         )

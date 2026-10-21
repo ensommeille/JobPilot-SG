@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class SourceType(StrEnum):
     HTML = "html"
-    API = "api"
+    JSON = "json"
     RSS = "rss"
     MOCK = "mock"
 

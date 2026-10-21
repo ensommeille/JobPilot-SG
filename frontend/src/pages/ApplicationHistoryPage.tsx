@@ -2,8 +2,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import {
-  fetchApplications, updateApplicationStatus,
-  type ApplicationRecord, type ApplicationStatus,
+  fetchApplicationAnswers, fetchApplications, updateApplicationStatus,
+  type ApplicationRecord, type ApplicationStatus, type SavedApplicationAnswer,
 } from '../services/applications'
 import { getToken, watchSession } from '../services/auth'
 
@@ -43,6 +43,7 @@ function SessionApplicationHistory({ token }: { token: string | null }) {
   const [selectedStatus, setSelectedStatus] = useState<Record<string, ApplicationStatus>>({})
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [updateError, setUpdateError] = useState<Record<string, string>>({})
+  const [expandedAnswersId, setExpandedAnswersId] = useState<string | null>(null)
   const updates = useRef(new Set<AbortController>())
   const navigate = useNavigate()
 
@@ -175,8 +176,16 @@ function SessionApplicationHistory({ token }: { token: string | null }) {
                     </div>
                     <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                       <span style={{ backgroundColor: status.bg, color: status.color, padding: '4px 12px', borderRadius: '12px', fontSize: '13px', fontWeight: '500' }}>{label}</span>
+                      {assistant && <button type="button" className="btn btn-secondary btn-sm"
+                        aria-expanded={expandedAnswersId === application.id}
+                        aria-controls={`saved-answers-${application.id}`}
+                        onClick={() => setExpandedAnswersId(current => current === application.id ? null : application.id)}>
+                        {expandedAnswersId === application.id ? 'Hide saved answers' : 'View saved answers'}
+                      </button>}
                       <button onClick={() => navigate(`/jobs/${application.job.id}`)} style={{ fontSize: '13px', color: '#1a73e8', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>View Job →</button>
                     </div>
+                    {assistant && token && expandedAnswersId === application.id &&
+                      <SavedAnswersPanel applicationId={application.id} token={token} />}
                   </article>
                 )
               })}
@@ -191,4 +200,44 @@ function SessionApplicationHistory({ token }: { token: string | null }) {
       </div>
     </div>
   )
+}
+
+function SavedAnswersPanel({ applicationId, token }: { applicationId: string; token: string }) {
+  const [answers, setAnswers] = useState<SavedApplicationAnswer[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [retry, setRetry] = useState(0)
+
+  useEffect(() => {
+    const request = new AbortController()
+    fetchApplicationAnswers(applicationId, {
+      signal: request.signal, headers: { Authorization: `Bearer ${token}` }, timeout: 15000,
+    }).then(response => {
+      if (!request.signal.aborted && getToken() === token) setAnswers(response.data.answers)
+    }).catch(() => {
+      if (!request.signal.aborted && getToken() === token) setError('Could not load saved answers. Please retry.')
+    }).finally(() => {
+      if (!request.signal.aborted && getToken() === token) setLoading(false)
+    })
+    return () => request.abort()
+  }, [applicationId, token, retry])
+
+  return <section id={`saved-answers-${applicationId}`} aria-label="Saved application answers"
+    style={{ flexBasis: '100%', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
+    <p style={{ margin: '0 0 12px', color: '#555' }}>Saved in JobPilot only. These answers were not sent to the employer.</p>
+    {loading && <p role="status">Loading saved answers...</p>}
+    {error && <div role="alert"><p>{error}</p><button type="button" className="btn btn-secondary btn-sm" onClick={() => {
+      setAnswers(null)
+      setError('')
+      setLoading(true)
+      setRetry(value => value + 1)
+    }}>Retry</button></div>}
+    {!loading && !error && answers?.length === 0 && <p>No confirmed answers were saved for this record.</p>}
+    {!loading && !error && answers && answers.length > 0 && <dl style={{ margin: 0 }}>
+      {answers.map(answer => <div key={answer.field_id} style={{ marginBottom: '12px' }}>
+        <dt style={{ fontWeight: 600 }}>{answer.label}</dt>
+        <dd style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{answer.value || '(Left blank)'}</dd>
+      </div>)}
+    </dl>}
+  </section>
 }

@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
   "name": "JobPilot SG — Review & Fill",
-  "version": "0.8.0",
-  "description": "Review and fill InternSG forms; send only after explicit confirmation and manual CAPTCHA.",
+  "version": "0.8.2",
+  "description": "Review and fill InternSG, Greenhouse and Lever forms; final submission stays manual.",
   "minimum_chrome_version": "106",
   "permissions": ["activeTab", "scripting", "storage"],
   "background": {"service_worker": "background.js", "type": "module"},
   "externally_connectable": {"matches": ["http://localhost/*", "http://127.0.0.1/*"]},
   "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
-  "action": {"default_popup": "popup.html", "default_title": "Review InternSG application"},
+  "action": {"default_popup": "popup.html", "default_title": "Review and fill supported applications"},
   "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"}
 }

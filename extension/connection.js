@@ -2,6 +2,7 @@
 export const DEPLOYMENTS = {
   'http://127.0.0.1:5173': 'http://127.0.0.1:8001',
   'http://localhost:5173': 'http://localhost:8000',
+  'http://127.0.0.1:5174': 'http://127.0.0.1:8002',
 };
 const random = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 const challengeFor = async value => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))))).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');

@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.db.models import CrawlRunStatus
 from app.ingestion.models import SourceType
+from app.ingestion.public_ats_adapter import public_ats_identity
 
 
 class SourceCreate(BaseModel):
@@ -44,6 +45,14 @@ class SourceCreate(BaseModel):
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
             raise ValueError("base_url must be an absolute HTTPS URL without credentials")
         return normalized
+
+    @model_validator(mode="after")
+    def validate_public_ats(self) -> SourceCreate:
+        if self.source_type is SourceType.JSON and public_ats_identity(self.base_url) is None:
+            raise ValueError(
+                "JSON sources require an exact Greenhouse or Lever public board API URL"
+            )
+        return self
 
 
 class SourceRead(BaseModel):
