@@ -367,3 +367,117 @@ def test_prepared_evidence_reuses_exact_results_without_a_global_cache():
         match_responsibilities(facts, duty, experience, project_evidence={})[0].outcome == "unknown"
     )
     assert match_responsibilities(facts, duty, None)[0].outcome == "unknown"
+
+
+STRIPE_SOFTWARE_DUTY = (
+    "Write software that will be used in production, and has meaningful impact "
+    "to Stripe’s business and users."
+)
+
+
+@pytest.mark.parametrize(
+    "experience",
+    [
+        "Built web applications for a class project.",
+        "Wrote software for a booking project.",
+        "I wrote software with Python for a student club.",
+        "Developed software.",
+    ],
+)
+def test_explicit_software_writing_is_related_activity_not_production_qualification(experience):
+    row = compare(STRIPE_SOFTWARE_DUTY, experience)
+    assert row.outcome == "related_evidence"
+    assert row.reason == "related_activity"
+    assert row.activities == ["software_features"]
+    assert row.profile_evidence == [experience]
+    assert row.responsibility == row.job_evidence == STRIPE_SOFTWARE_DUTY
+    assert "supported" not in row.model_dump().values()
+    assert "software_deployment" not in row.activities
+
+
+@pytest.mark.parametrize(
+    "experience",
+    [
+        "Wrote software documentation.",
+        "Wrote software requirements.",
+        "Wrote software reviews.",
+        "Wrote a report about software.",
+        "Wrote software engineering documentation.",
+        "Wrote a tutorial on how to develop software.",
+        "I am learning to write software.",
+        "I plan to write software for a booking project.",
+        "I will write software for a booking project.",
+        "I did not write software.",
+        "I never wrote software.",
+        "Quoted text: Wrote software for a booking project.",
+        "Job description: Write software that will be used in production.",
+        "My mentor wrote software for a booking project.",
+        "Observed a colleague who wrote software.",
+        "Write software that will be used in production.",
+    ],
+)
+def test_software_noun_does_not_turn_non_project_text_into_implementation(experience):
+    assert not has_project_evidence(experience)
+    row = compare(STRIPE_SOFTWARE_DUTY, experience)
+    assert row.outcome == "unknown"
+    assert row.activities == row.profile_evidence == []
+
+
+@pytest.mark.parametrize(
+    "denial",
+    [
+        "I never wrote software.",
+        "I have no experience writing software.",
+    ],
+)
+def test_bare_software_denial_still_vetoes_an_earlier_development_claim(denial):
+    experience = "Built web applications for a class project. " + denial
+    assert not has_project_evidence(experience)
+    assert compare(STRIPE_SOFTWARE_DUTY, experience).outcome == "unknown"
+
+
+@pytest.mark.parametrize(
+    "duty",
+    ["Write software documentation.", "Write software requirements.", "Write software reviews."],
+)
+def test_source_software_documents_are_not_software_implementation(duty):
+    row = compare(duty, "Built web applications for a class project.")
+    assert row.outcome == "unknown"
+    assert row.reason == "unsupported_activity"
+
+
+def test_software_writing_requires_the_action_in_a_complete_source_context():
+    experience = "Wrote software for a booking project."
+    clipped_noun = compare(
+        "software that will be used in production.",
+        experience,
+        description="Write software that will be used in production.",
+    )
+    assert clipped_noun.outcome == "unknown"
+    assert clipped_noun.reason == "unsupported_activity"
+    clipped_action = compare(
+        "write software that will be used in production.",
+        experience,
+        description="Review a tutorial explaining how to write software that will be used in production.",
+    )
+    assert clipped_action.outcome == "unknown"
+    assert clipped_action.reason == "unsupported_activity"
+
+
+def test_software_writing_keeps_conditional_and_secondary_scope():
+    experience = "Built web applications for a class project."
+    duty = "If time permits, write software that will be used in production."
+    condition = TextFact(value="If time permits", evidence="If time permits")
+    conditional = compare(duty, experience, priority="conditional", condition=condition)
+    assert conditional.outcome == "related_evidence"
+    assert conditional.reason == "related_conditional_activity"
+    assert conditional.priority == "conditional"
+    assert conditional.condition == condition
+    assert conditional.responsibility == conditional.job_evidence == duty
+    secondary = compare(STRIPE_SOFTWARE_DUTY, experience, priority="secondary", condition=None)
+    assert secondary.outcome == "related_evidence"
+    assert secondary.priority == "secondary"
+    assert secondary.activities == ["software_features"]
+    omitted = compare(duty, experience)
+    assert omitted.outcome == "unknown"
+    assert omitted.reason == "scope_unverified"

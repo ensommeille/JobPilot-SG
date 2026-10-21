@@ -1,0 +1,8 @@
+.source-review-notice {
+  padding: var(--s-4);
+  margin-block: var(--s-4);
+  background: var(--warning-soft);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.source-review-notice p { margin-block: var(--s-2) 0; max-width: 72ch; }

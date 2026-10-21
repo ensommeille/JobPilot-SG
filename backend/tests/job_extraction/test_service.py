@@ -84,6 +84,19 @@ def test_repair_does_not_echo_untrusted_extra_key(job, response):
     assert "SECRET-DO-NOT-ECHO" not in provider.requests[1].messages[1].content
 
 
+def test_experience_extra_key_is_rejected_instead_of_silently_dropped(job, response):
+    response.data["experience"]["preferred_experience"] = "Do not silently accept this field"
+    provider = MockProvider([response])
+    result = extract(provider, job, ExtractionConfig(max_validation_retries=0))
+
+    assert result.status == "failed"
+    assert result.error_code == "schema_validation_failed"
+    assert result.extraction is None
+    assert result.attempts[0].validation_issues == ["experience:extra_forbidden"]
+    assert len(provider.requests) == 1
+    assert "preferred_experience" not in result.model_dump_json()
+
+
 @pytest.mark.parametrize("retries", [0, 1, 2])
 def test_repair_has_hard_bound(job, retries):
     provider = MockProvider([InvalidStructuredOutputError("raw secret")] * 4)

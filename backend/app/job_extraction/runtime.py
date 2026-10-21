@@ -29,7 +29,7 @@ def live_runtime(settings) -> "ExtractionRuntime":
 
     return ExtractionRuntime(
         provider_factory=factory,
-        profile_revision="live-extraction-v4-experience-shape-" + endpoint_revision,
+        profile_revision="live-extraction-v6-applicant-context-" + endpoint_revision,
         provider=settings.provider,
         model=settings.model
         or ("deepseek-v4-flash" if settings.provider == "deepseek" else "qwen3.8-flash"),

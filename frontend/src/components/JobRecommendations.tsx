@@ -6,6 +6,8 @@ import { RequirementConditions, WorkConstraints } from './RequirementEvidence'
 import type { StructuredRequirement, WorkConstraintEvidence } from './RequirementEvidence'
 import ResponsibilityEvidence from './ResponsibilityEvidence'
 import type { ResponsibilityMatch } from './ResponsibilityEvidence'
+import SourceReviewNotice from './SourceReviewNotice'
+import type { SourceReview } from './SourceReviewNotice'
 import './JobRecommendations.css'
 
 interface Evidence extends StructuredRequirement {
@@ -28,6 +30,7 @@ interface Suggestion {
   overlaps?: Evidence[]
   work_constraints?: WorkConstraintEvidence[]
   responsibility_matches?: ResponsibilityMatch[]
+  source_review?: SourceReview | null
 }
 interface UnreviewedJob {
   job_id: string
@@ -48,6 +51,7 @@ interface Report {
   excluded: Record<string, number>
   items: Suggestion[]
   unreviewed_items: UnreviewedJob[]
+  source_review_count?: number
 }
 const messages = {
   profile_needed: 'Add specific skills or describe work you have done in your saved experience. General traits and learning goals alone do not generate suggestions; uploaded resume files are not read.',
@@ -69,6 +73,7 @@ const exclusions: Record<string, string> = {
   invalid_extraction: 'Requirements could not be verified', extraction_running: 'Extraction in progress',
   extraction_failed: 'Extraction failed', no_requirements: 'No comparable requirements',
   mock_extraction: 'Mock data excluded',
+  invalid_source_review: 'Corrected requirements could not be verified',
 }
 
 export default function JobRecommendations() {
@@ -131,6 +136,7 @@ export default function JobRecommendations() {
     {report && <div>
       <p role="status"><strong>{messages[report.status]}</strong></p>
       <p className="muted">Using {report.profile_skill_count} distinct named tool or domain {report.profile_skill_count === 1 ? 'skill' : 'skills'} from your saved Skills list. Resume files are not parsed.</p>
+      <SourceReviewNotice count={report.source_review_count} />
       {report.preferred_job_type === 'internship' && <p className="muted">Your saved introduction or availability explicitly mentions seeking an internship. Internship jobs appear before other job types when the skill-gap evidence is otherwise comparable; other jobs remain visible.</p>}
       {report.status !== 'profile_needed' && <>
         <p>{report.evaluated} of {report.scanned} candidate jobs evaluated. {report.matched} with related evidence; showing {report.items.length}.</p>
@@ -147,6 +153,7 @@ export default function JobRecommendations() {
           {report.items.map(job => <li key={job.job_id}>
             <h3><Link to={'/jobs/' + job.job_id}>{job.title}</Link></h3>
             <p className="muted">{job.company} · {job.city || 'City unspecified'} · {job.job_type || 'Type unspecified'}</p>
+            <SourceReviewNotice review={job.source_review} />
             {!!sharedSkills(job).length && <p><strong>Shared skills:</strong> {sharedSkills(job).join(', ')} named in both the JD and your saved skills.</p>}
             {job.responsibility_matches?.some(item => item.outcome === 'related_evidence') && <p><strong>Why shown:</strong> Your saved project experience includes related activities.</p>}
             <p>{job.gaps.length} explicit gaps · {job.unknown.length} requirements still need more information or manual review.</p>

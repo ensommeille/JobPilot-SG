@@ -1,10 +1,11 @@
 """Conservative quote checks are not semantic correctness claims."""
 
 import json
+import re
 
 import pytest
 
-from app.job_extraction.models import JobExtractionSchema
+from app.job_extraction.models import ExperienceRequirements, JobExtractionSchema
 from app.job_extraction.prompts import SYSTEM_PROMPT, build_messages
 from app.job_extraction.quality import assess_quality
 
@@ -41,9 +42,20 @@ def test_whitespace_and_unicode_normalization(empty_payload):
     assert quality.score == 1.0
 
 
-def test_quote_presence_does_not_prove_value(empty_payload):
-    empty_payload["summary"] = {"value": "Must have a PhD", "evidence": "Students welcome"}
-    quality = assess_quality(JobExtractionSchema.model_validate(empty_payload), "Students welcome")
+@pytest.mark.parametrize(
+    "value,evidence,description",
+    [
+        ("Must have a PhD", "Students welcome", "Students welcome"),
+        (
+            "Work across the stack and write production software.",
+            "Work across the stack.",
+            "Work across the stack. Write software that will be used in production.",
+        ),
+    ],
+)
+def test_quote_presence_does_not_prove_value(empty_payload, value, evidence, description):
+    empty_payload["summary"] = {"value": value, "evidence": evidence}
+    quality = assess_quality(JobExtractionSchema.model_validate(empty_payload), description)
     assert quality.score == 1.0
     assert quality.requires_review
     assert "semantic" in quality.interpretation
@@ -93,6 +105,25 @@ def test_prompt_supplies_exact_experience_shape_to_json_mode(job):
 
     assert '"experience": {"requirement": null, "minimum_years": null}' in system_message
     assert "Do not add other keys inside experience" in system_message
+
+
+def test_experience_examples_in_actual_prompt_validate_against_strict_contract(job):
+    # Validate the examples sent to the provider, not scripted predictions of model accuracy.
+    messages = build_messages(job)
+    decoder = json.JSONDecoder()
+    examples = [
+        ExperienceRequirements.model_validate(decoder.raw_decode(messages[0].content[m.end() :])[0])
+        for m in re.finditer(r'"experience":\s*', messages[0].content)
+    ]
+    assert len(examples) == 2
+    stated, unstated = examples
+    assert stated.requirement is not None
+    assert stated.requirement.value == stated.requirement.evidence
+    assert stated.minimum_years is None
+    assert unstated.requirement is None
+    assert unstated.minimum_years is None
+    # Guidance examples must stay out of the current job's evidence envelope.
+    assert json.loads(messages[1].content)["untrusted_job_data"]["description"] == job.description
 
 
 def test_repair_codes_are_bounded(job):

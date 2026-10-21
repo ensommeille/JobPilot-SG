@@ -12,6 +12,7 @@ from sqlalchemy.orm import joinedload
 
 from app.auth.dependencies import CurrentUser
 from app.db.models import JobExtractionRun, JobPosting, UserProfile
+from app.job_extraction.source_review import SourceReviewProvenance
 from app.job_matching import Database, MatchItem, build_analysis
 from app.responsibility_matching import ResponsibilityMatch, prepare_project_evidence
 from app.skill_signals import mentions, positive_profile
@@ -60,6 +61,7 @@ class Recommendation(BaseModel):
     overlaps: list[MatchItem] = Field(default_factory=list)
     work_constraints: list[MatchItem] = Field(default_factory=list)
     responsibility_matches: list[ResponsibilityMatch] = Field(default_factory=list)
+    source_review: SourceReviewProvenance | None = None
 
 
 class UnreviewedJob(BaseModel):
@@ -78,6 +80,7 @@ class RecommendationReport(BaseModel):
     status: Literal["ready", "profile_needed", "no_candidates", "no_evidence", "no_matches"]
     scanned: int = 0
     evaluated: int = 0
+    source_review_count: int = 0
     truncated: bool = False
     matched: int = 0
     profile_skill_count: int = 0
@@ -280,6 +283,8 @@ def recommend(
                     )
             continue
         report.evaluated += 1
+        if analysis.source_review is not None:
+            report.source_review_count += 1
         supported = [i for i in analysis.items if i.outcome == "supported"]
         concrete = specific_overlap_ids(analysis.items)
         activities = {
@@ -307,6 +312,7 @@ def recommend(
             overlaps=overlaps,
             work_constraints=analysis.work_constraints,
             responsibility_matches=analysis.responsibility_matches,
+            source_review=analysis.source_review,
         )
         # Distinct exact skill entries are stronger evidence than partial mentions.
         # Project activities are a separate, deduplicated discovery signal. Neither
@@ -314,7 +320,10 @@ def recommend(
         # priorities cannot inflate rank, and explicit gaps still take precedence.
         type_mismatch = preference is not None and (job.job_type or "").casefold() != preference
         ordered.append(
-            ((bool(gaps), type_mismatch, -len(exact), -len(concrete), -len(activities), index), item)
+            (
+                (bool(gaps), type_mismatch, -len(exact), -len(concrete), -len(activities), index),
+                item,
+            )
         )
     ordered.sort(key=lambda pair: pair[0])
     report.matched = len(ordered)
