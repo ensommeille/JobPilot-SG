@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import AuditLog, JobExtractionRun, JobPosting
+from app.llm.errors import provider_error_message
 
 from .models import ExtractionInput
 from .runtime import ExtractionRuntime
@@ -93,6 +94,7 @@ def present(
         "pipeline": run.pipeline_json,
         "result": run.result_json,
         "error_code": run.error_code,
+        "error_message": provider_error_message(run.error_code),
         "is_stale": stale,
         "is_current_pipeline": fingerprint(runtime.snapshot()) == run.pipeline_hash,
         "reused": reused,

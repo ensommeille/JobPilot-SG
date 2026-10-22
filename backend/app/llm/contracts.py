@@ -88,6 +88,14 @@ class ProviderAuthenticationError(LLMProviderError):
     code = "provider_authentication_error"
 
 
+class ProviderInsufficientBalanceError(LLMProviderError):
+    code = "provider_insufficient_balance"
+
+
+class ProviderInvalidRequestError(LLMProviderError):
+    code = "provider_invalid_request"
+
+
 class ProviderRateLimitError(LLMProviderError):
     code = "provider_rate_limit"
 

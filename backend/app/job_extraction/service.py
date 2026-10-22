@@ -161,6 +161,8 @@ class JobExtractionService:
                     if exc.code
                     in {
                         "provider_authentication_error",
+                        "provider_insufficient_balance",
+                        "provider_invalid_request",
                         "provider_rate_limit",
                         "provider_timeout",
                         "provider_capability_error",

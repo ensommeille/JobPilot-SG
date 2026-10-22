@@ -18,6 +18,8 @@ from app.llm import (
     Message,
     ProviderAuthenticationError,
     ProviderCapabilityError,
+    ProviderInsufficientBalanceError,
+    ProviderInvalidRequestError,
     ProviderRateLimitError,
     ProviderTimeoutError,
     QwenProvider,
@@ -116,8 +118,7 @@ def test_qwen_provider_uses_configured_workspace_url() -> None:
 
     assert result.provider == "qwen"
     assert seen == [
-        "https://workspace.ap-southeast-1.maas.aliyuncs.com/"
-        "compatible-mode/v1/chat/completions"
+        "https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions"
     ]
 
 
@@ -141,9 +142,7 @@ def test_invalid_structured_output_is_rejected(content: str) -> None:
         ("tool_calls", "unknown"),
     ],
 )
-def test_non_stop_finish_reason_returns_no_data(
-    vendor_reason: str, expected: str
-) -> None:
+def test_non_stop_finish_reason_returns_no_data(vendor_reason: str, expected: str) -> None:
     client = httpx.AsyncClient(
         transport=httpx.MockTransport(
             lambda _: success_response(content="not parsed", finish_reason=vendor_reason)
@@ -161,19 +160,29 @@ def test_non_stop_finish_reason_returns_no_data(
     [
         (401, ProviderAuthenticationError),
         (403, ProviderAuthenticationError),
-        (400, ProviderCapabilityError),
+        (402, ProviderInsufficientBalanceError),
+        (400, ProviderInvalidRequestError),
+        (422, ProviderInvalidRequestError),
+        (404, ProviderCapabilityError),
     ],
 )
 def test_non_retryable_http_errors_are_mapped(
     status_code: int, error_type: type[Exception]
 ) -> None:
-    client = httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda _: httpx.Response(status_code))
-    )
-    provider = DeepSeekProvider(api_key="secret", client=client, max_retries=0)
-    with pytest.raises(error_type):
+    calls = []
+
+    def handler(req):
+        calls.append(req)
+        return httpx.Response(status_code, json={"error": "raw-private-provider-body"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = DeepSeekProvider(api_key="secret", client=client, max_retries=2)
+    with pytest.raises(error_type) as exc:
         asyncio.run(provider.generate_structured(request()))
     asyncio.run(client.aclose())
+    assert len(calls) == 1
+    assert "raw-private-provider-body" not in str(exc.value)
+    assert "secret" not in str(exc.value)
 
 
 def test_rate_limit_is_retried_then_mapped() -> None:

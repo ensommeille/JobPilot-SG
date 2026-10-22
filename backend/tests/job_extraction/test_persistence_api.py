@@ -12,7 +12,12 @@ from sqlalchemy import select
 from app.db.models import AuditLog, JobExtractionRun, JobPosting, JobSource, User, UserRole
 from app.job_extraction.persistence import ExtractionRequestError, finish
 from app.job_extraction.runtime import ExtractionRuntime, get_extraction_runtime, mock_provider
-from app.llm import MockProvider, ProviderAuthenticationError
+from app.llm import (
+    MockProvider,
+    ProviderAuthenticationError,
+    ProviderInsufficientBalanceError,
+    ProviderInvalidRequestError,
+)
 from app.main import app
 
 
@@ -155,12 +160,20 @@ def test_v2_does_not_reuse_or_rewrite_legacy_history(client, db, setup_job, empt
     assert db.get(JobExtractionRun, UUID(first["id"])).result_json == before
 
 
-def test_failure_does_not_replace_valid_result(client, db, setup_job):
+@pytest.mark.parametrize(
+    ("error_type", "code", "message"),
+    [
+        (ProviderAuthenticationError, "provider_authentication_error", "authentication failed"),
+        (ProviderInsufficientBalanceError, "provider_insufficient_balance", "insufficient balance"),
+        (ProviderInvalidRequestError, "provider_invalid_request", "request parameters"),
+    ],
+)
+def test_failure_does_not_replace_valid_result(client, db, setup_job, error_type, code, message):
     first = trigger(client, setup_job).json()
 
     @asynccontextmanager
     async def failing():
-        yield MockProvider([ProviderAuthenticationError("NEVER_PERSIST_THIS_SECRET")])
+        yield MockProvider([error_type("NEVER_PERSIST_THIS_SECRET")])
 
     app.dependency_overrides[get_extraction_runtime] = lambda: ExtractionRuntime(
         provider_factory=failing
@@ -170,7 +183,12 @@ def test_failure_does_not_replace_valid_result(client, db, setup_job):
         assert failed.status_code == 201
         assert failed.json()["status"] == "failed"
         assert "NEVER_PERSIST_THIS_SECRET" not in failed.text
-        assert failed.json()["error_code"] == "provider_authentication_error"
+        assert failed.json()["error_code"] == code
+        assert message in failed.json()["error_message"]
+        _, _, headers = setup_job
+        detail = client.get(f"/extractions/{failed.json()['id']}", headers=headers)
+        assert detail.json()["error_message"] == failed.json()["error_message"]
+        assert "NEVER_PERSIST_THIS_SECRET" not in detail.text
         # The earlier valid record is still eligible, so no provider is constructed on reuse.
         reused = trigger(client, setup_job)
         assert reused.status_code == 200
