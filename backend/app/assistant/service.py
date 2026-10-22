@@ -112,6 +112,22 @@ def create_assistant_application(
             "all required fields must be confirmed or supplied as edited values"
         )
 
+    # Confirmation IDs acknowledge answers; they cannot make a missing answer valid.
+    # Use the same final-value precedence as the saved-answers reader.
+    suggestions = {item.field_id: item.value for item in payload.mapping_draft.mapping}
+    for field_id in _required_field_ids(form):
+        value = (
+            payload.edited_values[field_id]
+            if field_id in payload.edited_values
+            else suggestions.get(field_id)
+        )
+        if (
+            value is None
+            or (isinstance(value, str) and not value.strip())
+            or (isinstance(value, (list, dict)) and not value)
+        ):
+            raise AssistantConfirmationError("all required fields must have non-empty final answers")
+
     application = Application(
         user_id=user.id,
         job_id=payload.job_id,
