@@ -1,0 +1,325 @@
+{
+  "result_id": "d1b5e56f-b623-4cba-aff1-2bb33225c353",
+  "source_id": "stripe-public-greenhouse-recheck",
+  "external_id": "8130883",
+  "source_url": "https://job-boards.greenhouse.io/stripe/jobs/8130883",
+  "input_hash": "24ecc01bf9a9cf732d6fbae5ef98745f521032a6ccaf1c281edaa4412cfbab87",
+  "raw_hash": "ed756cc094b97e52ea2d23dca17d108d8c36777674325e5a3a0358520e286ca1",
+  "schema_version": "job-extraction-v2",
+  "prompt_version": "job-extraction-prompt-v2",
+  "contract_version": "0.1.0",
+  "execution_mode": "live",
+  "status": "needs_review",
+  "extraction": {
+    "summary": {
+      "value": "As an intern at Stripe you’ll work on projects across our stack that directly impact the way millions of businesses operate. You’ll own problems end to end with the support of your manager and teammates.",
+      "evidence": "As an intern at Stripe you’ll work on projects across our stack that directly impact the way millions of businesses operate. You’ll own problems end to end with the support of your manager and teammates."
+    },
+    "responsibilities": [
+      {
+        "value": "Operate as a real member of the team you join; engage in team discussions, decisions, and the technical design process.",
+        "evidence": "Operate as a real member of the team you join; engage in team discussions, decisions, and the technical design process.",
+        "priority": "unspecified",
+        "condition": null
+      },
+      {
+        "value": "Write software that will be used in production, and has meaningful impact to Stripe’s business and users.",
+        "evidence": "Write software that will be used in production, and has meaningful impact to Stripe’s business and users.",
+        "priority": "unspecified",
+        "condition": null
+      },
+      {
+        "value": "Give and receive technical feedback through code reviews or design discussions",
+        "evidence": "Give and receive technical feedback through code reviews or design discussions",
+        "priority": "unspecified",
+        "condition": null
+      },
+      {
+        "value": "Collaborate with other engineers and cross-functional stakeholders to proactively seek and incorporate feedback.",
+        "evidence": "Collaborate with other engineers and cross-functional stakeholders to proactively seek and incorporate feedback.",
+        "priority": "unspecified",
+        "condition": null
+      },
+      {
+        "value": "Learn quickly by asking great questions, working with your intern manager and teammates effectively, communicating the status of your work clearly, and building with the latest AI tooling.",
+        "evidence": "Learn quickly by asking great questions, working with your intern manager and teammates effectively, communicating the status of your work clearly, and building with the latest AI tooling.",
+        "priority": "unspecified",
+        "condition": null
+      }
+    ],
+    "requirement_groups": [
+      {
+        "value": "A strong fundamental understanding of computer science through pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline.",
+        "evidence": "A strong fundamental understanding of computer science through pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline.",
+        "importance": "required",
+        "operator": "all_of",
+        "requirements": [
+          {
+            "value": "Strong fundamental understanding of computer science",
+            "evidence": "A strong fundamental understanding of computer science through pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline.",
+            "kind": "skill",
+            "qualifier": null
+          }
+        ]
+      },
+      {
+        "value": "Experience and familiarity with programming, either through side projects or classwork.",
+        "evidence": "Experience and familiarity with programming, either through side projects or classwork.",
+        "importance": "required",
+        "operator": "all_of",
+        "requirements": [
+          {
+            "value": "Experience and familiarity with programming",
+            "evidence": "Experience and familiarity with programming, either through side projects or classwork.",
+            "kind": "skill",
+            "qualifier": null
+          }
+        ]
+      },
+      {
+        "value": "We work mostly in Ruby, Java, Javascript, Go, and Scala. We believe new programming languages can be learned if the fundamentals and general knowledge are present.",
+        "evidence": "We work mostly in Ruby, Java, Javascript, Go, and Scala. We believe new programming languages can be learned if the fundamentals and general knowledge are present.",
+        "importance": "unspecified",
+        "operator": "any_of",
+        "requirements": [
+          {
+            "value": "Ruby",
+            "evidence": "We work mostly in Ruby, Java, Javascript, Go, and Scala.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Java",
+            "evidence": "We work mostly in Ruby, Java, Javascript, Go, and Scala.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Javascript",
+            "evidence": "We work mostly in Ruby, Java, Javascript, Go, and Scala.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Go",
+            "evidence": "We work mostly in Ruby, Java, Javascript, Go, and Scala.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Scala",
+            "evidence": "We work mostly in Ruby, Java, Javascript, Go, and Scala.",
+            "kind": "skill",
+            "qualifier": null
+          }
+        ]
+      },
+      {
+        "value": "Experience from previous internships or other multi-person projects, including open source contributions, that demonstrate evaluating and receiving feedback from mentors, peers, and stakeholders.",
+        "evidence": "Experience from previous internships or other multi-person projects, including open source contributions, that demonstrate evaluating and receiving feedback from mentors, peers, and stakeholders.",
+        "importance": "required",
+        "operator": "all_of",
+        "requirements": [
+          {
+            "value": "Experience from previous internships or other multi-person projects, including open source contributions, that demonstrate evaluating and receiving feedback from mentors, peers, and stakeholders",
+            "evidence": "Experience from previous internships or other multi-person projects, including open source contributions, that demonstrate evaluating and receiving feedback from mentors, peers, and stakeholders.",
+            "kind": "qualification",
+            "qualifier": null
+          }
+        ]
+      },
+      {
+        "value": "Ability to learn unfamiliar systems and form an understanding of those systems, through independent research and working with a mentor or subject matter experts.",
+        "evidence": "Ability to learn unfamiliar systems and form an understanding of those systems, through independent research and working with a mentor or subject matter experts.",
+        "importance": "required",
+        "operator": "all_of",
+        "requirements": [
+          {
+            "value": "Ability to learn unfamiliar systems and form an understanding of those systems, through independent research and working with a mentor or subject matter experts",
+            "evidence": "Ability to learn unfamiliar systems and form an understanding of those systems, through independent research and working with a mentor or subject matter experts.",
+            "kind": "skill",
+            "qualifier": null
+          }
+        ]
+      },
+      {
+        "value": "Ability to leverage AI tools to accelerate development while applying rigorous critical thinking and professional judgement to review, refine, and validate all outputs.",
+        "evidence": "Ability to leverage AI tools to accelerate development while applying rigorous critical thinking and professional judgement to review, refine, and validate all outputs.",
+        "importance": "required",
+        "operator": "all_of",
+        "requirements": [
+          {
+            "value": "Ability to leverage AI tools to accelerate development",
+            "evidence": "Ability to leverage AI tools to accelerate development while applying rigorous critical thinking and professional judgement to review, refine, and validate all outputs.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Rigorous critical thinking and professional judgement to review, refine, and validate all outputs",
+            "evidence": "Ability to leverage AI tools to accelerate development while applying rigorous critical thinking and professional judgement to review, refine, and validate all outputs.",
+            "kind": "trait",
+            "qualifier": null
+          }
+        ]
+      },
+      {
+        "value": "At least 1 year of university education, or equivalent work experience.",
+        "evidence": "At least 1 year of university education, or equivalent work experience.",
+        "importance": "preferred",
+        "operator": "any_of",
+        "requirements": [
+          {
+            "value": "At least 1 year of university education",
+            "evidence": "At least 1 year of university education, or equivalent work experience.",
+            "kind": "qualification",
+            "qualifier": null
+          },
+          {
+            "value": "Equivalent work experience",
+            "evidence": "At least 1 year of university education, or equivalent work experience.",
+            "kind": "qualification",
+            "qualifier": null
+          }
+        ]
+      },
+      {
+        "value": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+        "evidence": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+        "importance": "preferred",
+        "operator": "any_of",
+        "requirements": [
+          {
+            "value": "Frontend",
+            "evidence": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Backend",
+            "evidence": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Infrastructure",
+            "evidence": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Other technologies",
+            "evidence": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+            "kind": "skill",
+            "qualifier": null
+          }
+        ]
+      },
+      {
+        "value": "Experience writing high quality pull requests, with good test coverage, and working knowledge to complete projects with minimal defects.",
+        "evidence": "Experience writing high quality pull requests, with good test coverage, and working knowledge to complete projects with minimal defects.",
+        "importance": "preferred",
+        "operator": "all_of",
+        "requirements": [
+          {
+            "value": "Experience writing high quality pull requests, with good test coverage, and working knowledge to complete projects with minimal defects",
+            "evidence": "Experience writing high quality pull requests, with good test coverage, and working knowledge to complete projects with minimal defects.",
+            "kind": "skill",
+            "qualifier": null
+          }
+        ]
+      },
+      {
+        "value": "Familiarity with navigating and managing your work in new code bases, with multiple languages.",
+        "evidence": "Familiarity with navigating and managing your work in new code bases, with multiple languages.",
+        "importance": "preferred",
+        "operator": "all_of",
+        "requirements": [
+          {
+            "value": "Familiarity with navigating and managing your work in new code bases, with multiple languages",
+            "evidence": "Familiarity with navigating and managing your work in new code bases, with multiple languages.",
+            "kind": "skill",
+            "qualifier": null
+          }
+        ]
+      },
+      {
+        "value": "Clear written communication skills, with the ability to write clearly to explain your work to stakeholders, team members, and other Stripes.",
+        "evidence": "Clear written communication skills, with the ability to write clearly to explain your work to stakeholders, team members, and other Stripes.",
+        "importance": "preferred",
+        "operator": "all_of",
+        "requirements": [
+          {
+            "value": "Clear written communication skills, with the ability to write clearly to explain your work to stakeholders, team members, and other Stripes",
+            "evidence": "Clear written communication skills, with the ability to write clearly to explain your work to stakeholders, team members, and other Stripes.",
+            "kind": "skill",
+            "qualifier": null
+          }
+        ]
+      }
+    ],
+    "education": {
+      "degree": {
+        "value": "Bachelor’s or Master’s degree",
+        "evidence": "A strong fundamental understanding of computer science through pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline."
+      },
+      "fields_of_study": [
+        {
+          "value": "computer science",
+          "evidence": "A strong fundamental understanding of computer science through pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline."
+        },
+        {
+          "value": "math",
+          "evidence": "A strong fundamental understanding of computer science through pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline."
+        },
+        {
+          "value": "a related discipline",
+          "evidence": "A strong fundamental understanding of computer science through pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline."
+        }
+      ],
+      "enrollment": null
+    },
+    "experience": {
+      "requirement": {
+        "value": "Experience and familiarity with programming, either through side projects or classwork.",
+        "evidence": "Experience and familiarity with programming, either through side projects or classwork."
+      },
+      "minimum_years": null
+    },
+    "work_constraints": {
+      "schedule": null,
+      "hours": null,
+      "minimum_duration": null,
+      "work_modes": [],
+      "locations": []
+    }
+  },
+  "quality": {
+    "quality_version": "evidence-coverage-v2",
+    "score": 1.0,
+    "total_claims": 42,
+    "evidence_matched": 42,
+    "issues": [],
+    "requires_review": true,
+    "interpretation": "Evidence coverage only; semantic correctness and completeness require human review."
+  },
+  "error_code": null,
+  "attempts": [
+    {
+      "attempt": 1,
+      "request_id": "d1b5e56f-b623-4cba-aff1-2bb33225c353:1",
+      "outcome": "needs_review",
+      "duration_ms": 6689.94,
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "provider_request_id": "32a194b3-2d9e-4de3-92d6-62c7daa2b538",
+      "finish_reason": "stop",
+      "usage": {
+        "input_tokens": 3771,
+        "output_tokens": 2288
+      },
+      "validation_issues": []
+    }
+  ],
+  "started_at": "2026-10-21T09:13:13.947009+00:00",
+  "finished_at": "2026-10-21T09:13:20.647581+00:00"
+}

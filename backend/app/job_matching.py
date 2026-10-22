@@ -14,7 +14,9 @@ from app.auth.dependencies import CurrentUser
 from app.db.models import JobExtractionRun, JobPosting, UserProfile
 from app.db.session import get_db
 from app.job_extraction.models import (
+    ExtractionPayload,
     ExtractionResult,
+    JobExtractionSchema,
     JobExtractionSchemaV2,
     RequirementAtom,
     RequirementGroup,
@@ -26,6 +28,11 @@ from app.job_extraction.quality import (
     duration_evidence_supported,
     hours_evidence_supported,
     normalized,
+)
+from app.job_extraction.source_review import (
+    InvalidSourceReview,
+    SourceReviewProvenance,
+    resolve_source_review,
 )
 from app.jobs.service import get_job
 from app.responsibility_matching import ResponsibilityMatch, match_responsibilities
@@ -92,6 +99,7 @@ class MatchAnalysis(BaseModel):
     summary: TextFact | None = None
     responsibilities: list[MatchResponsibility] = Field(default_factory=list)
     responsibility_matches: list[ResponsibilityMatch] = Field(default_factory=list)
+    source_review: SourceReviewProvenance | None = None
 
 
 # Only a closed set of atomic skill labels is comparable. Compound requirements,
@@ -283,9 +291,8 @@ def atomic_skill_context(label: str, context: str) -> bool:
 
 
 def _compare_legacy(
-    result: ExtractionResult, description: str, profile: UserProfile | None
+    data: JobExtractionSchema | None, description: str, profile: UserProfile | None
 ) -> list[MatchItem]:
-    data = result.extraction
     if data is None:
         return []
     rows = []
@@ -581,9 +588,16 @@ def _compare_v2(data: JobExtractionSchemaV2, description: str, profile) -> list[
 def compare(
     result: ExtractionResult, description: str, profile: UserProfile | None
 ) -> list[MatchItem]:
-    if isinstance(result.extraction, JobExtractionSchemaV2):
-        return _compare_v2(result.extraction, description, profile)
-    return _compare_legacy(result, description, profile)
+    return compare_payload(result.extraction, description, profile)
+
+
+def compare_payload(
+    data: ExtractionPayload | None, description: str, profile: UserProfile | None
+) -> list[MatchItem]:
+    """Compare a validated payload without pretending a revision is a model response."""
+    if isinstance(data, JobExtractionSchemaV2):
+        return _compare_v2(data, description, profile)
+    return _compare_legacy(data, description, profile)
 
 
 def _work_mode_polarity_supported(mode: WorkModeFact, description: str) -> bool:
@@ -778,6 +792,11 @@ def build_analysis(
     report = MatchAnalysis(job_id=job.id, status="unavailable")
     if include_experience:
         report.version = "evidence-overlap-v3"
+    try:
+        reviewed = resolve_source_review(job, run)
+    except InvalidSourceReview:
+        report.reason = "invalid_source_review"
+        return report
     if run is None:
         report.reason = "missing_extraction"
         return report
@@ -785,32 +804,39 @@ def build_analysis(
     if run.status != "needs_review":
         report.reason = "extraction_" + run.status
         return report
-    try:
-        current = job_input(job)
-        result = ExtractionResult.model_validate(run.result_json)
-    except (ValidationError, ExtractionRequestError):
-        report.reason = "invalid_extraction"
-        return report
-    if (
-        run.input_hash != current.input_hash
-        or result.input_hash != current.input_hash
-        or result.source_id != current.source_id
-        or result.external_id != current.external_id
-        or result.source_url != current.source_url
-    ):
-        report.reason = "stale_extraction"
-        return report
-    if result.status != "needs_review":
-        report.reason = "invalid_extraction"
-        return report
-    report.summary = result.extraction.summary
+    if reviewed is None:
+        try:
+            current = job_input(job)
+            result = ExtractionResult.model_validate(run.result_json)
+        except (ValidationError, ExtractionRequestError):
+            report.reason = "invalid_extraction"
+            return report
+        if (
+            run.input_hash != current.input_hash
+            or result.input_hash != current.input_hash
+            or result.source_id != current.source_id
+            or result.external_id != current.external_id
+            or result.source_url != current.source_url
+        ):
+            report.reason = "stale_extraction"
+            return report
+        if result.status != "needs_review":
+            report.reason = "invalid_extraction"
+            return report
+        payload = result.extraction
+        is_mock = result.execution_mode == "mock"
+    else:
+        payload, report.source_review = reviewed
+        # The resolver accepts only an intact live original plus a separately
+        # validated local mapping/revision. No historical model DTO is rewritten.
+        is_mock = False
+    report.summary = payload.summary
     report.responsibilities = [
-        MatchResponsibility.model_validate(fact.model_dump())
-        for fact in result.extraction.responsibilities
+        MatchResponsibility.model_validate(fact.model_dump()) for fact in payload.responsibilities
     ]
-    report.work_constraints = compare_work_constraints(result.extraction, job.description)
-    report.items = compare(result, job.description, profile)
-    if include_experience and result.execution_mode != "mock":
+    report.work_constraints = compare_work_constraints(payload, job.description)
+    report.items = compare_payload(payload, job.description, profile)
+    if include_experience and not is_mock:
         report.responsibility_matches = match_responsibilities(
             report.responsibilities,
             job.description,
@@ -821,7 +847,9 @@ def build_analysis(
         "Extracted requirements have not been human-verified. All comparisons are preliminary.",
         "Skill mentions are not proof of the complete requirement. No eligibility decision or match percentage.",
     ]
-    if result.execution_mode == "mock":
+    if report.source_review is not None:
+        report.warnings.append(report.source_review.notice)
+    if is_mock:
         report.warnings.append(
             "Requirements come from a mock extraction; treat this as a demonstration."
         )

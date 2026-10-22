@@ -77,7 +77,12 @@ def _action_object(verbs: str, objects: str) -> re.Pattern[str]:
     )
 
 
-_BUILD_SOFTWARE = _action_object(_BUILD, _SOFTWARE_OBJECT)
+# Keep this extension local to implementation activity: writing documentation,
+# requirements or reviews must not borrow the preceding word "software".
+_BUILD_SOFTWARE = _action_object(
+    _BUILD + r"|writ(?:e|es|ing)|wrote",
+    _SOFTWARE_OBJECT + r"|software(?=\s*(?:[.!?,;]|$)|\s+(?:that|which|for|with|using)\b)",
+)
 _BUILD_FEATURE = _action_object(_BUILD, _TECHNICAL_FEATURE)
 _BUILD_API = _action_object(
     _BUILD,

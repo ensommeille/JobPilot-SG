@@ -8,6 +8,8 @@ import type { StructuredRequirement, WorkConstraintEvidence } from './Requiremen
 import { isGeneralTraitOnly } from './matchPresentation'
 import ResponsibilityEvidence from './ResponsibilityEvidence'
 import type { ResponsibilityMatch } from './ResponsibilityEvidence'
+import SourceReviewNotice from './SourceReviewNotice'
+import type { SourceReview } from './SourceReviewNotice'
 import './JobMatchAnalysis.css'
 
 interface MatchItem extends StructuredRequirement {
@@ -30,10 +32,12 @@ interface Analysis {
   summary?: {value: string; evidence: string} | null
   responsibilities?: {value: string; evidence: string; priority: 'primary' | 'secondary' | 'conditional' | 'unspecified'; condition: {value: string; evidence: string} | null}[]
   responsibility_matches?: ResponsibilityMatch[]
+  source_review?: SourceReview | null
 }
 const reasons: Record<string, string> = {
   missing_extraction: 'Requirements are not ready yet. Check the job description below.',
   stale_extraction: 'This job has changed. Requirements need updating; check the latest job description.',
+  invalid_source_review: 'The corrected requirements could not be verified. Check the original job description while the project owner reviews them.',
   invalid_extraction: 'Requirements could not be verified. Check the job description below.',
   extraction_running: 'Requirements are being prepared. Try again shortly.',
   extraction_failed: 'Requirements could not be prepared. Check the job description instead.',
@@ -140,6 +144,7 @@ export default function JobMatchAnalysis({jobId}: {jobId: string}) {
     {busy && <p role="status">Comparing your saved skills and project experience with this job…</p>}
     {error && <p role="alert">{error}</p>}
     {result && <>
+      <SourceReviewNotice review={result.source_review} />
       {mock && <p className="job-match-notice" role="status">Demo data: these results use mock requirements, not a real job assessment.</p>}
       {result.status === 'unavailable' && <p className="job-match-notice" role="status">
         {reasons[result.reason || ''] || 'Requirements are unavailable. Check the job description instead.'}

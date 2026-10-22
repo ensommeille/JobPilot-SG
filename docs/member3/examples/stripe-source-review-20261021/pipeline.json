@@ -1,0 +1,16 @@
+{
+  "profile_revision": "live-extraction-v5-evidence-scope-a34e2a4708ed1c61",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "execution_mode": "live",
+  "config": {
+    "schema_version": "job-extraction-v2",
+    "max_validation_retries": 0,
+    "provider_call_timeout_seconds": 65.0,
+    "max_output_tokens": 8000
+  },
+  "schema_version": "job-extraction-v2",
+  "prompt_version": "job-extraction-prompt-v2",
+  "quality_version": "evidence-coverage-v2",
+  "contract_version": "0.1.0"
+}
