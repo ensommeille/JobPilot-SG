@@ -114,6 +114,57 @@ jobs:
       - run: npm test
       - run: npm audit --audit-level=high
 
+  application-journey:
+    name: Full profile / real-job snapshot / application journey
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Install application and browser dependencies
+        run: |
+          pip install -e "./backend"
+          npm ci --prefix frontend
+          npm ci --prefix extension
+      - name: Install acceptance browser
+        working-directory: extension
+        run: npx playwright install --with-deps chromium
+      - name: Start disposable API with saved actual source and sandbox form
+        run: |
+          python scripts/local_review_workspace.py \
+            --artifacts "$GITHUB_WORKSPACE/docs/member3/examples/stripe-source-review-20261021" \
+            --workspace "$RUNNER_TEMP/jobpilot-application-journey" \
+            --port 18522 --web-origin http://127.0.0.1:15522 --with-demo-form \
+            > "$RUNNER_TEMP/jobpilot-journey-api.log" 2>&1 &
+          curl --fail --retry 30 --retry-connrefused --retry-delay 1 http://127.0.0.1:18522/health
+      - name: Build and serve the actual frontend
+        env:
+          VITE_API_BASE_URL: http://127.0.0.1:18522
+        run: |
+          npm --prefix frontend run build
+          npm --prefix frontend run preview -- --host 127.0.0.1 --port 15522 --strictPort \
+            > "$RUNNER_TEMP/jobpilot-journey-web.log" 2>&1 &
+          curl --fail --retry 30 --retry-connrefused --retry-delay 1 http://127.0.0.1:15522/
+      - name: Verify full journey without a model call or employer submission
+        run: |
+          JOURNEY_ALLOW_TEST_WRITES=disposable-local-only \
+          JOURNEY_REVIEW_WORKSPACE="$RUNNER_TEMP/jobpilot-application-journey" \
+          node scripts/verify_application_journey.mjs
+      - name: Upload journey evidence and service diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-journey-evidence
+          path: |
+            output/application-journey/
+            ${{ runner.temp }}/jobpilot-journey-api.log
+            ${{ runner.temp }}/jobpilot-journey-web.log
+          if-no-files-found: ignore
+
   docker:
     name: Docker build + deploy smoke check
     runs-on: ubuntu-latest
