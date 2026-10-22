@@ -126,7 +126,9 @@ def create_assistant_application(
             or (isinstance(value, str) and not value.strip())
             or (isinstance(value, (list, dict)) and not value)
         ):
-            raise AssistantConfirmationError("all required fields must have non-empty final answers")
+            raise AssistantConfirmationError(
+                "all required fields must have non-empty final answers"
+            )
 
     application = Application(
         user_id=user.id,
@@ -158,18 +160,14 @@ def create_assistant_application(
         db.rollback()
         raise ApplicationConflictError("An application for this job already exists") from exc
 
-    persisted_application = get_application(
-        db, user=user, application_id=application.id
-    )
+    persisted_application = get_application(db, user=user, application_id=application.id)
     persisted_mapping = get_mapping(db, user=user, mapping_id=mapping.id)
     if persisted_application is None or persisted_mapping is None:  # pragma: no cover
         raise RuntimeError("Assistant application was not persisted")
     return persisted_application, persisted_mapping
 
 
-def get_mapping(
-    db: Session, *, user: User, mapping_id: UUID
-) -> FormMappingRecord | None:
+def get_mapping(db: Session, *, user: User, mapping_id: UUID) -> FormMappingRecord | None:
     statement = select(FormMappingRecord).where(
         FormMappingRecord.id == mapping_id, FormMappingRecord.user_id == user.id
     )

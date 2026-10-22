@@ -1,5 +1,8 @@
 """An acknowledgement must not turn an empty required answer into a saved record."""
 
+# Imported pytest fixtures are injected by argument name.
+# ruff: noqa: F811
+
 import pytest
 from sqlalchemy import func, select
 
@@ -19,8 +22,20 @@ def confirmation_payload(job, form):
         "prompt_version": "confirmation-regression-v1",
         "mapping_draft": {
             "mapping": [
-                {"field_id": "name", "label": "Full name", "value": "Fictional Applicant", "confidence": 0.95, "needs_review": False},
-                {"field_id": "email", "label": "Email", "value": "fictional@example.com", "confidence": 0.95, "needs_review": False},
+                {
+                    "field_id": "name",
+                    "label": "Full name",
+                    "value": "Fictional Applicant",
+                    "confidence": 0.95,
+                    "needs_review": False,
+                },
+                {
+                    "field_id": "email",
+                    "label": "Email",
+                    "value": "fictional@example.com",
+                    "confidence": 0.95,
+                    "needs_review": False,
+                },
             ],
         },
         "confirmed_field_ids": ["name", "email"],
@@ -57,11 +72,16 @@ def test_edited_answer_takes_precedence_and_saved_answers_survive_profile_change
     created = client.post("/assistant/applications", headers=headers, json=payload)
     assert created.status_code == 201
     application_id = created.json()["application"]["id"]
-    assert client.put("/profile", headers=headers, json={"full_name": "Changed Profile"}).status_code == 200
+    assert (
+        client.put("/profile", headers=headers, json={"full_name": "Changed Profile"}).status_code
+        == 200
+    )
     saved = client.get(f"/applications/{application_id}/answers", headers=headers)
     assert saved.status_code == 200
     assert [answer["value"] for answer in saved.json()["answers"]] == [
-        "Fictional Applicant", "reviewed@example.com", "My reviewed answer"
+        "Fictional Applicant",
+        "reviewed@example.com",
+        "My reviewed answer",
     ]
     assert client.post("/assistant/applications", headers=headers, json=payload).status_code == 409
     assert db.scalar(select(func.count()).select_from(Application)) == 1

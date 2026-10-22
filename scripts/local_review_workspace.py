@@ -124,9 +124,14 @@ def configure_process(workspace: Path, origin: str) -> None:
     loopback_only()
     import app.llm.config as llm_config
     from app import llm
+    from app.llm.contracts import ProviderCapabilityError
 
     def forbid_live_provider(*_args, **_kwargs):
-        raise RuntimeError("Live providers are disabled in the local review workspace")
+        # A known unavailable-provider condition preserves direct profile mappings.
+        # An unexpected RuntimeError would instead turn the entire mapping into HTTP 500.
+        raise ProviderCapabilityError(
+            "Live providers are disabled in the local review workspace"
+        )
 
     llm.build_live_provider = forbid_live_provider
     llm_config.build_live_provider = forbid_live_provider
@@ -348,6 +353,11 @@ def main() -> int:
         "--web-origin", type=web_origin, default="http://127.0.0.1:15521"
     )
     parser.add_argument("--seed-only", action="store_true")
+    parser.add_argument(
+        "--with-demo-form",
+        action="store_true",
+        help="Also seed the explicitly sandbox-only application form in this owned workspace",
+    )
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("Port must be between 1 and 65535")
@@ -355,6 +365,18 @@ def main() -> int:
         seed = seed_workspace(
             args.artifacts, args.workspace, port=args.port, origin=args.web_origin
         )
+        if args.with_demo_form:
+            from app.db.session import SessionLocal
+            from app.demo_seed import seed_demo
+
+            with SessionLocal() as db:
+                demo = seed_demo(
+                    db,
+                    admin_email="local-review-bootstrap@example.com",
+                    admin_password=secrets.token_urlsafe(48),
+                )
+            seed["demo_form_seeded"] = True
+            seed["seeded_users"] = int(demo.admin_created)
     except (OSError, ValueError, KeyError) as exc:
         print(
             f"Local review workspace refused ({type(exc).__name__}): {exc}",

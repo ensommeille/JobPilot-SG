@@ -25,17 +25,32 @@ const root = path.resolve(import.meta.dirname, '..');
 const output = path.join(root, 'output/application-journey');
 await fs.mkdir(output, {recursive: true});
 const checks = [], failures = [], blocked = [];
+const optionalFonts = new Set();
+const fontStylesheet = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap';
 const browser = await chromium.launch({headless: true});
 const context = await browser.newContext({viewport: {width: 1440, height: 1000}});
-// Refuse remote pages/assets rather than risk sending test answers to an employer.
+// Use the existing system-font fallback for repeatable offline acceptance. Only
+// that deliberately blocked, exact stylesheet's network warning is expected.
+// Employer pages, model APIs and all other remote requests remain blocked.
 await context.route('**/*', route => {
-  if ([web, api].includes(new URL(route.request().url()).origin)) return route.continue();
-  blocked.push(new URL(route.request().url()).origin);
+  const request = route.request(), url = new URL(request.url());
+  if ([web, api].includes(url.origin)) return route.continue();
+  if (request.method() === 'GET' && request.resourceType() === 'stylesheet'
+      && request.url() === fontStylesheet) {
+    optionalFonts.add(request.url());
+    return route.abort();
+  }
+  blocked.push(url.origin);
   return route.abort();
 });
 const page = await context.newPage();
 page.on('pageerror', error => failures.push(error.message));
-page.on('console', event => { if (event.type() === 'error') failures.push(event.text()); });
+page.on('console', event => {
+  if (event.type() !== 'error') return;
+  if (event.text() === 'Failed to load resource: net::ERR_FAILED'
+      && optionalFonts.has(event.location().url)) return;
+  failures.push(event.text());
+});
 const profile = {
   full_name: 'Fictional End-to-End Applicant', contact_email: 'journey-contact@example.com',
   phone: '+65 8000 0000', education: 'Fictional computing student',
@@ -199,7 +214,13 @@ try {
   expect((await (await request('GET', '/applications', undefined, 200, otherToken)).json()).total).toBe(0);
   await request('GET', `/applications/${assistant.id}/answers`, undefined, 401, null);
   checks.push('Other ordinary account and unauthenticated clients cannot read private records/answers');
+  const logout = page.waitForResponse(response => response.url() === api + '/auth/logout'
+    && response.request().method() === 'POST');
   await page.getByRole('button', {name: 'Logout', exact: true}).click();
+  expect((await logout).status()).toBe(204);
+  await expect(page).toHaveURL(web + '/');
+  expect(await page.evaluate(() => localStorage.getItem('jobpilot_token'))).toBeNull();
+  await request('GET', '/applications', undefined, 401);
   await page.goto(web + '/applications');
   await expect(page.getByRole('article')).toHaveCount(0);
   await expect(page.getByRole('alert')).toContainText('Sign in');
@@ -211,6 +232,7 @@ try {
     real_job: {title: job.title, company: job.company, source_url: job.source_url},
     source: 'Saved actual live artifact plus explicit source-bound agent correction; final human review pending',
     new_model_calls: 0, employer_submissions: 0, test_accounts: 2,
+    optional_font_stylesheet_blocked: optionalFonts.size > 0,
     note: 'Isolated integration snapshot of pending PRs; not current main or a new live model acceptance.',
   };
   await fs.writeFile(path.join(output, 'verification.json'), JSON.stringify(result, null, 2));
