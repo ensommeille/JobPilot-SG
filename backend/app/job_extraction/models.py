@@ -294,6 +294,7 @@ class AttemptRecord(StrictModel):
     provider_request_id: str | None = Field(default=None, max_length=500)
     finish_reason: Literal["stop", "length", "refusal", "unknown"] | None = None
     usage: TokenUsage | None = None
+    validation_issues: list[str] = Field(default_factory=list, max_length=12)
 
 
 class ExtractionResult(StrictModel):

@@ -1,0 +1,251 @@
+{
+  "review_kind": "coding_agent_source_comparison",
+  "reviewed_at": "2026-10-21T09:19:24.016320+00:00",
+  "approval_status": "proposed_local_correction_requires_user_review",
+  "original_live_result_id": "d1b5e56f-b623-4cba-aff1-2bb33225c353",
+  "original_live_result_file_sha256": "f400ef289b34b0af4f363311d402a8768c0f397c57c891b50bc6d20c0f7e52f0",
+  "input_hash": "24ecc01bf9a9cf732d6fbae5ef98745f521032a6ccaf1c281edaa4412cfbab87",
+  "historical_teammate_run_modified": false,
+  "new_model_requests": 1,
+  "additional_requests_for_corrections": 0,
+  "two_original_concerns": {
+    "summary_supported_by_own_contiguous_quote": true,
+    "qualitative_experience_present_without_invented_work_years": true,
+    "second_experience_requirement_retained": true,
+    "preferred_education_or_work_alternative_retained": true,
+    "scope": "this_one_new_source_bound_live_result_only"
+  },
+  "operations": [
+    {
+      "op": "replace",
+      "path": "/education/enrollment",
+      "before": null,
+      "value": {
+        "value": "pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline",
+        "evidence": "A strong fundamental understanding of computer science through pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline."
+      },
+      "reason": "补回原文的攻读/在读限定，保留学位与专业的备选关系，不推断已毕业。",
+      "source_quote": "A strong fundamental understanding of computer science through pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline.",
+      "source_start": 4144,
+      "source_end": 4301
+    },
+    {
+      "op": "replace",
+      "path": "/requirement_groups/0/requirements/0/qualifier",
+      "before": null,
+      "value": {
+        "value": "pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline",
+        "evidence": "A strong fundamental understanding of computer science through pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline."
+      },
+      "reason": "CS 基础条件的原子项也保留通过攻读学位形成的限定，避免只留下无条件技能名。",
+      "source_quote": "A strong fundamental understanding of computer science through pursuit of a Bachelor’s or Master’s degree in computer science, math, or a related discipline.",
+      "source_start": 4144,
+      "source_end": 4301
+    },
+    {
+      "op": "replace",
+      "path": "/requirement_groups/1/requirements/0/qualifier",
+      "before": null,
+      "value": {
+        "value": "either through side projects or classwork",
+        "evidence": "Experience and familiarity with programming, either through side projects or classwork."
+      },
+      "reason": "保留个人项目或课程作业均可的经验来源，不能缩成不带来源的工作经验。",
+      "source_quote": "Experience and familiarity with programming, either through side projects or classwork.",
+      "source_start": 4302,
+      "source_end": 4389
+    },
+    {
+      "op": "replace",
+      "path": "/requirement_groups/7",
+      "before": {
+        "value": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+        "evidence": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+        "importance": "preferred",
+        "operator": "any_of",
+        "requirements": [
+          {
+            "value": "Frontend",
+            "evidence": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Backend",
+            "evidence": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Infrastructure",
+            "evidence": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Other technologies",
+            "evidence": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+            "kind": "skill",
+            "qualifier": null
+          }
+        ]
+      },
+      "value": {
+        "value": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+        "evidence": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+        "importance": "preferred",
+        "operator": "unspecified",
+        "requirements": [
+          {
+            "value": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+            "evidence": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+            "kind": "qualification",
+            "qualifier": null
+          }
+        ]
+      },
+      "reason": "保留专长领域备选与一般能力平衡的完整复合条件；不把 Frontend 等裸词当作满足该条件。",
+      "source_quote": "One or more areas of specialized knowledge (frontend, backend, infrastructure or other technologies) balanced with general skills and knowledge.",
+      "source_start": 5178,
+      "source_end": 5322
+    },
+    {
+      "op": "remove",
+      "path": "/requirement_groups/2",
+      "before": {
+        "value": "We work mostly in Ruby, Java, Javascript, Go, and Scala. We believe new programming languages can be learned if the fundamentals and general knowledge are present.",
+        "evidence": "We work mostly in Ruby, Java, Javascript, Go, and Scala. We believe new programming languages can be learned if the fundamentals and general knowledge are present.",
+        "importance": "unspecified",
+        "operator": "any_of",
+        "requirements": [
+          {
+            "value": "Ruby",
+            "evidence": "We work mostly in Ruby, Java, Javascript, Go, and Scala.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Java",
+            "evidence": "We work mostly in Ruby, Java, Javascript, Go, and Scala.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Javascript",
+            "evidence": "We work mostly in Ruby, Java, Javascript, Go, and Scala.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Go",
+            "evidence": "We work mostly in Ruby, Java, Javascript, Go, and Scala.",
+            "kind": "skill",
+            "qualifier": null
+          },
+          {
+            "value": "Scala",
+            "evidence": "We work mostly in Ruby, Java, Javascript, Go, and Scala.",
+            "kind": "skill",
+            "qualifier": null
+          }
+        ]
+      },
+      "reason": "这是团队技术栈背景，原文还明确语言可以学习，不能造为申请者至少掌握其一的要求。",
+      "source_quote": "We work mostly in Ruby, Java, Javascript, Go, and Scala. We believe new programming languages can be learned if the fundamentals and general knowledge are present.",
+      "source_start": 4390,
+      "source_end": 4553
+    },
+    {
+      "op": "add",
+      "path": "/requirement_groups/-",
+      "before": null,
+      "value": {
+        "value": "Ambitious builder: You’re energized by building solutions without clear precedent and solving problems with far-reaching consequences. Successful Stripes are deeply curious, and prefer the joy of discovery to the comfort of certainty.",
+        "evidence": "Ambitious builder: You’re energized by building solutions without clear precedent and solving problems with far-reaching consequences. Successful Stripes are deeply curious, and prefer the joy of discovery to the comfort of certainty.",
+        "importance": "unspecified",
+        "operator": "unspecified",
+        "requirements": [
+          {
+            "value": "Ambitious builder: You’re energized by building solutions without clear precedent and solving problems with far-reaching consequences. Successful Stripes are deeply curious, and prefer the joy of discovery to the comfort of certainty.",
+            "evidence": "Ambitious builder: You’re energized by building solutions without clear precedent and solving problems with far-reaching consequences. Successful Stripes are deeply curious, and prefer the joy of discovery to the comfort of certainty.",
+            "kind": "trait",
+            "qualifier": null
+          }
+        ]
+      },
+      "reason": "补回 Who you are 中的个人特征；不提升为必需技术技能，也不用于自动认定匹配。",
+      "source_quote": "Ambitious builder: You’re energized by building solutions without clear precedent and solving problems with far-reaching consequences. Successful Stripes are deeply curious, and prefer the joy of discovery to the comfort of certainty.",
+      "source_start": 3534,
+      "source_end": 3768
+    },
+    {
+      "op": "add",
+      "path": "/requirement_groups/-",
+      "before": null,
+      "value": {
+        "value": "Rigorous thinker: You appreciate that things worth doing are rarely simple. You enjoy working on problems that have never been tackled before.",
+        "evidence": "Rigorous thinker: You appreciate that things worth doing are rarely simple. You enjoy working on problems that have never been tackled before.",
+        "importance": "unspecified",
+        "operator": "unspecified",
+        "requirements": [
+          {
+            "value": "Rigorous thinker: You appreciate that things worth doing are rarely simple. You enjoy working on problems that have never been tackled before.",
+            "evidence": "Rigorous thinker: You appreciate that things worth doing are rarely simple. You enjoy working on problems that have never been tackled before.",
+            "kind": "trait",
+            "qualifier": null
+          }
+        ]
+      },
+      "reason": "补回 Who you are 中的个人特征；不提升为必需技术技能，也不用于自动认定匹配。",
+      "source_quote": "Rigorous thinker: You appreciate that things worth doing are rarely simple. You enjoy working on problems that have never been tackled before.",
+      "source_start": 3769,
+      "source_end": 3911
+    },
+    {
+      "op": "add",
+      "path": "/requirement_groups/-",
+      "before": null,
+      "value": {
+        "value": "Adaptable problem solver: You adapt quickly and treat obstacles as opportunities.",
+        "evidence": "Adaptable problem solver: You adapt quickly and treat obstacles as opportunities.",
+        "importance": "unspecified",
+        "operator": "unspecified",
+        "requirements": [
+          {
+            "value": "Adaptable problem solver: You adapt quickly and treat obstacles as opportunities.",
+            "evidence": "Adaptable problem solver: You adapt quickly and treat obstacles as opportunities.",
+            "kind": "trait",
+            "qualifier": null
+          }
+        ]
+      },
+      "reason": "补回 Who you are 中的个人特征；不提升为必需技术技能，也不用于自动认定匹配。",
+      "source_quote": "Adaptable problem solver: You adapt quickly and treat obstacles as opportunities.",
+      "source_start": 3912,
+      "source_end": 3993
+    }
+  ],
+  "mechanical_validation": {
+    "strict_schema_valid": true,
+    "all_corrected_quotes_in_bound_input": true,
+    "required_groups": 5,
+    "preferred_groups": 5,
+    "unspecified_trait_groups": 3,
+    "all_five_original_responsibilities_retained": true,
+    "quality": {
+      "quality_version": "evidence-coverage-v2",
+      "score": 1.0,
+      "total_claims": 42,
+      "evidence_matched": 42,
+      "issues": [],
+      "requires_review": true,
+      "interpretation": "Evidence coverage only; semantic correctness and completeness require human review."
+    }
+  },
+  "limitations": [
+    "The old teammate run was not accessible and has not been repaired or independently verified.",
+    "The corrected extraction is an agent-authored revision, not another live model response.",
+    "Evidence coverage is not a semantic correctness probability or human approval.",
+    "No database/deployment write or successful recommendation claim is made."
+  ]
+}

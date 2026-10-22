@@ -60,12 +60,41 @@ def test_schema_repair_once(job, response):
     assert "missing" in repair["previous_validation_codes"]
 
 
+def test_failed_schema_records_safe_diagnostics_without_raw_response(job, response):
+    broken = response.model_copy(deep=True)
+    broken.data.pop("requirement_groups")
+    broken.data["SECRET-DO-NOT-ECHO"] = "sensitive model output"
+    result = extract(MockProvider([broken]), job, ExtractionConfig(max_validation_retries=0))
+
+    assert result.status == "failed"
+    assert result.error_code == "schema_validation_failed"
+    assert result.attempts[0].validation_issues == [
+        "requirement_groups:missing",
+        "root:extra_forbidden",
+    ]
+    assert "SECRET-DO-NOT-ECHO" not in result.model_dump_json()
+    assert "sensitive model output" not in result.model_dump_json()
+
+
 def test_repair_does_not_echo_untrusted_extra_key(job, response):
     bad = response.model_copy(deep=True)
     bad.data["SECRET-DO-NOT-ECHO"] = "payload"
     provider = MockProvider([bad, response])
     assert extract(provider, job).status == "needs_review"
     assert "SECRET-DO-NOT-ECHO" not in provider.requests[1].messages[1].content
+
+
+def test_experience_extra_key_is_rejected_instead_of_silently_dropped(job, response):
+    response.data["experience"]["preferred_experience"] = "Do not silently accept this field"
+    provider = MockProvider([response])
+    result = extract(provider, job, ExtractionConfig(max_validation_retries=0))
+
+    assert result.status == "failed"
+    assert result.error_code == "schema_validation_failed"
+    assert result.extraction is None
+    assert result.attempts[0].validation_issues == ["experience:extra_forbidden"]
+    assert len(provider.requests) == 1
+    assert "preferred_experience" not in result.model_dump_json()
 
 
 @pytest.mark.parametrize("retries", [0, 1, 2])

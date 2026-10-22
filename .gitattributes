@@ -10,3 +10,6 @@
 *.pptx binary
 *.xlsx binary
 *.pdf binary
+
+# Preserve the original model artifact bytes used by the review manifest hash.
+docs/member3/examples/stripe-source-review-20261021/result.original.json -text
