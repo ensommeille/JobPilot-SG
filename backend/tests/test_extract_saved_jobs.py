@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
-from app.db.models import JobPosting, JobSource, User
+from app.db.models import JobExtractionRun, JobPosting, JobSource, User
 from app.extract_saved_jobs import pending_jobs, prepare_saved
 from app.job_extraction.runtime import ExtractionRuntime
 from tests.test_ingestion_admin import auth_headers
@@ -65,15 +65,31 @@ def test_preview_can_target_one_stored_job_without_paying_for_earlier_jobs(db, s
     assert [job.id for job in pending_jobs(db, limit=1, job_ids=[first.id])] == [first.id]
 
 
-def test_live_preparation_stops_after_authentication_failure(db, stored):
+@pytest.mark.parametrize(
+    ("status", "code", "message"),
+    [
+        (401, "provider_authentication_error", "authentication failed"),
+        (402, "provider_insufficient_balance", "insufficient balance"),
+        (400, "provider_invalid_request", "request parameters"),
+        (422, "provider_invalid_request", "request parameters"),
+        (404, "provider_capability_error", "endpoint"),
+        (429, "provider_rate_limit", "rate limit"),
+    ],
+)
+def test_live_preparation_stops_after_account_or_request_failure(db, stored, status, code, message):
     actor, first, second = stored
     calls = []
     report = asyncio.run(
-        prepare_saved(db, actor=actor, jobs=[first, second], runtime=runtime(calls, 401))
+        prepare_saved(db, actor=actor, jobs=[first, second], runtime=runtime(calls, status))
     )
     assert len(calls) == 1
     assert len(report["jobs"]) == 1
-    assert report["jobs"][0]["error_code"] == "provider_authentication_error"
+    assert report["jobs"][0]["error_code"] == code
+    assert message in report["jobs"][0]["error_message"]
+    runs = list(db.scalars(select(JobExtractionRun)))
+    assert len(runs) == 1
+    assert runs[0].status == "failed" and runs[0].error_code == code
+    assert runs[0].active_key is None
 
 
 def test_mock_and_unbounded_batches_fail_closed(db, stored):

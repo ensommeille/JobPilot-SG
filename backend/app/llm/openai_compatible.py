@@ -14,6 +14,8 @@ from .contracts import (
     LLMProviderError,
     ProviderAuthenticationError,
     ProviderCapabilityError,
+    ProviderInsufficientBalanceError,
+    ProviderInvalidRequestError,
     ProviderRateLimitError,
     ProviderTimeoutError,
     StructuredGenerationRequest,
@@ -136,6 +138,10 @@ class OpenAICompatibleChatProvider:
 
             if response.status_code in {401, 403}:
                 raise ProviderAuthenticationError("LLM provider authentication failed")
+            if response.status_code == 402:
+                raise ProviderInsufficientBalanceError("LLM provider balance is insufficient")
+            if response.status_code in {400, 422}:
+                raise ProviderInvalidRequestError("LLM provider rejected request parameters")
             if response.status_code == 429:
                 if attempt < self.max_retries:
                     await self._sleep_before_retry(attempt)

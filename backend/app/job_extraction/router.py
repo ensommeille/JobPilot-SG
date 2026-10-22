@@ -44,6 +44,7 @@ class ExtractionRunRead(BaseModel):
     pipeline: dict[str, Any]
     result: ExtractionResult | None
     error_code: str | None
+    error_message: str | None = None
     is_stale: bool
     is_current_pipeline: bool
     reused: bool

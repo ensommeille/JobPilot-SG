@@ -20,6 +20,7 @@ from app.job_extraction.models import ExtractionResult
 from app.job_extraction.persistence import ExtractionRequestError, execute, job_input
 from app.job_extraction.runtime import ExtractionRuntime, live_runtime
 from app.llm.config import LLMSettings
+from app.llm.errors import BATCH_ABORT_ERROR_CODES, provider_error_message
 
 
 def pending_jobs(
@@ -116,7 +117,7 @@ async def prepare_saved(
     jobs: list[JobPosting],
     runtime: ExtractionRuntime,
 ) -> dict:
-    """Extract selected stored JDs; stop after authentication/rate-limit failure."""
+    """Extract selected JDs; stop on account, configuration or rate-limit failures."""
     if not actor.is_active or actor.role != UserRole.ADMIN:
         raise ValueError("An active administrator is required")
     if runtime.is_mock:
@@ -134,9 +135,10 @@ async def prepare_saved(
                 "status": run.status,
                 "reused": reused,
                 "error_code": run.error_code,
+                "error_message": provider_error_message(run.error_code),
             }
             report["jobs"].append(entry)
-            if run.error_code in {"provider_authentication_error", "provider_rate_limit"}:
+            if run.error_code in BATCH_ABORT_ERROR_CODES:
                 break
         except ExtractionRequestError as exc:
             db.rollback()
@@ -150,7 +152,9 @@ def main() -> None:
     parser.add_argument("--source-id", type=UUID)
     parser.add_argument("--job-type", type=str, help="Exact job type, e.g. internship")
     parser.add_argument(
-        "--job-id", type=UUID, action="append",
+        "--job-id",
+        type=UUID,
+        action="append",
         help="Only process this stored job; repeat for an explicitly reviewed batch",
     )
     parser.add_argument("--limit", type=int, choices=range(1, 11), default=3)
