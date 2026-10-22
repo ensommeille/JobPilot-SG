@@ -15,6 +15,7 @@ from app.ingestion.service import build_source_adapter, run_source
 from app.job_extraction.persistence import ExtractionRequestError, execute
 from app.job_extraction.runtime import ExtractionRuntime, live_runtime
 from app.llm.config import LLMSettings
+from app.llm.errors import BATCH_ABORT_ERROR_CODES, provider_error_message
 
 
 async def prepare(
@@ -74,9 +75,10 @@ async def prepare(
                     "status": run.status,
                     "reused": reused,
                     "error_code": run.error_code,
+                    "error_message": provider_error_message(run.error_code),
                 }
             )
-            if run.error_code in {"provider_authentication_error", "provider_rate_limit"}:
+            if run.error_code in BATCH_ABORT_ERROR_CODES:
                 break
         except ExtractionRequestError as exc:
             db.rollback()

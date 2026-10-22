@@ -156,9 +156,16 @@ def test_failure_is_recorded_without_mock_fallback(client, db, pipeline, mode):
 
 @pytest.mark.parametrize(
     ("status", "error_code"),
-    [(401, "provider_authentication_error"), (429, "provider_rate_limit")],
+    [
+        (401, "provider_authentication_error"),
+        (402, "provider_insufficient_balance"),
+        (400, "provider_invalid_request"),
+        (422, "provider_invalid_request"),
+        (404, "provider_capability_error"),
+        (429, "provider_rate_limit"),
+    ],
 )
-def test_provider_auth_or_rate_limit_stops_remaining_jobs(db, pipeline, status, error_code):
+def test_provider_account_or_request_failure_stops_remaining_jobs(db, pipeline, status, error_code):
     actor, source = pipeline
     calls = []
 
@@ -201,6 +208,7 @@ def test_provider_auth_or_rate_limit_stops_remaining_jobs(db, pipeline, status, 
     assert len(result["jobs"]) == 1
     assert result["jobs"][0]["status"] == "failed"
     assert result["jobs"][0]["error_code"] == error_code
+    assert result["jobs"][0]["error_message"]
     runs = list(db.scalars(select(JobExtractionRun)))
     assert len(runs) == 1
     assert runs[0].error_code == error_code
