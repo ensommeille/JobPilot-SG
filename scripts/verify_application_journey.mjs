@@ -128,6 +128,7 @@ try {
   expect(item.unknown.length).toBeGreaterThan(0);
   await expect(page.getByText('Locally corrected draft').first()).toBeVisible();
   await expect(page.getByRole('region', {name: 'Related project experience'})).toContainText('class project');
+  await expect(page.locator('.job-card')).toHaveCount(3);
   await page.screenshot({path: path.join(output, 'real-job-recommendation.png'), fullPage: true});
   checks.push('One real Stripe snapshot suggested with exact JD/profile evidence; human review remains pending');
 
