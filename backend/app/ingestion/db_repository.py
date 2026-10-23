@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -16,8 +18,9 @@ class SqlAlchemyJobRepository:
         self.db = db
         self.source = source
 
-    def upsert(self, records: list[JobRecord]) -> UpsertStats:
+    def upsert(self, records: list[JobRecord], *, seen_at: datetime | None = None) -> UpsertStats:
         items_new = items_updated = items_unchanged = 0
+        seen_at = seen_at or datetime.now(UTC)
 
         for record in records:
             job = self.db.scalar(
@@ -35,18 +38,20 @@ class SqlAlchemyJobRepository:
             if job is None:
                 job = JobPosting(source_id=self.source.id, external_id=record.external_id)
                 self._copy_record(job, record)
+                job.last_seen_at = seen_at
                 self.db.add(job)
                 items_new += 1
             elif job.source_id != self.source.id:
                 # Keep the canonical source identity intact on cross-source deduplication.
                 items_unchanged += 1
-            elif job.raw_hash == record.raw_hash and job.status == record.status.value:
-                # Backfill provenance for legacy rows even when page content is unchanged.
-                job.source_url = record.source_url
-                items_unchanged += 1
             else:
+                before = self._snapshot(job)
                 self._copy_record(job, record)
-                items_updated += 1
+                job.last_seen_at = seen_at
+                if self._snapshot(job) == before:
+                    items_unchanged += 1
+                else:
+                    items_updated += 1
 
         self.db.flush()
         total_stored = (
@@ -106,6 +111,35 @@ class SqlAlchemyJobRepository:
             category="general",
         )
         job.tags = [*employment_tags, *general_tags]
+
+    @staticmethod
+    def _snapshot(job: JobPosting) -> tuple:
+        # Description hashes deliberately do not cover location, URLs or other metadata.
+        fields = (
+            "external_id",
+            "title",
+            "company",
+            "city",
+            "salary_min",
+            "salary_max",
+            "salary_currency",
+            "salary_period",
+            "education",
+            "experience",
+            "job_type",
+            "description",
+            "apply_url",
+            "source_url",
+            "posted_at",
+            "deadline",
+            "dedup_hash",
+            "raw_hash",
+            "status",
+        )
+        return (
+            *(getattr(job, field) for field in fields),
+            frozenset((tag.name.casefold(), tag.category) for tag in job.tags),
+        )
 
     def _resolve_tags(self, names: list[str], *, category: str) -> list[JobTag]:
         unique_names: list[str] = []

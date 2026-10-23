@@ -54,7 +54,7 @@ interface Report {
   source_review_count?: number
 }
 const messages = {
-  profile_needed: 'Add specific skills or describe work you have done in your saved experience. General traits and learning goals alone do not generate suggestions; uploaded resume files are not read.',
+  profile_needed: 'Add specific skills or describe work you have done in your saved experience. You can review text extracted from a PDF in your profile, copy selected information and save it first. General traits and learning goals alone do not generate suggestions.',
   no_candidates: 'No active, unexpired jobs fit these filters. Clear a filter or browse all jobs below.',
   no_evidence: 'Jobs were found, but their requirements are not ready for reliable comparison. Refreshing or uploading a resume will not create an extraction. This is not a rejection; a project administrator must run the extraction workflow before evidence-based suggestions can appear.',
   no_matches: 'No clear skill or project-activity overlaps were found in the jobs evaluated. Recognition is limited to named skills and described work, not every possible meaning. This is not a rejection: review your saved profile or browse all jobs.',
@@ -118,7 +118,7 @@ export default function JobRecommendations() {
 
   return <section className="job-recommendations" aria-labelledby="recommendations-title" aria-busy={busy}>
     <h2 id="recommendations-title">For you</h2>
-    <p>Find jobs with tools, domain skills or activities related to your saved profile and real job descriptions. Shared terms are a reason to investigate, not proof that you meet every requirement. Skill evidence comes from your saved Skills list, not an uploaded resume file.</p>
+    <p>Find jobs with tools, domain skills or activities related to your saved profile and real job descriptions. Shared terms are a reason to investigate, not proof that you meet every requirement. Review information extracted from your resume PDF and save selected skills and experience in your profile before finding jobs.</p>
     <form onSubmit={findJobs}>
       <div className="recommendation-filters">
         <label>Role or company (optional)<input className="input" maxLength={200} value={filters.keyword} onChange={e => changeFilter('keyword', e.target.value)} /></label>
@@ -135,7 +135,7 @@ export default function JobRecommendations() {
     {error && <p role="alert">{error}</p>}
     {report && <div>
       <p role="status"><strong>{messages[report.status]}</strong></p>
-      <p className="muted">Using {report.profile_skill_count} distinct named tool or domain {report.profile_skill_count === 1 ? 'skill' : 'skills'} from your saved Skills list. Resume files are not parsed.</p>
+      <p className="muted">Using {report.profile_skill_count} distinct named tool or domain {report.profile_skill_count === 1 ? 'skill' : 'skills'} from your saved Skills list. Information extracted from a PDF is used after you review and save it to your profile.</p>
       <SourceReviewNotice count={report.source_review_count} />
       {report.preferred_job_type === 'internship' && <p className="muted">Your saved introduction or availability explicitly mentions seeking an internship. Internship jobs appear before other job types when the skill-gap evidence is otherwise comparable; other jobs remain visible.</p>}
       {report.status !== 'profile_needed' && <>

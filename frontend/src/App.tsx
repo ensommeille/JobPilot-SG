@@ -11,6 +11,7 @@ import ApplicationFormPage from './pages/ApplicationFormPage'
 import ApplicationHistoryPage from './pages/ApplicationHistoryPage'
 import ExternalApplicationPage from './pages/ExternalApplicationPage'
 import InternSGPreviewPage from './pages/InternSGPreviewPage'
+import PrepareApplicationPage from './pages/PrepareApplicationPage'
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
         <Route path="/" element={<LoginPage />} />
         <Route path="/jobs" element={<JobListPage />} />
         <Route path="/jobs/:id" element={<JobDetailPage />} />
+        <Route path="/jobs/:id/prepare" element={<PrepareApplicationPage />} />
         <Route path="/jobs/:id/apply" element={<ApplicationFormPage />} />
         <Route path="/jobs/:id/apply-external" element={<ExternalApplicationPage />} />
         {import.meta.env.DEV && <Route path="/jobs/internsg-preview/apply-external" element={<InternSGPreviewPage />} />}

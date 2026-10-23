@@ -1,0 +1,32 @@
+.application-history-container { max-width: 940px; }
+.application-history-toolbar { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: var(--s-4); margin-bottom: var(--s-5); }
+.application-history-count { color: var(--text-muted); margin-bottom: var(--s-3); font-size: 13px; }
+.application-history-list { background: var(--surface); padding-inline: var(--s-5); }
+.application-history-row { padding-block: var(--s-5); border-bottom: 1px solid var(--border); }
+.application-history-row:last-child { border-bottom: 0; }
+.application-history-record { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-3); min-width: 0; }
+.application-history-record-heading { display: flex; width: 100%; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: var(--s-3); }
+.application-history-record-heading h2 { flex: 1 1 260px; overflow-wrap: anywhere; font-size: 18px; }
+.application-status { color: var(--text-muted); background: var(--bg); padding: var(--s-1) var(--s-3); border-radius: var(--radius-sm); font-size: 13px; }
+.application-status[data-state="sent"], .application-status[data-state="offered"] { color: var(--primary); background: var(--primary-soft); }
+.application-status[data-state="failed"], .application-status[data-state="unknown"], .application-status[data-state="rejected"] { color: var(--danger); background: var(--danger-soft); }
+.application-status[data-state="sending"] { color: var(--text); background: var(--warning-soft); }
+.application-record-date { font-size: 13px; color: var(--text-muted); }
+.application-history-record > p { max-width: 72ch; overflow-wrap: anywhere; }
+.application-status-controls, .application-history-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+.application-status-controls { margin-top: var(--s-2); }
+.application-status-controls label { font-size: 13px; }
+.application-history-links { margin-top: var(--s-2); }
+.application-history-error { color: var(--danger); }
+.application-message-reference { overflow-wrap: anywhere; font-size: 13px; }
+.application-history-record details { max-width: 100%; }
+.application-history-record summary { color: var(--primary); cursor: pointer; }
+.application-history-pagination { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: var(--s-3); margin-top: var(--s-5); }
+.application-history-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-3); padding-block: var(--s-6); max-width: 72ch; }
+.application-history-page .btn { white-space: normal; height: auto; min-height: 38px; padding-block: var(--s-2); max-width: 100%; }
+.application-history-page a { text-underline-offset: 3px; }
+@media (max-width: 600px) {
+  .application-history-list { padding-inline: var(--s-4); }
+  .application-status-controls { align-items: flex-start; }
+  .application-status-controls .select { max-width: 100%; }
+}

@@ -10,12 +10,14 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import AdminUser
 from app.db.session import get_db
+from app.ingestion.locks import SourceBusyError, SourceLeaseLostError
 from app.ingestion.schemas import (
     CrawlRunPage,
     CrawlRunRead,
     SourceCreate,
     SourceRead,
     SourceRunRequest,
+    SourceScheduleUpdate,
 )
 from app.ingestion.service import (
     SourceAdapterFactory,
@@ -28,6 +30,7 @@ from app.ingestion.service import (
     list_crawl_runs,
     list_sources,
     run_source,
+    update_source_schedule,
 )
 
 router = APIRouter(tags=["admin-ingestion"])
@@ -41,14 +44,26 @@ def read_sources(db: DatabaseSession, _admin: AdminUser) -> list[SourceRead]:
 
 
 @router.post("/sources", response_model=SourceRead, status_code=status.HTTP_201_CREATED)
-def create_job_source(
-    payload: SourceCreate, db: DatabaseSession, admin: AdminUser
-) -> SourceRead:
+def create_job_source(payload: SourceCreate, db: DatabaseSession, admin: AdminUser) -> SourceRead:
     try:
         source = create_source(db, payload=payload, actor=admin)
     except SourceConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return SourceRead.model_validate(source)
+
+
+@router.patch("/sources/{source_id}", response_model=SourceRead)
+def configure_job_source(
+    source_id: UUID, payload: SourceScheduleUpdate, db: DatabaseSession, admin: AdminUser
+) -> SourceRead:
+    source = get_source(db, source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    try:
+        updated = update_source_schedule(db, source=source, payload=payload, actor=admin)
+    except SourceRunError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return SourceRead.model_validate(updated)
 
 
 @router.post(
@@ -75,6 +90,8 @@ def create_crawl_run(
             max_links=payload.max_links,
             max_details=payload.max_details,
         )
+    except (SourceBusyError, SourceLeaseLostError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except SourceRunError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return CrawlRunRead.model_validate(crawl_run)
@@ -98,9 +115,7 @@ def read_crawl_runs(
 
 
 @router.get("/runs/{run_id}", response_model=CrawlRunRead)
-def read_crawl_run(
-    run_id: UUID, db: DatabaseSession, _admin: AdminUser
-) -> CrawlRunRead:
+def read_crawl_run(run_id: UUID, db: DatabaseSession, _admin: AdminUser) -> CrawlRunRead:
     crawl_run = get_crawl_run(db, run_id)
     if crawl_run is None:
         raise HTTPException(status_code=404, detail="Crawl run not found")

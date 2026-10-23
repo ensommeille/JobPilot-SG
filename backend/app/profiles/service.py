@@ -18,6 +18,9 @@ def get_profile(db: Session, *, user: User) -> UserProfile:
     )
     profile = db.scalar(statement)
     if profile is not None:
+        from app.profiles.resume_files import file_flags
+
+        file_flags(db, profile.resumes)
         return profile
 
     profile = UserProfile(user_id=user.id, contact_email=user.email)
@@ -72,10 +75,14 @@ def add_resume_metadata(db: Session, *, user: User, payload: ResumeCreate) -> Re
 
 
 def list_resume_metadata(db: Session, *, user: User) -> list[ResumeDocument]:
-    profile = get_profile(db, user=user)
     statement = (
         select(ResumeDocument)
-        .where(ResumeDocument.profile_id == profile.id)
+        .join(UserProfile, UserProfile.id == ResumeDocument.profile_id)
+        .where(UserProfile.user_id == user.id)
         .order_by(ResumeDocument.uploaded_at.desc(), ResumeDocument.id)
     )
-    return list(db.scalars(statement).all())
+    documents = list(db.scalars(statement).all())
+    from app.profiles.resume_files import file_flags
+
+    file_flags(db, documents)
+    return documents

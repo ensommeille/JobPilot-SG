@@ -24,6 +24,10 @@ GET    /profile
 PUT    /profile
 POST   /profile/resumes
 GET    /profile/resumes
+POST   /profile/resumes/upload
+GET    /profile/resumes/{id}
+GET    /profile/resumes/{id}/content
+DELETE /profile/resumes/{id}
 
 # Tags / Sources (Sources = Admin)
 GET    /tags
@@ -77,8 +81,21 @@ GET    /audit-logs
   source URL. Repeated `(source_id, external_id)` records update only when `raw_hash` changes.
 - Failed and partial crawls never delete accepted jobs. Their counters and structured errors remain
   available through `/runs` and `/runs/{id}`, while source health is updated for administration.
-- `PUT /profile` replaces the authenticated user's structured pre-fill data. Resume endpoints accept
-  validated PDF/DOC/DOCX metadata up to 5 MiB; binary storage is outside the current MVP.
+- `PUT /profile` replaces the authenticated user's structured pre-fill data. The legacy JSON
+  `POST /profile/resumes` remains compatible with PDF/DOC/DOCX metadata and declared sizes up to
+  5 MiB; these filename-only records do not contain uploaded file bytes (`has_file: false`).
+- `POST /profile/resumes/upload` accepts a multipart `file`: an actual PDF of at most 2 MiB and
+  1–20 pages. The original bytes are stored privately for the authenticated account. Encrypted or
+  malformed PDFs are rejected. Text extraction runs locally with bounded resources; image-only
+  PDFs are retained with `extraction_status: needs_text`. OCR is not performed.
+- `GET /profile/resumes` returns summaries and file/extraction flags without PDF bytes or extracted
+  text. Owner-only `GET /profile/resumes/{id}` returns extracted text and conservative suggestions.
+  Users must check selected suggestions and explicitly save their profile before that information
+  is reused; uploading alone does not overwrite profile fields or generate personal claims.
+- Owner-only `GET /profile/resumes/{id}/content` downloads the original PDF; `DELETE` on the
+  resume resource removes its library entry and original file. Saved profile fields and attachment
+  copies already held by email drafts or sent records remain. File access requires the normal web
+  bearer session, rejects extension credentials, and uses `Cache-Control: no-store`.
 - Manual applications start as draft or submitted. Status changes follow the documented lifecycle;
   invalid or duplicate changes return HTTP 409 and another user's record appears as HTTP 404.
 - `/assistant/map-fields` resolves only the authenticated user's profile snapshot and delegates to

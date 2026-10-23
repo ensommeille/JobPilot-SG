@@ -7,10 +7,14 @@ from app.db.session import engine
 
 def test_all_planned_core_tables_are_created() -> None:
     assert set(inspect(engine).get_table_names()) == {
+        "resume_file_contents",
         "application_forms",
         "applications",
         "audit_logs",
         "crawl_runs",
+        "source_crawl_leases",
+        "email_application_policies",
+        "email_applications",
         "favorites",
         "extension_grants",
         "revoked_access_tokens",

@@ -1,6 +1,6 @@
 """Tests for the M3 normalized-record to M2 relational persistence bridge."""
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -122,9 +122,33 @@ def test_recrawl_backfills_original_url_without_inventing_it(db: Session) -> Non
     db.commit()
     stats = repository.upsert([record])
     db.commit()
-    assert stats.items_unchanged == 1
+    assert stats.items_updated == 1
     assert job.source_url == record.source_url
     assert job.apply_url != job.source_url
+
+
+def test_same_hash_refreshes_metadata_and_observation_time(db: Session) -> None:
+    source = JobSource(name="Metadata", source_type="mock", base_url="https://jobs.example.test")
+    db.add(source)
+    db.commit()
+    repository = SqlAlchemyJobRepository(db, source)
+    first_seen = datetime(2026, 10, 1, tzinfo=UTC)
+    repository.upsert([make_record()], seen_at=first_seen)
+    db.commit()
+    changed = make_record(city="Remote Singapore", apply_url="https://jobs.example.test/new-apply")
+    second_seen = first_seen + timedelta(hours=6)
+    stats = repository.upsert([changed], seen_at=second_seen)
+    db.commit()
+    row = db.scalar(select(JobPosting))
+    assert stats.items_updated == 1
+    assert row.city == "Remote Singapore"
+    assert row.apply_url.endswith("/new-apply")
+    assert row.raw_hash == "1" * 64
+    third_seen = second_seen + timedelta(hours=6)
+    stats = repository.upsert([changed], seen_at=third_seen)
+    db.commit()
+    assert stats.items_unchanged == 1
+    assert row.last_seen_at.replace(tzinfo=UTC) == third_seen
 
 
 def test_cross_source_duplicate_preserves_canonical_identity(db: Session) -> None:

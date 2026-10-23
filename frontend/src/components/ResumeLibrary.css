@@ -1,0 +1,19 @@
+.resume-library { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-5); margin-bottom: var(--s-4); background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.resume-library h2, .resume-library h3 { margin-top: 0; }
+.resume-library > p, .resume-text-review > p { max-width: 72ch; }
+.resume-library label { display: block; margin-block: var(--s-2); }
+.resume-library input[type="file"] { max-width: 100%; }
+.resume-library-files { padding: 0; margin: var(--s-4) 0; list-style: none; }
+.resume-library-files > li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s-3); padding-block: var(--s-3); border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.resume-library-files > li > div { min-width: 0; }
+.resume-library-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.resume-text-review { border-top: 1px solid var(--border); padding-top: var(--s-4); }
+.resume-text-review > p, .resume-text-review > details, .resume-text-review > dl { margin-block: var(--s-3); }
+.resume-text-review summary { cursor: pointer; color: var(--primary); }
+.resume-text-review pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; max-height: 360px; overflow-y: auto; padding: var(--s-3); background: var(--bg); }
+.resume-suggestion { padding-block: var(--s-2); border-bottom: 1px solid var(--border); }
+.resume-suggestion label { display: flex; align-items: flex-start; gap: var(--s-2); }
+.resume-suggestion dd { margin: 0 0 var(--s-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.resume-library [role="alert"] { color: var(--danger); }
+.resume-library :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+@media (max-width: 600px) { .resume-library { padding: var(--s-4); } .resume-library .btn { white-space: normal; height: auto; min-height: 44px; } }

@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.db.models import CrawlRunStatus
 from app.ingestion.models import SourceType
 from app.ingestion.public_ats_adapter import public_ats_identity
+from app.ingestion.schedule import normalize_schedule, utc_timestamp
 
 
 class SourceCreate(BaseModel):
@@ -19,7 +20,12 @@ class SourceCreate(BaseModel):
     source_type: SourceType
     base_url: str = Field(min_length=1, max_length=1000)
     schedule: str | None = Field(default=None, max_length=120)
-    enabled: bool = True
+    enabled: bool = Field(
+        default=True,
+        description="Allow new runs. Disabling does not cancel an in-progress collection or remove saved jobs.",
+    )
+    max_links: int = Field(default=20, ge=1, le=100)
+    max_details: int = Field(default=5, ge=1, le=100)
 
     @field_validator("name")
     @classmethod
@@ -32,10 +38,7 @@ class SourceCreate(BaseModel):
     @field_validator("schedule")
     @classmethod
     def normalize_schedule(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
+        return normalize_schedule(value)
 
     @field_validator("base_url")
     @classmethod
@@ -48,9 +51,11 @@ class SourceCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_public_ats(self) -> SourceCreate:
+        if self.max_details > self.max_links:
+            raise ValueError("max_details must not exceed max_links")
         if self.source_type is SourceType.JSON and public_ats_identity(self.base_url) is None:
             raise ValueError(
-                "JSON sources require an exact Greenhouse or Lever public board API URL"
+                "JSON sources require an exact Greenhouse, Lever or Ashby public board API URL"
             )
         return self
 
@@ -65,8 +70,43 @@ class SourceRead(BaseModel):
     schedule: str | None
     enabled: bool
     status: str
+    max_links: int
+    max_details: int
+    last_attempt_at: datetime | None
+    last_success_at: datetime | None
+    next_run_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("last_attempt_at", "last_success_at", "next_run_at")
+    @classmethod
+    def normalize_timestamp(cls, value: datetime | None) -> datetime | None:
+        return utc_timestamp(value) if value is not None else None
+
+
+class SourceScheduleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schedule: str | None = Field(default=None, max_length=120)
+    enabled: bool | None = Field(
+        default=None,
+        description="Disable to prevent new runs; an in-progress collection may finish and save its batch.",
+    )
+    max_links: int | None = Field(default=None, ge=1, le=100)
+    max_details: int | None = Field(default=None, ge=1, le=100)
+
+    @field_validator("schedule")
+    @classmethod
+    def validate_schedule(cls, value: str | None) -> str | None:
+        return normalize_schedule(value)
+
+    @model_validator(mode="after")
+    def validate_update(self) -> SourceScheduleUpdate:
+        if not self.model_fields_set:
+            raise ValueError("provide at least one source setting")
+        if any(getattr(self, field) is None for field in self.model_fields_set - {"schedule"}):
+            raise ValueError("only schedule can be null")
+        return self
 
 
 class SourceRunRequest(BaseModel):
@@ -93,6 +133,10 @@ class CrawlRunRead(BaseModel):
     items_new: int
     items_updated: int
     items_failed: int
+    items_attempted: int
+    items_unchanged: int
+    items_closed: int
+    is_complete: bool
     error_summary: list[dict[str, Any]]
     created_at: datetime
 

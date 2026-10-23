@@ -197,7 +197,7 @@ export default function JobMatchAnalysis({jobId}: {jobId: string}) {
         </details>}
         <details className="job-match-limits">
           <summary>About this analysis</summary>
-          <p>This comparison uses your saved skills and experience text; uploaded resume files are not read. Project evidence shows related activities, not verified expertise. Check education, proficiency and work arrangements yourself.</p>
+          <p>This comparison uses your saved skills and experience. After uploading a PDF, review its extracted information and save the selected profile fields first. Project evidence shows related activities, not verified expertise. Check education, proficiency and work arrangements yourself.</p>
           <p>Requirements are model-extracted and not human-verified. Counts refer to requirements, not a match percentage. “Needs review” does not necessarily mean your profile is incomplete.</p>
           {result.warnings.map(warning => <p lang="en" key={warning}>{warning}</p>)}
         </details>

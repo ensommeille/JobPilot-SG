@@ -1,8 +1,8 @@
-"""Bounded, read-only adapters for public Greenhouse and Lever job boards.
+"""Bounded, read-only adapters for public Greenhouse, Lever and Ashby boards.
 
 The source URL is an exact API-board URL, never an arbitrary user-supplied URL.
-Only published internship posts are retained. Application links are stored, not
-fetched or submitted by this adapter.
+Only explicitly Singapore-based, published early-career posts are retained.
+Application links are stored, never fetched or submitted by this adapter.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import html
 import re
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
@@ -27,15 +27,17 @@ from .models import (
     SourceConfig,
     SourceType,
 )
-from .normalization import build_dedup_hash, infer_city, normalize_job_types, sha256_text
+from .normalization import build_external_dedup_hash, normalize_job_types, sha256_text
 from .source_adapter import SourceAdapter
 
-PARSER_VERSION = "public-ats-2026-10-v1"
+PARSER_VERSION = "public-ats-2026-10-v2"
 BOARD_PATHS = {
     "boards-api.greenhouse.io": ("greenhouse", re.compile(r"/v1/boards/([A-Za-z0-9_-]+)")),
     "api.lever.co": ("lever", re.compile(r"/v0/postings/([A-Za-z0-9_-]+)")),
     "api.eu.lever.co": ("lever", re.compile(r"/v0/postings/([A-Za-z0-9_-]+)")),
+    "api.ashbyhq.com": ("ashby", re.compile(r"/posting-api/job-board/([A-Za-z0-9_.-]+)")),
 }
+LISTING_SUFFIXES = {"greenhouse": "/jobs?content=true", "lever": "?mode=json", "ashby": ""}
 
 
 def public_ats_identity(value: str) -> tuple[str, str] | None:
@@ -58,7 +60,9 @@ def public_ats_identity(value: str) -> tuple[str, str] | None:
     ):
         return None
     match = rule[1].fullmatch(parsed.path.rstrip("/"))
-    return (rule[0], match.group(1)) if match else None
+    if not match or match.group(1) in {".", ".."}:
+        return None
+    return rule[0], match.group(1)
 
 
 def _public_url(value: object, *, hosts: set[str]) -> str | None:
@@ -87,10 +91,91 @@ def _plain(value: object) -> str:
     return BeautifulSoup(html.unescape(value), "html.parser").get_text(" ", strip=True)
 
 
-def _internship(title: str, record: dict) -> bool:
+def _career_types(title: str, record: dict) -> list[str]:
+    """Seniority and commitment are separate: an internship may be FullTime."""
+    if re.search(
+        r"\b(?:senior|sr|staff|principal|lead|manager|director|head|chief)\b", title, re.I
+    ):
+        return []
     categories = record.get("categories")
     commitment = categories.get("commitment", "") if isinstance(categories, dict) else ""
-    return bool(re.search(r"\bintern(?:ship)?\b", f"{title} {commitment}", re.I))
+    text = f"{title} {commitment} {record.get('employmentType') or ''}"
+    result = []
+    if re.search(r"\bintern(?:ship)?s?\b", text, re.I):
+        result.append("internship")
+    if re.search(r"\b(?:graduates?|new[ -]grads?)\b", title, re.I):
+        result.append("graduate")
+    if re.search(r"\b(?:junior|jr|entry[ -]level|early[ -]career)\b", title, re.I):
+        result.append("entry-level")
+    return result
+
+
+def _locations(record: dict, provider: str) -> list[str]:
+    """Read only source location fields, never infer Singapore from JD prose."""
+    values: list[str] = []
+
+    def add(value: object) -> None:
+        if isinstance(value, str) and value.strip() and value.strip() not in values:
+            values.append(value.strip())
+
+    def address(value: object) -> None:
+        if not isinstance(value, dict):
+            return
+        postal = value.get("postalAddress", value)
+        if isinstance(postal, dict):
+            add(postal.get("addressLocality"))
+            country = postal.get("addressCountry")
+            if isinstance(country, str) and country.casefold() in {"sg", "sgp", "singapore"}:
+                add("Singapore")
+
+    def array(value: object) -> list:
+        return value if isinstance(value, list) else []
+
+    location = record.get("location")
+    if isinstance(location, dict):
+        add(location.get("name"))
+    else:
+        add(location)
+    if provider == "lever":
+        categories = record.get("categories") or {}
+        if isinstance(categories, dict):
+            add(categories.get("location"))
+            for value in array(categories.get("allLocations")):
+                add(value)
+        if isinstance(record.get("country"), str) and record["country"].casefold() == "sg":
+            add("Singapore")
+    elif provider == "ashby":
+        address(record.get("address"))
+        for secondary in array(record.get("secondaryLocations")):
+            if isinstance(secondary, dict):
+                add(secondary.get("location"))
+                address(secondary.get("address"))
+    elif provider == "greenhouse":
+        for office in array(record.get("offices")):
+            if isinstance(office, dict):
+                add(office.get("location"))
+                add(office.get("name"))
+    return values
+
+
+def _singapore(record: dict, provider: str) -> bool:
+    return any(
+        re.search(r"\bsingapore\b", value, re.I)
+        and not re.search(r"\b(?:not|outside|excluding)\s+singapore\b", value, re.I)
+        for value in _locations(record, provider)
+    )
+
+
+def _posted_at(record: dict, provider: str) -> date | None:
+    value = record.get("publishedAt") if provider == "ashby" else record.get("first_published")
+    try:
+        if isinstance(value, str):
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+        if provider == "lever" and isinstance(record.get("createdAt"), (int, float)):
+            return datetime.fromtimestamp(record["createdAt"] / 1000, UTC).date()
+    except (ValueError, OverflowError, OSError):
+        pass
+    return None
 
 
 class PublicATSAdapter(SourceAdapter):
@@ -114,6 +199,7 @@ class PublicATSAdapter(SourceAdapter):
         self._config = config
         self.provider = provider
         self.board = identity[1]
+        self._listing_url = config.base_url + LISTING_SUFFIXES[provider]
         self._sleep = sleep
         self._now = now or (lambda: datetime.now(UTC))
         self._owns_client = client is None
@@ -132,6 +218,30 @@ class PublicATSAdapter(SourceAdapter):
         if self._owns_client:
             self.client.close()
 
+    def _request(self, url: str, *, max_bytes: int) -> httpx.Response:
+        # Stream a bounded body; checking response.content after client.get is too late.
+        with self.client.stream("GET", url) as response:
+            if response.is_redirect:
+                raise ValueError("ATS API redirected unexpectedly")
+            response.raise_for_status()
+            chunks: list[bytes] = []
+            size = 0
+            for chunk in response.iter_bytes():
+                size += len(chunk)
+                if size > max_bytes:
+                    raise ValueError("ATS response exceeds the configured byte limit")
+                chunks.append(chunk)
+            return httpx.Response(
+                response.status_code,
+                headers={
+                    key: value
+                    for key, value in response.headers.items()
+                    if key.casefold() not in {"content-encoding", "content-length"}
+                },
+                content=b"".join(chunks),
+                request=response.request,
+            )
+
     def _get(self, url: str) -> httpx.Response:
         parsed = urlparse(url)
         if (
@@ -140,14 +250,19 @@ class PublicATSAdapter(SourceAdapter):
             or parsed.port is not None
             or parsed.username
             or parsed.password
+            or url != self._listing_url
         ):
-            raise ValueError("Request is outside the configured ATS host")
-        if self.config.enforce_robots and not url.endswith("/robots.txt"):
+            raise ValueError("Request is outside the configured public ATS listing")
+        # Ashby documents this exact GET as its public Job Postings API:
+        # https://developers.ashbyhq.com/docs/public-job-posting-api
+        # Its host-level robots.txt returned 401 on 23 Oct 2026. Only this
+        # canonical API URL uses the published-API contract; no HTML/private
+        # endpoint is allowed, and API 401/403/redirects still fail closed.
+        if self.config.enforce_robots and self.provider != "ashby":
             if self._robots is None:
                 robots_url = f"https://{parsed.hostname}/robots.txt"
                 try:
-                    response = self.client.get(robots_url)
-                    response.raise_for_status()
+                    response = self._request(robots_url, max_bytes=64_000)
                 except httpx.HTTPError as exc:
                     if self.config.robots_fail_closed:
                         raise ValueError("ATS robots policy unavailable") from exc
@@ -161,12 +276,7 @@ class PublicATSAdapter(SourceAdapter):
                 raise ValueError("ATS robots policy disallows this request")
         for attempt in range(self.config.retry_count + 1):
             try:
-                response = self.client.get(url)
-                # A redirect is not followed, even if an API provider changes hosts.
-                if response.is_redirect:
-                    raise ValueError("ATS API redirected unexpectedly")
-                response.raise_for_status()
-                return response
+                return self._request(url, max_bytes=10_000_000)
             except (httpx.TransportError, httpx.TimeoutException):
                 if attempt == self.config.retry_count:
                     raise
@@ -189,16 +299,14 @@ class PublicATSAdapter(SourceAdapter):
         failures: list[ItemFailure] = []
         discovered = attempted = 0
         listing_accessible = False
-        url = self.config.base_url + (
-            "/jobs?content=true" if self.provider == "greenhouse" else "?mode=json"
-        )
+        url = self._listing_url
         try:
             if not self.config.enabled:
                 raise ValueError("Source is disabled")
             data = self._json(url)
             jobs = (
                 data.get("jobs")
-                if self.provider == "greenhouse" and isinstance(data, dict)
+                if self.provider in {"greenhouse", "ashby"} and isinstance(data, dict)
                 else data
             )
             if not isinstance(jobs, list):
@@ -208,7 +316,9 @@ class PublicATSAdapter(SourceAdapter):
                 job
                 for job in jobs
                 if isinstance(job, dict)
-                and _internship(str(job.get("title") or job.get("text") or ""), job)
+                and (self.provider != "ashby" or job.get("isListed") is True)
+                and _singapore(job, self.provider)
+                and _career_types(str(job.get("title") or job.get("text") or ""), job)
             ]
             discovered = len(candidates)
             for job in candidates[:max_links][:max_details]:
@@ -259,7 +369,12 @@ class PublicATSAdapter(SourceAdapter):
                 raise ValueError("Greenhouse post has an invalid ID")
             title = _plain(job.get("title"))
             original = _public_url(
-                job.get("absolute_url"), hosts={"boards.greenhouse.io", "job-boards.greenhouse.io"}
+                job.get("absolute_url"),
+                hosts={
+                    "boards.greenhouse.io",
+                    "job-boards.greenhouse.io",
+                    "job-boards.eu.greenhouse.io",
+                },
             )
             # Greenhouse can use a custom company URL. Do not fetch arbitrary domains;
             # construct the canonical hosted board URL from the verified board/id.
@@ -267,17 +382,12 @@ class PublicATSAdapter(SourceAdapter):
                 original or f"https://job-boards.greenhouse.io/{self.board}/jobs/{external_id}"
             )
             apply_url = source_url
-            location = (
-                _plain((job.get("location") or {}).get("name"))
-                if isinstance(job.get("location"), dict)
-                else ""
-            )
             raw_html = html.unescape(str(job.get("content") or ""))
             description = _plain(raw_html)
-            job_type_raw = "Internship"
-        else:
-            external_id = str(job["id"])
-            if not re.fullmatch(r"[A-Za-z0-9-]+", external_id):
+            job_type_raw = title
+        elif self.provider == "lever":
+            external_id = job["id"]
+            if not isinstance(external_id, str) or not re.fullmatch(r"[A-Za-z0-9-]+", external_id):
                 raise ValueError("Lever post has an invalid ID")
             title = _plain(job.get("text"))
             hosts = {"jobs.lever.co", "jobs.eu.lever.co"}
@@ -286,15 +396,35 @@ class PublicATSAdapter(SourceAdapter):
             if not source_url or not apply_url:
                 raise ValueError("Lever hosted/apply URL is not a supported HTTPS form")
             categories = job.get("categories") or {}
-            location = _plain(categories.get("location")) if isinstance(categories, dict) else ""
             job_type_raw = (
                 _plain(categories.get("commitment")) if isinstance(categories, dict) else ""
             )
             raw_html = str(job.get("description") or "")
             description = _plain(job.get("descriptionPlain") or raw_html)
+        else:
+            external_id = job["id"]
+            if not isinstance(external_id, str) or not re.fullmatch(r"[A-Za-z0-9-]+", external_id):
+                raise ValueError("Ashby post has an invalid ID")
+            title = _plain(job.get("title"))
+            source_url = _public_url(job.get("jobUrl"), hosts={"jobs.ashbyhq.com"})
+            apply_url = _public_url(job.get("applyUrl"), hosts={"jobs.ashbyhq.com"})
+            expected = f"/{self.board}/{external_id}"
+            if (
+                not source_url
+                or not apply_url
+                or urlparse(source_url).path.rstrip("/") != expected
+                or urlparse(apply_url).path.rstrip("/")
+                not in {expected + "/application", expected + "/apply"}
+            ):
+                raise ValueError("Ashby hosted/apply URL does not match this board and posting")
+            raw_html = str(job.get("descriptionHtml") or "")
+            description = _plain(job.get("descriptionPlain") or raw_html)
+            job_type_raw = _plain(job.get("employmentType"))
         if not external_id or not title or not description:
             raise ValueError("ATS post is missing ID, title or description")
-        city = infer_city(location)
+        if not _singapore(job, self.provider) or not (career_types := _career_types(title, job)):
+            raise ValueError("ATS post is outside the Singapore early-career scope")
+        location = "; ".join(_locations(job, self.provider))
         raw_text = f"{title}\n{description}"
         record = JobRecord(
             source=self.provider,
@@ -305,14 +435,15 @@ class PublicATSAdapter(SourceAdapter):
             title=title,
             company=self.config.name,
             location=location or None,
-            city=city,
-            job_type=normalize_job_types(job_type_raw or title),
+            city="Singapore",
+            job_type=list(dict.fromkeys([*career_types, *normalize_job_types(job_type_raw)])),
             job_type_raw=job_type_raw,
             description=description,
             apply_url=apply_url,
             raw_hash=sha256_text(raw_text),
-            dedup_hash=build_dedup_hash(self.config.source_id, title, self.config.name, city),
+            dedup_hash=build_external_dedup_hash(self.config.source_id, external_id),
             parser_version=PARSER_VERSION,
+            posted_at=_posted_at(job, self.provider),
         )
         return RawJobItem(
             source_id=self.config.source_id,

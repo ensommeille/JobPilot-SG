@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'reac
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import JobRecommendations from '../components/JobRecommendations'
+import SourceFreshness from '../components/SourceFreshness'
 import { fetchAllJobs, fetchFavorites, addFavorite, removeFavorite, normalizeFavoriteList } from '../services/jobs'
 import type { JobId, JobView } from '../services/jobs'
 import { getToken, watchSession } from '../services/auth'
@@ -262,6 +263,7 @@ const JobListPage = () => {
           <p>Internships and graduate roles across Singapore, in one place.</p>
         </div>
 
+        <SourceFreshness />
         <JobRecommendations />
         <h2 style={{marginBottom: 'var(--s-4)'}}>Browse jobs</h2>
         <p className="muted" style={{ marginBottom: 'var(--s-4)' }}>Browse all currently stored jobs. Sidebar filters apply to the full result set.</p>

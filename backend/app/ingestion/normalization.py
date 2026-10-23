@@ -22,6 +22,15 @@ def build_dedup_hash(source_id: str, title: str, company: str, city: str | None)
     return sha256_text(payload)
 
 
+def build_external_dedup_hash(source_id: str, external_id: str) -> str:
+    """ATS postings retain identity when their title, location or company label changes.
+
+    Keep external IDs case-sensitive; unlike display text they are opaque provider keys.
+    The existing title-based helper remains unchanged for legacy InternSG records.
+    """
+    return sha256_text("\x1f".join(("public-ats-post", source_id, external_id)))
+
+
 def parse_salary(value: str | None) -> tuple[int | None, int | None, str | None, str | None]:
     if not value:
         return None, None, None, None
