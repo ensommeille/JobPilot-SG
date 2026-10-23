@@ -73,6 +73,7 @@ async function setup(page, {signedIn = true, installed = true, bridgeMode = 'nor
   await page.route('https://fonts.googleapis.com/**', route => route.fulfill({contentType: 'text/css', body: ''}));
   await page.route('**/profile', route => route.request().resourceType() === 'document' ? route.continue()
     : route.fulfill({json: {full_name: 'Fictional platform account'}}));
+  await page.route('**/users/me', route => route.fulfill({json: {role: 'job_seeker'}}));
   await page.route(new RegExp(`/jobs/(${jobA}|${jobB})$`), route => {
     if (route.request().resourceType() === 'document') return route.continue();
     const id = new URL(route.request().url()).pathname.split('/').at(-1);
