@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'reac
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import JobRecommendations from '../components/JobRecommendations'
+import AIRecommendations from '../components/AIRecommendations'
 import SourceFreshness from '../components/SourceFreshness'
 import { fetchAllJobs, fetchFavorites, addFavorite, removeFavorite, normalizeFavoriteList } from '../services/jobs'
 import type { JobId, JobView } from '../services/jobs'
@@ -265,6 +266,7 @@ const JobListPage = () => {
 
         <SourceFreshness />
         <JobRecommendations />
+        <AIRecommendations />
         <h2 style={{marginBottom: 'var(--s-4)'}}>Browse jobs</h2>
         <p className="muted" style={{ marginBottom: 'var(--s-4)' }}>Browse all currently stored jobs. Sidebar filters apply to the full result set.</p>
         <form className="searchbar" onSubmit={e => e.preventDefault()} role="search">

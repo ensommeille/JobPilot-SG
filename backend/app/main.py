@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai_recommendations.router import router as ai_recommendations_router
 from app.application_journey.router import router as application_journey_router
 from app.applications.router import router as applications_router
 from app.assistant.router import router as assistant_router
@@ -27,6 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth_router)
+app.include_router(ai_recommendations_router)
 app.include_router(extension_auth_router)
 app.include_router(users_router)
 app.include_router(jobs_router)

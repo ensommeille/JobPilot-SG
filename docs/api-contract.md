@@ -107,3 +107,19 @@ GET    /audit-logs
   records are committed together.
 - Ownership boundary: `/assistant/*` routers & persistence = M2; FormMappingService / DraftGenerationService (domain) = M4.
 - LLM output contracts (extraction JSON, field-mapping JSON) are defined in the development document §8.2 / §9.2 and are schema-validated (Pydantic).
+
+## Optional private AI recommendations
+
+- `GET /jobs/ai-recommendations/candidates` previews eligible jobs without calling a model.
+- `POST /jobs/ai-recommendations` requires `confirmed: true` and optionally 1–5 distinct
+  `job_ids`; one batch uses only saved, reviewed education/experience/skills and requested
+  filters after identifier redaction. It does not read PDF bytes or submit applications.
+- `GET /ai-recommendations/{run_id}` reads only the caller's existing run without a model call.
+
+All three require the normal web bearer session and return private `no-store` responses.
+Per-user profile/JD/pipeline hashes reuse successful or failed attempts; reading or repeating
+an unchanged request does not automatically retry a paid call. Exact source quotes are
+validated, supported claims require profile quotes, and missing information remains unknown.
+Technical success does not mean semantic approval: `requires_review` is always true.
+See [the AI recommendation contract](member3/AI_RECOMMENDATIONS_V1.md) for bounds, cache leases
+and the limited v2 qualification-priority checks.

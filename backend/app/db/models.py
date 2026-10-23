@@ -490,7 +490,8 @@ class JobExtractionRun(UUIDPrimaryKeyMixin, Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-# Register the optional email pilot tables for migrations and isolated test databases.
+# Register private discovery results, email pilot tables and resume contents.
+from app.ai_recommendations.models import AIRecommendationRun as AIRecommendationRun  # noqa: E402
 from app.email_applications.models import (  # noqa: E402
     EmailApplication as EmailApplication,
 )
