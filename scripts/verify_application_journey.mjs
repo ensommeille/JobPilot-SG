@@ -156,7 +156,7 @@ try {
   expect(realDraft.submitted_at).toBeNull();
   await request('POST', `/jobs/${seed.job_id}/applications`, {status: 'draft'}, 409);
   await page.goto(web + '/applications');
-  await expect(page.getByRole('article', {name: job.title})).toContainText('Draft');
+  await expect(page.getByRole('article', {name: job.title})).toContainText('Preparation draft');
   checks.push('Real-job draft displayed in history with no submitted timestamp; duplicate refused');
 
   // The in-platform form is explicitly a separate sandbox use case, not a Stripe form.
@@ -187,7 +187,7 @@ try {
   await expect(page.getByRole('heading', {name: 'Application record saved', exact: true})).toBeVisible();
   await page.getByRole('button', {name: 'View My Applications', exact: true}).click();
   const card = page.getByRole('article', {name: fixtureJob.title});
-  await expect(card).toContainText('Record saved');
+  await expect(card).toContainText('Application record saved');
   await card.getByRole('button', {name: 'View saved answers', exact: true}).click();
   for (const value of Object.values(finalValues)) await expect(card).toContainText(value);
   await page.reload();
