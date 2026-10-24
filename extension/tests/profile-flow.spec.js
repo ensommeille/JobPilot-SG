@@ -6,6 +6,7 @@ const tokenA = 'fixture-profile-flow-account-a';
 const tokenB = 'fixture-profile-flow-account-b';
 const emptyProfile = {
   full_name: 'Fictional Flow Applicant', contact_email: 'flow@example.test', phone: '',
+  given_name: null, family_name: null,
   education: '', experience: '', skills: [], links: {}, resume_summary: '',
   availability_period: '', nationality: null, study_country: null,
 };
@@ -31,6 +32,11 @@ async function signIn(page) {
   await page.addInitScript(token => {
     if (!localStorage.getItem('jobpilot_token')) localStorage.setItem('jobpilot_token', token);
   }, tokenA);
+  await page.route('**/users/me', route => route.fulfill({json: {id: 'fixture-profile-flow', role: 'user'}}));
+  await page.route('**/jobs/*/ai-assessment', route => route.fulfill({json: {
+    job_id: 'profile-flow-fixture', status: 'not_analyzed', assessment: null, advice: null,
+    source_run_id: null, execution_mode: null, model: null, finished_at: null, reason: null,
+  }}));
   await page.route('**/browser-assistant/draft', route => route.fulfill({json: {
     values: {}, countries: {nationality: null, campus: null}, profile_source: 'jobpilot',
     summary_status: 'manual_only', requires_review: true, submission_supported: false,
@@ -58,7 +64,10 @@ async function setupProfile(page, initial = {}, onSave) {
     }
     return route.fulfill({json: profile});
   });
+  await page.route('**/browser-assistant/autofill-profile', route => route.fulfill({json: {values: {}, sources: {}, missing_fields: [], resume: null, resumes: [], requires_resume_selection: false, extraction_status: 'no_resume', fingerprint: 'fixture-empty'}}));
+  await page.route('**/profile/resumes', route => route.fulfill({json: []}));
   await page.goto(`${base}/profile`);
+  await page.locator('#saved-profile-details > summary').click();
   await expect(page.getByRole('button', {name: 'Save Profile'})).toBeEnabled();
   return () => profile;
 }
@@ -77,25 +86,34 @@ test('saved natural skills lead to evidence and the correct explicit InternSG en
   });
   let recommendationCalls = 0, externalPosts = 0;
   await page.route(/\/jobs(\?.*)?$/, route => route.request().resourceType() === 'document'
-    ? route.continue() : route.fulfill({json: {items: [], total: 0}}));
-  await page.route('**/jobs/recommendations', route => {
+    ? route.continue() : route.fulfill({json: {items: [job], total: 1, pages: 1}}));
+  const recommendationRunId = '22222222-3333-4444-8555-666666666666';
+  const recommendationRun = () => ({
+    id: recommendationRunId, status: 'succeeded', reused: false, input_hash: 'profile-flow-fixture',
+    provider: 'fixture-only', model: 'fixture-only', prompt_version: 'fixture-only', execution_mode: 'live',
+    profile_skill_count: currentProfile().skills.length,
+    candidates: [{id: job.id, title: job.title, company: job.company, city: job.city, job_type: job.job_type}],
+    display_order: [job.id], advice: {[job.id]: {
+      version: 'action-advice-v1', status: 'check_first', headline: 'Check the full spreadsheet requirements before applying.',
+      reasons: ['The complete conditions remain unverified.'], blockers: [], strengths: [], counts: {supported: 0, gap: 0, unknown: 1},
+    }},
+    result: {requires_review: true, items: [{
+      job_id: job.id, rank: 1, summary: 'Microsoft Excel appears in the saved skills and the job; other conditions remain unverified.',
+      warnings: [], requirements: [{requirement: sourceQuote, category: 'skill', outcome: 'unknown',
+        reason: 'Shared skill only; the complete conditions remain unverified.', jd_quote: sourceQuote,
+        profile_field: 'skills', profile_quote: naturalSkill}],
+    }]},
+    error_code: null, usage: {input_tokens: 50, output_tokens: 40},
+    started_at: '2026-10-24T04:00:00Z', expires_at: '2026-10-24T04:03:00Z', finished_at: '2026-10-24T04:00:05Z',
+  });
+  await page.route('**/jobs/ai-recommendations', route => {
     recommendationCalls++;
     expect(route.request().headers().authorization).toBe(`Bearer ${tokenA}`);
+    expect(route.request().postDataJSON()).toEqual({confirmed: true});
     expect(currentProfile().skills).toEqual([naturalSkill]);
-    const item = {
-      category: 'required_skills', requirement: sourceQuote, importance: 'required',
-      outcome: 'unknown', reason: 'Shared skill only; the complete conditions remain unverified.',
-      job_evidence: sourceQuote, profile_evidence: naturalSkill,
-      skill_overlaps: [{skill_id: 'excel', label: 'Microsoft Excel', kind: 'specific', profile_evidence: naturalSkill}],
-    };
-    return route.fulfill({json: {
-      version: 'evidence-discovery-v2', status: 'ready', scanned: 1, evaluated: 1,
-      matched: 1, truncated: false, excluded: {}, items: [{
-        job_id: job.id, title: job.title, company: job.company, city: job.city,
-        job_type: job.job_type, supported: [], gaps: [], overlaps: [item], unknown: [item],
-      }],
-    }});
+    return route.fulfill({status: 201, json: recommendationRun()});
   });
+  await page.route(`**/ai-recommendations/${recommendationRunId}`, route => route.fulfill({json: {...recommendationRun(), reused: true}}));
   await page.route(`**/jobs/${job.id}`, route => route.request().resourceType() === 'document'
     ? route.continue() : route.fulfill({json: job}));
   await page.route('**/assistant/bootstrap', route => route.fulfill({json: {forms: [], manual_fallback: true}}));
@@ -122,15 +140,15 @@ test('saved natural skills lead to evidence and the correct explicit InternSG en
     skills: [naturalSkill],
   });
 
-  await page.getByRole('button', {name: /Jobs$/}).click();
+  await page.getByRole('link', {name: 'View jobs', exact: true}).click();
   await expect(page).toHaveURL(`${base}/jobs`);
   expect(recommendationCalls).toBe(0);
-  await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  await expect(page.locator('.recommendation-list')).toContainText('Microsoft Excel named in both the JD and your saved skills.');
-  await page.getByText('Review reasons and evidence', {exact: true}).click();
-  await expect(page.locator('.recommendation-evidence')).toContainText(naturalSkill);
-  await expect(page.locator('.recommendation-evidence')).toContainText('conditions unverified');
-  await page.getByRole('link', {name: 'View job and full analysis'}).click();
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.locator('.ai-ranked-jobs')).toContainText('Check the full spreadsheet requirements before applying.');
+  await page.getByText('Review 1 requirement and source quotes', {exact: true}).click();
+  await expect(page.locator('.job-advice-quotes')).toContainText(naturalSkill);
+  await expect(page.locator('.job-advice-requirements')).toContainText('conditions remain unverified');
+  await page.getByRole('link', {name: 'View job and original posting'}).click();
   await expect(page.getByRole('heading', {name: job.title})).toBeVisible();
   await expect(page.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveCount(0);
   for (const [name, width, height] of [['desktop', 1280, 900], ['mobile', 390, 844]]) {
@@ -163,6 +181,8 @@ test('an old account delayed profile load cannot populate the new account screen
   await expect(page.getByRole('alert').filter({hasText: 'Account changed'}).first()).toBeVisible();
   await expect(page.getByRole('button', {name: 'Save Profile'})).toBeDisabled();
   await expect(page.getByLabel('Full Name', {exact: true})).toHaveValue('');
+  await expect(page.getByLabel('First / given name', {exact: true})).toHaveValue('');
+  await expect(page.getByLabel('Last / family name', {exact: true})).toHaveValue('');
   await expect(page.getByLabel('Personal introduction (written by you)')).toHaveValue('');
   await expect(page.locator('body')).not.toContainText('Private account A name');
   expect(await page.evaluate(() => localStorage.getItem('jobpilot_token'))).toBe(tokenB);

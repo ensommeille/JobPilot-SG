@@ -311,7 +311,7 @@ def test_catalog_registration_is_explicit_and_does_not_fetch(db: Session) -> Non
     actor, original = admin_source(db, schedule="manual")
     registered = register_catalog_sources(db, actor=actor, keys=["greenhouse-stripe", "internsg"])
     assert [s.schedule for s in registered] == ["every:6h", "every:24h"]
-    assert [(s.max_links, s.max_details) for s in registered] == [(20, 20), (10, 5)]
+    assert [(s.max_links, s.max_details) for s in registered] == [(20, 20), (100, 100)]
     assert all(s.next_run_at is not None for s in registered)
     assert original.schedule == "manual"
     assert db.scalar(select(CrawlRun)) is None

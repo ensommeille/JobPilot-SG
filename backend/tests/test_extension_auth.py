@@ -190,6 +190,19 @@ def test_allowlist_origin_and_explicit_consent(client):
     )
 
 
+def test_current_local_registration_keeps_the_origin_and_client_allowlists_exact(client, monkeypatch):
+    origin = "http://127.0.0.1:15523"
+    monkeypatch.setattr(get_settings(), "extension_web_origins", [origin])
+    headers = auth_headers(client)
+    payload = {"client_id": CLIENT, "confirmed": True, "challenge": "a" * 43}
+    for refused in (ORIGIN, "http://localhost:15523", "http://127.0.0.1:15524", "https://evil.test"):
+        assert client.post("/auth/extension/authorize", headers={**headers, "Origin": refused}, json=payload).status_code == 403
+    assert client.post("/auth/extension/authorize", headers={**headers, "Origin": origin}, json={**payload, "client_id": "b" * 32}).status_code == 403
+    accepted = client.post("/auth/extension/authorize", headers={**headers, "Origin": origin}, json=payload)
+    assert accepted.status_code == 200
+    assert accepted.headers["cache-control"] == "no-store"
+
+
 def test_logout_revokes_existing_and_pending_sessions(client):
     headers = auth_headers(client)
     restricted, _ = connect(client, headers)

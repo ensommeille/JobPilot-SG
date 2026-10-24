@@ -49,7 +49,9 @@ async function setup(page, {signedIn = true, installed = true, bridgeMode = 'nor
     if (installed) window.chrome = {runtime: {sendMessage: (client, message, callback) => {
       const bridge = window.applicationBridge;
       bridge.messages.push({client, message});
-      if (message.kind === 'application-inspect') {
+      if (message.kind === 'connection-status') callback({ok: true, version: 1, connected: true,
+        platform_origin: location.origin, api_origin: 'http://127.0.0.1:8001', user_id: 'fixture-platform-user', expires_at: Date.now() / 1000 + 300});
+      else if (message.kind === 'application-inspect') {
         if (bridge.mode === 'hold-inspect') bridge.pendingInspect = callback;
         else if (bridge.mode === 'old-protocol') callback({ok: true, version: 0});
         else if (bridge.mode === 'inspect-error') callback({ok: false, error: 'Extension connection expired. Connect through JobPilot again.'});
@@ -73,7 +75,7 @@ async function setup(page, {signedIn = true, installed = true, bridgeMode = 'nor
   await page.route('https://fonts.googleapis.com/**', route => route.fulfill({contentType: 'text/css', body: ''}));
   await page.route('**/profile', route => route.request().resourceType() === 'document' ? route.continue()
     : route.fulfill({json: {full_name: 'Fictional platform account'}}));
-  await page.route('**/users/me', route => route.fulfill({json: {role: 'job_seeker'}}));
+  await page.route('**/users/me', route => route.fulfill({json: {id: 'fixture-platform-user', role: 'job_seeker'}}));
   await page.route(new RegExp(`/jobs/(${jobA}|${jobB})$`), route => {
     if (route.request().resourceType() === 'document') return route.continue();
     const id = new URL(route.request().url()).pathname.split('/').at(-1);
@@ -100,9 +102,19 @@ async function setup(page, {signedIn = true, installed = true, bridgeMode = 'nor
   return calls;
 }
 
+async function showLoadedAnswers(page) {
+  const edit = page.getByRole('button', {name: 'Edit loaded answers for this application', exact: true});
+  const reviewing = page.getByRole('button', {name: 'Show only missing answers', exact: true});
+  await expect(edit.or(reviewing)).toBeVisible();
+  if (await edit.isVisible()) await edit.click();
+  const saved = page.locator('.preparation-saved-details');
+  if (!await saved.evaluate(element => element.open)) await saved.locator('summary').click();
+}
+
 async function loadForm(page) {
+  await showLoadedAnswers(page);
   await expect(page.getByLabel('Full name', {exact: true})).toBeVisible();
-  await page.getByRole('button', {name: 'Load InternSG application here'}).click();
+  await page.getByRole('button', {name: 'Load application form'}).click();
   await expect(page.frameLocator('iframe').locator('#applicant_name')).toBeVisible();
 }
 
@@ -124,11 +136,12 @@ async function switchAccount(page) {
 
 test('saved profile is editable on JobPilot without loading or filling the original form', async ({page}) => {
   const calls = await setup(page);
+  await showLoadedAnswers(page);
   for (const field of fields) await expect(page.getByLabel(field.label, {exact: true})).toHaveValue(savedDraft.values[field.id]);
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('cn');
   await expect(page.getByLabel('Country of study / graduation', {exact: true})).toHaveValue('sg');
   await expect(page.locator('iframe')).toHaveCount(0);
-  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toBeDisabled();
+  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toHaveCount(0);
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   await expect(page.getByRole('button', {name: 'Check form with extension'})).toHaveCount(0);
   expect(calls.drafts.length).toBeGreaterThan(0);
@@ -143,6 +156,7 @@ test('saved profile is editable on JobPilot without loading or filling the origi
 
 test('one explicit click inspects and fills the shown answers without submitting', async ({page}) => {
   const calls = await setup(page);
+  await showLoadedAnswers(page);
   await expect(page.getByLabel('Full name', {exact: true})).toHaveValue(savedDraft.values.applicant_name);
   await page.getByLabel('Full name', {exact: true}).fill('Reviewed Fictional Applicant');
   await loadForm(page);
@@ -180,6 +194,7 @@ test('one explicit click inspects and fills the shown answers without submitting
 
 test('changing jobs reuses all seven saved details without carrying over one-off edits or filling automatically', async ({page}) => {
   const calls = await setup(page);
+  await showLoadedAnswers(page);
   await expect(page.getByLabel('Full name', {exact: true})).toHaveValue(savedDraft.values.applicant_name);
   await loadForm(page);
   await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
@@ -195,12 +210,13 @@ test('changing jobs reuses all seven saved details without carrying over one-off
     window.dispatchEvent(new PopStateEvent('popstate'));
   }, jobB);
   await expect(page.getByText(`Fictional ${jobB} — fixture only`, {exact: false})).toBeVisible();
+  await showLoadedAnswers(page);
   for (const field of fields) await expect(page.getByLabel(field.label, {exact: true})).toHaveValue(savedDraft.values[field.id]);
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue(savedDraft.countries.nationality);
   await expect(page.getByLabel('Country of study / graduation', {exact: true})).toHaveValue(savedDraft.countries.campus);
   await expect(page.locator('iframe')).toHaveCount(0);
   await expect(page.getByText(/^Filled \d/)).toHaveCount(0);
-  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toBeDisabled();
+  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toHaveCount(0);
   expect(await messages(page, 'application-fill')).toHaveLength(1);
   expect(calls.externalGets).toBe(1);
 
@@ -253,6 +269,7 @@ test('skipped fill results retain the draft and show the extension reason', asyn
   await setup(page, {fillResult: {ok: true, filled: ['applicant_email', 'applicant_contact', 'applicant_period', 'applicant_summary', 'applicant_countries'], skipped: ['applicant_name'], reasons: {applicant_name: 'The original page changed after review.'}, submitted: false}});
   await loadAndFill(page);
   await expect(page.locator('body')).toContainText('The original page changed after review.');
+  await showLoadedAnswers(page);
   await expect(page.getByLabel('Full name', {exact: true})).toHaveValue(savedDraft.values.applicant_name);
   await expect(page.getByText(/^Filled 5; skipped 1/)).toBeVisible();
   expect(await messages(page, 'application-fill')).toHaveLength(1);
@@ -260,11 +277,43 @@ test('skipped fill results retain the draft and show the extension reason', asyn
 
 test('missing extension keeps profile preview but does not fake fill support', async ({page}) => {
   const calls = await setup(page, {installed: false});
+  await showLoadedAnswers(page);
   await expect(page.getByLabel('Full name', {exact: true})).toHaveValue(savedDraft.values.applicant_name);
-  await loadAndFill(page);
-  await expect(page.getByRole('alert')).toContainText('Connect the JobPilot extension once');
+  await loadForm(page);
+  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toBeDisabled();
+  await expect(page.locator('.application-extension-status')).toContainText('Extension not connected.');
   expect(await messages(page, 'application-fill')).toHaveLength(0);
   expect(calls.externalPosts).toBe(0);
+});
+
+test('saved answers start in a review fold and only missing details need input', async ({page}) => {
+  const calls = await setup(page);
+  await expect(page.getByRole('button', {name: 'Edit loaded answers for this application'})).toBeVisible();
+  await expect(page.getByLabel('Full name', {exact: true})).toHaveCount(0);
+  await page.getByText('Review the details already loaded', {exact: true}).click();
+  await expect(page.locator('.preparation-saved-details')).toContainText(savedDraft.values.applicant_name);
+  expect(await messages(page, 'application-inspect')).toHaveLength(0);
+  expect(await messages(page, 'application-fill')).toHaveLength(0);
+  expect(calls.externalPosts).toBe(0);
+});
+
+test('Load is the first primary action and is replaced by nearby Fill without automatic input', async ({page}) => {
+  await setup(page);
+  const fill = page.getByRole('button', {name: 'Fill application form', exact: true});
+  const load = page.getByRole('button', {name: 'Load application form', exact: true});
+  await expect(fill).toHaveCount(0);
+  await expect(load).toHaveCount(1);
+  await expect(page.locator('iframe')).toHaveCount(0);
+  expect(await messages(page, 'application-inspect')).toHaveLength(0);
+  expect(await messages(page, 'application-fill')).toHaveLength(0);
+  await load.click();
+  await expect(page.frameLocator('iframe').locator('#applicant_name')).toBeVisible();
+  await expect(load).toHaveCount(0);
+  await expect(page.locator('.application-extension-status')).toContainText('Extension connected to this account.');
+  await expect(fill).toBeEnabled();
+  await fill.click();
+  await expect(page.getByText(/^Filled 6; skipped 0/)).toBeVisible();
+  expect(await messages(page, 'application-fill')).toHaveLength(1);
 });
 
 test('an old extension protocol fails closed with upgrade guidance', async ({page}) => {
@@ -278,6 +327,7 @@ test('expired extension connection is explained and never silently falls back to
   const calls = await setup(page, {bridgeMode: 'inspect-error'});
   await loadAndFill(page);
   await expect(page.getByRole('alert')).toContainText('Connect through JobPilot again');
+  await showLoadedAnswers(page);
   await expect(page.getByLabel('Full name', {exact: true})).toHaveValue(savedDraft.values.applicant_name);
   expect(await messages(page, 'application-fill')).toHaveLength(0);
   expect(calls.applicationWrites).toBe(0);
@@ -292,7 +342,7 @@ test('account change clears the old draft, closes the frame and ignores a late i
   await expect(page.locator('iframe')).toHaveCount(0);
   await expect(page.getByRole('alert').filter({hasText: /Account changed/i}).first()).toBeVisible();
   expect(await page.locator('input,textarea').evaluateAll(nodes => nodes.map(node => node.value))).not.toContain(savedDraft.values.applicant_name);
-  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toBeDisabled();
+  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toHaveCount(0);
   expect(await messages(page, 'application-fill')).toHaveLength(0);
 });
 
@@ -307,7 +357,7 @@ test('route change discards the previous page review rather than filling a diffe
   await expect(page.getByText(`Fictional ${jobB} — fixture only`, {exact: false})).toBeVisible();
   await page.evaluate(() => window.applicationBridge.pendingInspect(structuredClone(window.applicationBridge.inspect)));
   await expect(page.locator('iframe')).toHaveCount(0);
-  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toBeDisabled();
+  await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toHaveCount(0);
   expect(await messages(page, 'application-fill')).toHaveLength(0);
 });
 
@@ -354,6 +404,7 @@ test('original-frame navigation clears a previous successful fill report', async
   await expect(page.getByText(/^Filled \d/)).toHaveCount(0);
   await expect(page.getByText('Filled. Check the answer on the original form.', {exact: true})).toHaveCount(0);
   await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toBeEnabled();
+  await showLoadedAnswers(page);
   await expect(page.getByLabel('Full name', {exact: true})).toHaveValue(savedDraft.values.applicant_name);
   expect(await messages(page, 'application-fill')).toHaveLength(1);
   expect(calls.externalPosts).toBe(0);
@@ -384,6 +435,7 @@ test('editing text or either country clears a previous fill report without filli
 test('saving the linked profile and returning loads the new reusable application details', async ({page}) => {
   let profile = {
     full_name: savedDraft.values.applicant_name, contact_email: savedDraft.values.applicant_email,
+    given_name: null, family_name: null,
     phone: savedDraft.values.applicant_contact, availability_period: savedDraft.values.applicant_period,
     resume_summary: savedDraft.values.applicant_summary, nationality: 'cn', study_country: 'sg',
     education: '', experience: '', skills: [], links: {},
@@ -404,6 +456,7 @@ test('saving the linked profile and returning loads the new reusable application
     }
     return route.fulfill({json: profile});
   });
+  await showLoadedAnswers(page);
   await expect(page.getByLabel('Full name', {exact: true})).toHaveValue(savedDraft.values.applicant_name);
   await page.getByLabel('Full name', {exact: true}).fill('Unsaved review-only name');
   const before = calls.drafts.length;
@@ -418,6 +471,7 @@ test('saving the linked profile and returning loads the new reusable application
   expect(saves).toBe(1);
   await page.getByRole('link', {name: 'Return to application', exact: true}).click();
   await expect(page).toHaveURL(`${base}/jobs/${jobA}/apply-external`);
+  await showLoadedAnswers(page);
   await expect(page.getByLabel('Full name', {exact: true})).toHaveValue('New saved fictional applicant');
   await expect(page.getByLabel('Personal introduction', {exact: true})).toHaveValue('My newly saved reusable introduction.');
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('ca');
@@ -463,6 +517,7 @@ test('the click freezes displayed values and countries while the fresh inspectio
   await setup(page, {bridgeMode: 'hold-inspect'});
   await loadAndFill(page);
   await expect.poll(() => page.evaluate(() => Boolean(window.applicationBridge.pendingInspect))).toBe(true);
+  await showLoadedAnswers(page);
   await expect(page.getByLabel('Full name', {exact: true})).toBeDisabled();
   await expect(page.getByLabel('Nationality', {exact: true})).toBeDisabled();
   await expect(page.getByRole('button', {name: 'Reload saved details'})).toBeDisabled();
@@ -541,12 +596,13 @@ test('an expired inspection never dispatches a fill and a malformed fill report 
 test('long user-written text remains readable and editable on desktop and mobile', async ({page}) => {
   const text = 'A user-authored account of my fictional project. '.repeat(30) + '我学习计算机。';
   const calls = await setup(page, {draftData: {...savedDraft, values: {...savedDraft.values, applicant_summary: text}}});
+  await showLoadedAnswers(page);
   await expect(page.getByLabel('Personal introduction', {exact: true})).toHaveValue(text);
   for (const [name, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]]) {
     await page.setViewportSize({width, height});
     await page.screenshot({path: `../output/platform-application-${name}.png`, fullPage: true});
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await expect(page.getByRole('button', {name: 'Load InternSG application here'})).toBeVisible();
+    await expect(page.getByRole('button', {name: 'Load application form'})).toBeVisible();
   }
   expect(calls.externalGets).toBe(0);
   expect(calls.externalPosts).toBe(0);

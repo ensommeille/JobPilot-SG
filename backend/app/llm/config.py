@@ -32,7 +32,7 @@ class LLMSettings(BaseSettings):
     base_url: str | None = None
     model: str | None = None
     thinking: Literal["enabled", "disabled"] | None = None
-    timeout_seconds: float = Field(default=30.0, gt=0, le=60)
+    timeout_seconds: float = Field(default=30.0, gt=0, le=75)
     max_retries: int = Field(default=2, ge=0, le=5)
     retry_backoff_seconds: float = Field(default=0.25, ge=0, le=5)
 

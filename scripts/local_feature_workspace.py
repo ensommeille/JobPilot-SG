@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import sys
 from datetime import UTC, datetime, timedelta
@@ -50,6 +51,12 @@ def absolute_workspace(value: str) -> Path:
         ):
             raise argparse.ArgumentTypeError("Workspace cannot traverse symlinks or junctions")
     return path.resolve()
+
+
+def registered_extension_id(value: str) -> str:
+    if not re.fullmatch(r"[a-p]{32}", value):
+        raise argparse.ArgumentTypeError("Extension client ID must be exactly 32 lowercase letters a-p")
+    return value
 
 
 def read_json(path: Path):
@@ -130,16 +137,19 @@ def prepare_workspace(
     return True
 
 
-def configure_process(workspace: Path, origin: str, smtp_port: int) -> None:
+def configure_process(
+    workspace: Path, origin: str, smtp_port: int, *, extension_client_id: str | None = None
+) -> None:
     """Configure only this helper process; do not apply network blocking before opt-in GETs."""
     if "app.db.session" in sys.modules:
         raise ValueError(
             "Run this helper in a fresh Python process, not an already initialized API"
         )
+    extension_ids = [registered_extension_id(extension_client_id)] if extension_client_id is not None else []
     os.environ["DATABASE_URL"] = "sqlite+pysqlite:///" + (workspace / "local.sqlite").as_posix()
     os.environ["JWT_SECRET_KEY"] = secrets.token_urlsafe(48)
     os.environ["CORS_ORIGINS"] = json.dumps([origin])
-    os.environ["EXTENSION_CLIENT_IDS"] = "[]"
+    os.environ["EXTENSION_CLIENT_IDS"] = json.dumps(extension_ids)
     os.environ["EXTENSION_WEB_ORIGINS"] = json.dumps([origin])
     os.environ["JOB_EXTRACTION_LIVE_ENABLED"] = "false"
     for name in (
@@ -174,7 +184,10 @@ def seed_workspace(
     origin: str,
     smtp_port: int,
     collect_live: bool = False,
+    extension_client_id: str | None = None,
 ) -> dict:
+    if extension_client_id is not None:
+        registered_extension_id(extension_client_id)
     programme, programme_sha = load_programme()
     fresh = prepare_workspace(
         workspace,
@@ -183,9 +196,7 @@ def seed_workspace(
         smtp_port=smtp_port,
         programme_sha=programme_sha,
     )
-    configure_process(workspace, origin, smtp_port)
-    from sqlalchemy import select
-
+    configure_process(workspace, origin, smtp_port, extension_client_id=extension_client_id)
     from app.core.security import hash_password
     from app.db.base import Base
     from app.db.models import JobPosting, JobSource, User, UserRole
@@ -193,6 +204,7 @@ def seed_workspace(
     from app.email_applications.models import EmailApplicationPolicy
     from app.ingestion.scheduler import register_catalog_sources, run_due_sources
     from app.ingestion.source_catalog import catalog_source
+    from sqlalchemy import select
 
     if Path(engine.url.database).resolve() != workspace / "local.sqlite":
         raise ValueError("Database engine is not bound to the isolated workspace")
@@ -356,6 +368,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--web-origin", type=web_origin, default="http://127.0.0.1:15523")
     parser.add_argument("--smtp-port", type=int, default=1027)
     parser.add_argument(
+        "--extension-client-id", type=registered_extension_id,
+        help="Register this installed JobPilot extension ID for this process only; omitted keeps connections disabled",
+    )
+    parser.add_argument(
         "--collect-live",
         action="store_true",
         help="On a NEW workspace only: perform one real public-GET collection for the four explicit boards",
@@ -374,6 +390,7 @@ def main(argv: list[str] | None = None) -> int:
             origin=arguments.web_origin,
             smtp_port=arguments.smtp_port,
             collect_live=arguments.collect_live,
+            extension_client_id=arguments.extension_client_id,
         )
     except (OSError, ValueError, KeyError) as exc:
         print(
@@ -386,7 +403,6 @@ def main(argv: list[str] | None = None) -> int:
     loopback_only()
     if not arguments.seed_only:
         import uvicorn
-
         from app.main import app
 
         uvicorn.run(app, host="127.0.0.1", port=arguments.api_port, reload=False, workers=1)

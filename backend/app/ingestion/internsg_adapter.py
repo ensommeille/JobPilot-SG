@@ -84,6 +84,7 @@ class InternSGAdapter(SourceAdapter):
     BASE_URL = "https://www.internsg.com"  # Backward-compatible constants.
     LISTING_URL = f"{BASE_URL}/jobs/"
     USER_AGENT = default_internsg_config().user_agent
+    MAX_LISTING_PAGES = 10
 
     def __init__(
         self,
@@ -92,12 +93,31 @@ class InternSGAdapter(SourceAdapter):
         client: httpx.Client | None = None,
         sleep: Callable[[float], None] = time.sleep,
         now: Callable[[], datetime] | None = None,
+        singapore_early_career_only: bool = False,
     ) -> None:
         self._config = config or default_internsg_config()
         if self._config.source_type is not SourceType.HTML:
             raise ValueError("InternSGAdapter requires source_type=html")
+        parsed = urlparse(self._config.base_url)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname not in {"internsg.com", "www.internsg.com"}
+            or parsed.hostname not in self._config.allowed_hosts
+            or parsed.port is not None
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or parsed.path.rstrip("/") not in {"", "/jobs"}
+        ):
+            raise AdapterPolicyError("InternSG source must use its HTTPS origin or /jobs listing")
+        # Persisted catalogue entries may identify the listing rather than the origin.
+        # All public listing, detail and robots paths are rooted at the site origin.
+        self._config = self._config.model_copy(update={"base_url": f"https://{parsed.hostname}"})
         self._sleep = sleep
+        self._has_requested = False
         self._now = now or (lambda: datetime.now(UTC))
+        self._singapore_early_career_only = singapore_early_career_only
         self._owns_client = client is None
         self.client = client or httpx.Client(
             headers={"User-Agent": self._config.user_agent, "Accept": "text/html"},
@@ -134,56 +154,126 @@ class InternSGAdapter(SourceAdapter):
             )
             return self._batch(started_at, False, 0, 0, [], [failure])
 
-        try:
-            listing_html = self.fetch_listing_page(page=1)
-            links = self.extract_job_links(listing_html, max_links=max_links)
-        except (httpx.HTTPError, AdapterPolicyError, ValueError) as exc:
-            stage = (
-                "robots"
-                if isinstance(exc, AdapterPolicyError) and "robots" in str(exc).casefold()
-                else "listing"
-            )
-            return self._batch(
-                started_at, False, 0, 0, [], [self._failure(self.LISTING_URL, stage, exc)]
-            )
+        links: list[str] = []
+        seen_links: set[str] = set()
+        failures: list[ItemFailure] = []
+        listing_accessible = False
+        page = 1
+        for _ in range(self.MAX_LISTING_PAGES):
+            try:
+                listing_html = self.fetch_listing_page(page=page)
+                listing_accessible = True
+                page_links = self.extract_job_links(listing_html, max_links=max_links)
+                for link in page_links:
+                    if link not in seen_links:
+                        seen_links.add(link)
+                        links.append(link)
+                        if len(links) == max_links:
+                            break
+                if len(links) >= max_links or not page_links:
+                    break
+                next_page = self._next_listing_page(listing_html, current_page=page)
+                if next_page is None:
+                    break
+                page = next_page
+            except (httpx.HTTPError, AdapterPolicyError, ValueError) as exc:
+                stage = (
+                    "robots"
+                    if isinstance(exc, AdapterPolicyError) and "robots" in str(exc).casefold()
+                    else "listing"
+                )
+                failures.append(self._failure(self._listing_url(page), stage, exc))
+                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in {
+                    403,
+                    429,
+                }:
+                    # A rate/access denial stops the batch, including already discovered
+                    # details. Existing persisted jobs are retained by the repository.
+                    return self._batch(started_at, listing_accessible, len(links), 0, [], failures)
+                break
 
         if not links:
-            failure = self._failure(
-                self.LISTING_URL, "listing", DetailParseError("no job links discovered")
-            )
-            return self._batch(started_at, True, 0, 0, [], [failure])
+            if not failures:
+                failures.append(
+                    self._failure(
+                        self.LISTING_URL, "listing", DetailParseError("no job links discovered")
+                    )
+                )
+            return self._batch(started_at, listing_accessible, 0, 0, [], failures)
 
         LOGGER.info("Found %d job links", len(links))
         items: list[RawJobItem] = []
-        failures: list[ItemFailure] = []
         attempted = 0
         for index, url in enumerate(links[:max_details], start=1):
-            if index > 1:
-                self._sleep(self.config.polite_delay_seconds)
             attempted += 1
             LOGGER.info("Fetching %d/%d: %s", index, min(max_details, len(links)), url)
             try:
                 html = self.fetch_job_detail(url)
-                items.append(self.to_raw_item(html, url))
-                LOGGER.info("Parsed: %s", items[-1].known_fields.title)
+                item = self.to_raw_item(html, url)
+                if self._singapore_early_career_only and not self._in_scope(item.known_fields):
+                    LOGGER.info("Skipping outside Singapore early-career scope: %s", url)
+                    continue
+                items.append(item)
+                LOGGER.info("Parsed: %s", item.known_fields.title)
             except (httpx.HTTPError, AdapterPolicyError) as exc:
                 failures.append(self._failure(url, "fetch", exc))
                 LOGGER.error("Fetch failed for %s: %s", url, exc)
+                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in {
+                    403,
+                    429,
+                }:
+                    break
             except (DetailParseError, ValueError) as exc:
                 failures.append(self._failure(url, "parse", exc))
                 LOGGER.error("Parse failed for %s: %s", url, exc)
 
         return self._batch(started_at, True, len(links), attempted, items, failures)
 
-    def fetch_listing_page(self, page: int = 1) -> str:
-        if page < 1:
-            raise ValueError("page must be at least 1")
+    @staticmethod
+    def _in_scope(record: JobRecord) -> bool:
+        # Closed source notices still update an existing identity; they are never shown.
+        if record.status is JobStatus.CLOSED:
+            return True
+        if record.city != "Singapore" or re.search(
+            r"\b(?:senior|sr|staff|principal|lead|manager|director|head|chief)\b",
+            record.title,
+            re.I,
+        ):
+            return False
+        return "internship" in record.job_type or bool(
+            re.search(
+                r"\b(?:intern(?:ship)?s?|graduates?|new[ -]grads?|junior|jr|entry[ -]level|early[ -]career)\b",
+                record.title + " " + (record.experience or ""),
+                re.I,
+            )
+        )
+
+    def _listing_url(self, page: int) -> str:
+        if not 1 <= page <= self.MAX_LISTING_PAGES:
+            raise ValueError(f"page must be between 1 and {self.MAX_LISTING_PAGES}")
         base = f"{self.config.base_url}/jobs/"
-        url = base if page == 1 else f"{base}page/{page}/"
+        return base if page == 1 else f"{base}{page}/"
+
+    def fetch_listing_page(self, page: int = 1) -> str:
+        url = self._listing_url(page)
         self._validate_fetch_url(url, path_prefix="/jobs/")
         self._ensure_robots_allowed(url)
         LOGGER.info("Fetching listing page: %s", url)
         return self._fetch_html(url)
+
+    def _next_listing_page(self, html: str, *, current_page: int) -> int | None:
+        soup = BeautifulSoup(html, "html.parser")
+        link = soup.select_one('a[rel~="next"][href], .nav-links a.next[href]')
+        if link is None:
+            return None
+        url = urljoin(self.config.base_url, str(link["href"])).split("#", 1)[0]
+        self._validate_fetch_url(url, path_prefix="/jobs/")
+        parsed = urlparse(url)
+        match = re.fullmatch(r"/jobs/(?:page/)?([0-9]+)/?", parsed.path)
+        if parsed.query or match is None or int(match.group(1)) != current_page + 1:
+            raise AdapterPolicyError("Invalid or repeated InternSG pagination link")
+        page = int(match.group(1))
+        return page if page <= self.MAX_LISTING_PAGES else None
 
     def extract_job_links(self, html: str, max_links: int = 20) -> list[str]:
         """Extract bounded, unique, same-site public job-detail URLs."""
@@ -200,7 +290,10 @@ class InternSGAdapter(SourceAdapter):
             href = anchor.get("href")
             if not isinstance(href, str):
                 continue
-            url = urljoin(self.config.base_url, href).split("#", 1)[0]
+            parsed = urlparse(urljoin(self.config.base_url, href))
+            # The site's paginated listing adds ?f_pg=N to repeated job links.
+            # Posting identity lives in the /job/ slug, not this navigation marker.
+            url = parsed._replace(query="", fragment="").geturl()
             try:
                 self._validate_fetch_url(url, path_prefix="/job/")
             except AdapterPolicyError:
@@ -221,6 +314,8 @@ class InternSGAdapter(SourceAdapter):
 
     def parse_job_detail(self, html: str, url: str) -> JobRecord:
         """Parse and validate deterministic fields; malformed pages fail closed."""
+        from app.jobs.description import build_description_blocks
+
         self._validate_fetch_url(url, path_prefix="/job/")
         soup = BeautifulSoup(html, "html.parser")
         container = soup.select_one(".isg-detail-container")
@@ -280,6 +375,7 @@ class InternSGAdapter(SourceAdapter):
             experience=facts.get("Experience Level"),
             tags=normalize_job_types(job_type_raw),
             description=description,
+            description_blocks=build_description_blocks(description),
             apply_url=apply_url,
             raw_hash=raw_hash,
             dedup_hash=build_dedup_hash(self.config.source_id, title, company, city),
@@ -328,6 +424,9 @@ class InternSGAdapter(SourceAdapter):
     def _request(self, url: str) -> httpx.Response:
         response: httpx.Response | None = None
         for attempt in range(self.config.retry_count + 1):
+            if self._has_requested:
+                self._sleep(max(1.5, self.config.polite_delay_seconds))
+            self._has_requested = True
             try:
                 response = self.client.get(url)
             except httpx.TransportError as exc:
@@ -398,7 +497,13 @@ class InternSGAdapter(SourceAdapter):
     def _validate_fetch_url(self, url: str, *, path_prefix: str) -> None:
         parsed = urlparse(url)
         host = (parsed.hostname or "").lower().rstrip(".")
-        if parsed.scheme != "https" or host not in self.config.allowed_hosts:
+        if (
+            parsed.scheme != "https"
+            or host not in self.config.allowed_hosts
+            or parsed.username
+            or parsed.password
+            or parsed.port is not None
+        ):
             raise AdapterPolicyError(f"URL is outside HTTPS host allowlist: {url}")
         if not parsed.path.startswith(path_prefix):
             raise AdapterPolicyError(f"URL path is outside adapter scope: {url}")

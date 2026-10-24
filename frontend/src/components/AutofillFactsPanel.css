@@ -1,0 +1,22 @@
+.autofill-facts { padding: var(--s-5); margin-bottom: var(--s-4); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.autofill-facts h2 { margin-top: 0; }
+.autofill-facts > p { max-width: 72ch; }
+.autofill-facts label { display: block; margin: var(--s-3) 0 var(--s-2); font-weight: 600; }
+.autofill-facts select, .autofill-facts textarea { width: 100%; min-height: 44px; padding: var(--s-3); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); background: var(--surface); font: inherit; }
+.autofill-facts textarea { min-height: 100px; resize: vertical; }
+.autofill-facts-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-block: var(--s-3); }
+.autofill-facts-note { color: var(--text-muted); font-size: 0.875rem; }
+.autofill-facts-ready { color: var(--primary); font-weight: 600; }
+.autofill-facts details { margin-top: var(--s-3); border-top: 1px solid var(--border); }
+.autofill-facts summary { padding-block: var(--s-3); min-height: 44px; cursor: pointer; font-weight: 600; color: var(--primary); }
+.autofill-facts-list { margin: 0; }
+.autofill-facts-list > div { padding-block: var(--s-3); border-bottom: 1px solid var(--border); }
+.autofill-facts-list dt { font-weight: 600; }
+.autofill-facts-list dt span { display: block; font-size: 0.8125rem; font-weight: 400; color: var(--text-muted); }
+.autofill-facts-list dd { margin: var(--s-2) 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.autofill-facts blockquote { margin: var(--s-2) 0 0; padding: var(--s-3); background: var(--bg); color: var(--text-muted); font-size: 0.875rem; }
+.autofill-facts [role="alert"] { color: var(--danger); }
+.autofill-facts :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.profile-saved-details > summary { min-height: 44px; padding-block: var(--s-3); cursor: pointer; font-weight: 600; color: var(--primary); }
+.profile-saved-details > p { color: var(--text-muted); }
+@media (max-width: 600px) { .autofill-facts { padding: var(--s-4); } .autofill-facts .btn { min-height: 44px; white-space: normal; height: auto; } }

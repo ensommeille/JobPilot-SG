@@ -1,5 +1,81 @@
 # JobPilot SG — Review & Fill (InternSG pilot)
 
+## Version 0.9.2: open, preview, Fill
+
+With a connected account, opening the popup on a supported application loads the
+current form and saved PDF/Profile answers automatically. Review or edit the
+preview and choose **Fill application form** once. A **Refresh form** recovery
+action appears when loading fails or the preview becomes stale; no initial Read
+button is required.
+
+Automatic loading and normal refresh do not analyze the PDF, call a paid model,
+request new permissions, attach a file or submit an application. Unfamiliar
+questions that cannot be matched to saved facts remain for the applicant to
+answer. A PDF attachment still requires its own explicit action.
+
+Only canonical supported ATS/InternSG application pages and the connected
+platform's approved embedded InternSG route are eligible. Other sites are not
+inspected. Account, active-tab, URL and document changes invalidate old previews.
+
+## Version 0.9.1: one upload and a working Greenhouse reader
+
+Choosing a PDF in Profile now saves and analyzes it in one explicit action. The
+upload label explains that AI is used and a new analysis may be billed. Opening
+Profile or refreshing saved answers does not start a paid analysis. Selecting a
+different saved PDF prepares it once if needed; ready results are reused.
+Failed or interrupted analysis never retries automatically, and the saved file
+remains available. Existing Profile values still take priority.
+
+Fixed the Greenhouse reader crash caused by unnamed React-select helper inputs,
+and added an actual serialized-reader/Chrome-result/popup-parser regression.
+The popup now has an explicit intrinsic root width rather than allowing Chrome
+to shrink it into a narrow column. Reading failures report their actual class
+instead of claiming the job is unsupported. The exact Greenhouse Resume/CV
+caption identifies the CV field separately from transcript and cover-letter
+buttons whose visible label is also “Attach”.
+
+## Version 0.9.0: PDF-first application answers (historical)
+
+Upload the PDF once in Profile, choose **Read for autofill**, and reuse supported,
+grounded facts. Existing saved Profile values take priority. Add only missing or
+ambiguous details; no per-field approval checkboxes are required. Selecting or
+reading a PDF never uploads it to an employer.
+
+The extension reads the same saved answers for supported ATS forms and InternSG.
+**Read form & load saved details** may use a paid AI mapping for unfamiliar ordinary
+questions; it maps questions to existing facts rather than inventing answers.
+**Fill application form** authorizes the current preview and checks its saved-fact
+fingerprint again for free. Personal declarations and unsupported controls stay
+manual. First and last names are never guessed by splitting a full name.
+
+**Attach saved PDF** is a separate explicit action for the PDF currently selected
+in Profile and one recognized resume upload control. Clicking it may upload the
+file to the employer immediately, even though no application is submitted. Check
+the original website for its file name and upload status. CAPTCHA, consent and
+final submission remain manual. A form fill never silently attaches a file.
+
+## Version 0.8.4: preview once, fill once
+
+The popup opens the tools for the current supported application and keeps account
+settings folded. Review the proposed answers, edit anything needed, then choose
+**Fill application form** once. That click authorizes only the displayed snapshot;
+individual ATS confirmation checkboxes have been removed. A changed saved profile
+requires a fresh preview before ATS filling. Existing website answers stay intact.
+
+First and last names come only from explicitly saved **Given name** and **Family
+name** in Profile. Missing names stay blank; the popup never splits a full name.
+Supported country dropdowns use clearly labelled saved country facts or an explicit
+choice made in the popup. Telephone country codes stay manual. Attach the original
+PDF on the website, finish its remaining questions and submit there yourself.
+The popup's older advanced sending controls are hidden and disabled in this build.
+
+## Version 0.8.3: current local workspace connection
+
+This historical release added the
+exact `127.0.0.1:15523` → `127.0.0.1:18523` local deployment, process-local client
+registration in the workspace helpers, and a read-only connection check for the
+platform. It does not add submission authority or automatic PDF uploading.
+
 ## Version 0.8.2: reviewed common questions on hosted ATS forms
 
 The Greenhouse/Lever popup now recognizes a limited set of clearly labelled text
@@ -7,8 +83,8 @@ questions: LinkedIn, GitHub, availability, education/experience summaries,
 skills and a short self-introduction. Suggestions come only from fields already
 saved in the connected JobPilot profile; a résumé file is neither parsed nor
 uploaded. The original question, proposed answer and profile source are shown
-in the popup. Every answer requires its own checkbox before **Fill reviewed
-fields only**; edits clear that checkbox. Empty or overlong evidence is not
+in the popup. This historical version required each answer's checkbox; version
+0.8.4 replaces those checks with one explicit Fill action. Empty or overlong evidence is not
 silently invented or truncated. Unrecognized, legal, visa, demographic, pay,
 company-motivation, file, CAPTCHA and consent controls remain manual. The fill
 operation never submits an employer application. Reload the unpacked extension
@@ -35,22 +111,26 @@ study-country replacement; it does not authorize submission.
 1. Back up your database, install backend dependencies and run
    `python -m alembic upgrade head` from `backend` before starting the new backend.
    Migration `20261014_0003` adds four nullable profile columns; `20261014_0004`
-   adds authorization grants and platform-token revocations.
+   adds authorization grants and platform-token revocations. Migration
+   `20261024_0010` adds nullable given/family names without guessing existing name order;
+   `20261024_0011` adds owner-scoped PDF autofill facts and explicit review records.
 2. Sign into JobPilot, open **Profile**, maintain the **Reusable application
    details** section and choose **Save Profile**. These details are saved to
    the account in the backend database.
 3. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**
    and select this directory. Existing users should reload the extension
-   (version 0.8.0), then reopen its popup. Keep the same directory and extension
+   (version 0.9.2), then reopen its popup. Keep the same directory and extension
    ID to preserve device copies. Register its 32-letter ID in the backend
    `EXTENSION_CLIENT_IDS=["your-installed-extension-id"]` environment setting.
    The default empty list intentionally rejects connections.
-4. Choose **Connect through JobPilot** in the extension. The local demo is the
-   default; change deployment under **Connection settings** only when needed.
+4. Choose **Connect through JobPilot** in the extension. The current local
+   workspace (`127.0.0.1:15523`) is the default; change deployment under
+   **Connection settings** when using another supported pair.
    Grant platform and API access; the opened platform tab asks you to confirm the current account.
    If needed, sign in ON THE PLATFORM. There is no extension password form.
    Return to the application and reopen the popup after confirmation.
-   Local demo: `http://127.0.0.1:5173` → API `http://127.0.0.1:8001`;
+   Current local workspace: `http://127.0.0.1:15523` → API `http://127.0.0.1:18523`;
+   local demo: `http://127.0.0.1:5173` → API `http://127.0.0.1:8001`;
    normal development: `http://localhost:5173` → API `http://localhost:8000`.
    These exact pairs are allowlisted. Other deployments need coordinated configuration.
    Default Docker Compose uses the **localhost** pair; opening its frontend at
@@ -65,6 +145,23 @@ study-country replacement; it does not authorize submission.
 6. Repeat on another job: saved platform details are loaded again, not re-entered.
    CAPTCHA, attachments and consent remain manual. Test data must never be
    submitted to a real employer.
+
+For an owned local feature workspace, start or resume
+`scripts/local_feature_workspace.py` with `--extension-client-id` followed by the
+32-letter ID displayed by the installed extension. The same option is available
+on `scripts/local_ai_workspace.py`; it does not enable or call a model by itself.
+Omitting the option keeps the registered-client list empty. Registration is
+process-local and does not write the ID to the repository, workspace marker or
+browser profile. The helper retains exactly its selected platform origin. A
+restart changes the temporary platform signing key, so sign in and reconnect.
+
+The platform can request `{kind: 'connection-status', version: 1}` from its saved
+extension ID. The extension accepts only a trusted top-level deployment origin,
+checks its restricted session with that deployment's fixed API, and returns only
+`connected`, the public `extension_version`, paired origins, account ID and an expiry in Unix seconds. No token or
+profile answer is returned. The platform must compare the current account and
+both origins. A saved extension ID or a successful status check does not prove a
+particular form is ready; filling performs a fresh form and account inspection.
 
 The frontend local demo is `http://127.0.0.1:5173`.
 The development-only route `/jobs/internsg-preview/apply-external` loads a REAL

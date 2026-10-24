@@ -259,7 +259,7 @@ def test_new_prompt_uses_new_cache_identity_and_preserves_legacy_result(
     assert original["status"] == revised["status"] == "succeeded"
     assert original["id"] != revised["id"]
     assert original["input_hash"] != revised["input_hash"]
-    assert revised["prompt_version"] == "ai-recommendation-v3-complete-rows"
+    assert revised["prompt_version"] == current
     assert len(provider.calls) == 2
     assert db.scalar(select(func.count()).select_from(AIRecommendationRun)) == 2
     legacy = client.get(f"/ai-recommendations/{original['id']}", headers=context.headers).json()
@@ -291,7 +291,7 @@ def test_prompt_complete_row_example_matches_the_actual_strict_schema():
     assert set(ROW_EXAMPLE) == set(RequirementAssessment.model_fields)
     assert RequirementAssessment.model_validate(ROW_EXAMPLE).outcome == "unknown"
     assert "EVERY responsibility and work_constraint" in SYSTEM_PROMPT
-    assert "ALL SEVEN keys" in SYSTEM_PROMPT
+    assert "ALL NINE keys" in SYSTEM_PROMPT
 
 
 @pytest.mark.parametrize("quote", ["Python", "PyTorch", "Built Python APIs."])

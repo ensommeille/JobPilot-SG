@@ -58,7 +58,7 @@ class RequirementAssessment(StrictModel):
     ]
     outcome: Literal["supported", "gap", "unknown"]
     jd_quote: str = Field(min_length=1, max_length=4000)
-    profile_field: Literal["education", "experience", "skills"] | None
+    profile_field: Literal["education", "experience", "skills", "availability"] | None
     profile_quote: str | None = Field(max_length=4000)
     reason: str = Field(min_length=1, max_length=2000)
 
@@ -83,10 +83,48 @@ class BatchAssessment(StrictModel):
         return value
 
 
+class AdviceEvidence(RequirementAssessment):
+    requirement_index: int = Field(ge=0)
+
+
+class EvidenceCounts(BaseModel):
+    supported: int
+    gap: int
+    unknown: int
+
+
+class ActionAdvice(BaseModel):
+    version: Literal["action-advice-v3"] = "action-advice-v3"
+    status: Literal["priority_apply", "consider", "check_first", "not_priority"]
+    headline: str
+    reasons: list[str]
+    blockers: list[AdviceEvidence]
+    strengths: list[AdviceEvidence]
+    counts: EvidenceCounts
+
+
+class JobAssessmentReport(BaseModel):
+    job_id: UUID
+    status: Literal["available", "not_analyzed", "outdated", "running", "failed", "unavailable"]
+    source_run_id: UUID | None = None
+    assessment: JobAssessment | None = None
+    advice: ActionAdvice | None = None
+    execution_mode: Literal["live", "mock"] | None = None
+    model: str | None = None
+    finished_at: datetime | None = None
+    reason: str | None = None
+
+    @field_validator("finished_at")
+    @classmethod
+    def utc_time(cls, value: datetime | None) -> datetime | None:
+        return utc_timestamp(value) if value is not None else None
+
+
 class RecommendationReport(BaseModel):
     id: UUID
     status: Literal["running", "succeeded", "failed"]
     reused: bool
+    is_current: bool
     input_hash: str
     provider: str
     model: str
@@ -95,6 +133,8 @@ class RecommendationReport(BaseModel):
     profile_skill_count: int
     candidates: list[Candidate]
     result: BatchAssessment | None
+    advice: dict[str, ActionAdvice] = Field(default_factory=dict)
+    display_order: list[UUID] = Field(default_factory=list)
     error_code: str | None
     usage: TokenUsage
     started_at: datetime

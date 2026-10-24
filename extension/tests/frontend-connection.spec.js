@@ -52,9 +52,11 @@ test('mismatched API configuration fails closed', async ({page}) => {
 
 test('failed server logout keeps login; successful retry revokes and clears it', async ({page}) => {
   await setup(page);
-  await page.route('**/profile', route => route.request().resourceType() === 'document' ? route.continue() : route.fulfill({json: {full_name: 'Fictional user', skills: [], links: {}}}));
+  await page.route('**/profile', route => route.request().resourceType() === 'document' ? route.continue() : route.fulfill({json: {full_name: 'Fictional user', given_name: null, family_name: null, skills: [], links: {}, resume_summary: '', availability_period: '', nationality: null, study_country: null}}));
   let failed = true;
   await page.route('**/auth/logout', route => route.fulfill({status: failed ? 503 : 204, body: ''}));
+  await page.route('**/browser-assistant/autofill-profile', route => route.fulfill({json: {values: {}, sources: {}, missing_fields: [], resume: null, resumes: [], requires_resume_selection: false, extraction_status: 'no_resume', fingerprint: 'fixture-empty'}}));
+  await page.route('**/profile/resumes', route => route.fulfill({json: []}));
   await page.goto(base + '/profile');
   await page.getByRole('button', {name: 'Logout', exact: true}).click();
   await expect(page.getByRole('alert').filter({hasText: 'Could not revoke'})).toBeVisible();

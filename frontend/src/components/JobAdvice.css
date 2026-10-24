@@ -1,0 +1,31 @@
+.job-advice { min-width: 0; overflow-wrap: anywhere; margin-top: var(--s-4); }
+.job-advice h4, .job-advice h5 { font-size: 1rem; margin: 0; font-weight: 600; }
+.job-advice-decision { display: flex; gap: var(--s-3); flex-wrap: wrap; align-items: baseline; }
+.job-advice-status { font-size: 0.8125rem; font-weight: 500; padding: var(--s-1) var(--s-2); background: var(--bg); border-radius: var(--radius-sm); }
+.job-advice-priority_apply, .job-advice-consider { color: var(--primary); }
+.job-advice-not_priority { color: var(--danger); }
+.job-advice-check_first, .job-advice-review_needed { color: var(--text); }
+.job-advice p { max-width: 74ch; margin-top: var(--s-2); }
+.job-advice-headline { line-height: 1.6; }
+.job-advice-reasons { padding-inline-start: var(--s-5); margin-top: var(--s-3); }
+.job-advice-reasons li { margin-top: var(--s-2); }
+.job-advice-evidence { margin-top: var(--s-4); font-size: 0.875rem; }
+.job-advice summary { color: var(--primary); cursor: pointer; padding-block: var(--s-2); min-height: 40px; text-underline-offset: 3px; }
+.job-advice summary:hover { text-decoration: underline; }
+.job-advice-requirements { list-style: none; padding: 0; margin: var(--s-3) 0 0; }
+.job-advice-requirements > li { padding-block: var(--s-4); border-bottom: 1px solid var(--border); }
+.job-advice-requirement-heading { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-3); }
+.job-advice-outcome { flex-shrink: 0; font-size: 0.875rem; }
+.job-advice-outcome-supported { color: var(--primary); }
+.job-advice-outcome-gap { color: var(--danger); }
+.job-advice-outcome-unknown, .job-advice-note { color: var(--text-muted); }
+.job-advice-quotes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4); margin-top: var(--s-4); }
+.job-advice-quotes dt { font-weight: 600; }
+.job-advice-quotes dd { margin: var(--s-2) 0 0; white-space: pre-wrap; border-inline-start: 1px solid var(--border-strong); padding-inline-start: var(--s-3); }
+.job-advice-notes { padding-inline-start: var(--s-5); margin-top: var(--s-3); }
+.job-advice :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.job-advice ::selection { background: var(--primary-soft); color: var(--text); }
+@media (max-width: 700px) {
+  .job-advice-quotes { grid-template-columns: 1fr; }
+  .job-advice-requirement-heading { flex-wrap: wrap; gap: var(--s-2); }
+}

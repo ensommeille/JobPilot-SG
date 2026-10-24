@@ -1,9 +1,12 @@
 """Public job, tag, favorite, and pagination schemas."""
 
 from datetime import UTC, date, datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+
+from app.jobs.application_channels import ApplicationAssistance, application_assistance
 
 
 class JobSourceRead(BaseModel):
@@ -29,6 +32,13 @@ class JobTagRead(BaseModel):
     category: str
 
 
+class DescriptionBlock(BaseModel):
+    kind: Literal["heading", "paragraph", "list"]
+    text: str = ""
+    items: list[str] = Field(default_factory=list)
+    ordered: bool = False
+
+
 class JobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,6 +55,7 @@ class JobRead(BaseModel):
     experience: str | None
     job_type: str | None
     description: str
+    description_blocks: list[DescriptionBlock] | None = None
     apply_url: str
     source_url: str | None = None
     posted_at: date | None
@@ -57,6 +68,13 @@ class JobRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     last_seen_at: datetime | None = None
+
+    @computed_field
+    @property
+    def application_assistance(self) -> ApplicationAssistance:
+        return application_assistance(
+            self.apply_url, status=self.status, deadline=self.deadline
+        )
 
     @field_validator("last_seen_at")
     @classmethod

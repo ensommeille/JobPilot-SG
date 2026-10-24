@@ -1,0 +1,15 @@
+.application-channel-info { padding-block: var(--s-4); min-width: 0; overflow-wrap: anywhere; }
+.application-channel-info h3 { font-size: 1rem; margin-bottom: var(--s-2); }
+.application-channel-info p { max-width: 74ch; line-height: 1.6; }
+.application-extension-status { margin-top: var(--s-3); font-size: 0.875rem; color: var(--text-muted); }
+.application-extension-status > .link { margin-top: var(--s-2); }
+.application-extension-status details { margin-top: var(--s-3); }
+.application-extension-status summary { cursor: pointer; color: var(--primary); padding-block: var(--s-2); }
+.application-extension-status ol { padding-inline-start: var(--s-5); }
+.application-extension-status li { margin-top: var(--s-2); }
+.application-channel-info :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.application-channel-compact { padding-block: var(--s-3) var(--s-5); }
+.application-channel-compact h2 { font-size: 1rem; margin-bottom: var(--s-1); }
+.application-channel-compact > p, .application-channel-connection { font-size: .875rem; }
+.application-channel-connection { margin-top: var(--s-2); }
+.application-channel-connection > summary { color: var(--primary); cursor: pointer; }

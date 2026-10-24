@@ -1,0 +1,502 @@
+{
+  "verified_at_singapore": "2026-10-24T18:39:09.293865+08:00",
+  "base_main": "dd085f81e604b23ca3b464d2510afbedfddd0fc2",
+  "head_and_fetched_main_divergence": [
+    0,
+    0
+  ],
+  "scope": "Local source expansion, text-only JD formatting and unified conservative application advice",
+  "source_expansion": {
+    "verified_at_singapore": "2026-10-24 17:36:27 +08:00",
+    "total_db_records": 183,
+    "active_visible_records": 181,
+    "actual_advertised_vacancies": 180,
+    "official_programme_overviews": 1,
+    "active_InternSG_vacancies": 92,
+    "active_employer_ATS_vacancies": 88,
+    "closed_excluded_negative_fixtures": 2,
+    "active_synthetic_or_mock": 0,
+    "distinct_employers": 77,
+    "technical_direction_title_keyword_count": 61,
+    "technical_count_method": "Title keywords only: software/developer/ML/data/AI/robot/cyber/security/cloud/platform/network/SRE/QA/simulation/mapping/localization/technology analyst. Not a reviewed eligibility or matching count.",
+    "concrete_JDs_with_description_blocks": 180,
+    "new_real_vacancies_added": 168,
+    "existing_job_ids_preserved": true,
+    "existing_canonical_JD_hashes_preserved": true,
+    "source_external_id_duplicates": 0,
+    "private_tables_unchanged_during_source_worker": true,
+    "model_calls_by_source_worker": 0,
+    "emails_sent": 0,
+    "employer_submissions": 0,
+    "final_InternSG_collection": {
+      "links_found": 100,
+      "details_attempted": 100,
+      "retained_SG_early_career": 92,
+      "new": 74,
+      "unchanged": 18,
+      "failed": 0,
+      "closed": 0,
+      "is_complete": false,
+      "reason": "Bounded HTML scan is not a complete site inventory, so missing older jobs are not mass-closed."
+    },
+    "cross_run_deduplication": {
+      "Stripe_second_complete_public_GET": {
+        "new": 0,
+        "updated": 0,
+        "unchanged": 4
+      },
+      "InternSG_existing_first_page_retained": 18,
+      "duplicates": 0
+    },
+    "schedule_acceptance": {
+      "InternSG_scheduled_smoke_new": 3,
+      "next_due_check_reports": [],
+      "automated_sources": 12,
+      "manual_programme_sources": 1,
+      "source_worker_phase_started_loop": false,
+      "final_local_loop_running": true
+    },
+    "sources": [
+      {
+        "name": "BlockTech",
+        "source_type": "json",
+        "base_url": "https://api.ashbyhq.com/posting-api/job-board/blocktech",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "every:6h",
+        "last_success_at": "2026-10-24 09:32:24.905000",
+        "next_run_at": "2026-10-24 15:32:24.905000",
+        "active_jobs": 3,
+        "last_success_at_singapore": "2026-10-24 17:32:24 +08:00",
+        "next_run_at_singapore": "2026-10-24 23:32:24 +08:00"
+      },
+      {
+        "name": "CSIT",
+        "source_type": "json",
+        "base_url": "https://api.lever.co/v0/postings/csit",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "every:6h",
+        "last_success_at": "2026-10-24 08:14:09.958000",
+        "next_run_at": "2026-10-24 14:14:09.958000",
+        "active_jobs": 35,
+        "last_success_at_singapore": "2026-10-24 16:14:09 +08:00",
+        "next_run_at_singapore": "2026-10-24 22:14:09 +08:00"
+      },
+      {
+        "name": "Cantina",
+        "source_type": "json",
+        "base_url": "https://api.ashbyhq.com/posting-api/job-board/cantina",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "every:6h",
+        "last_success_at": "2026-10-24 09:32:27.697000",
+        "next_run_at": "2026-10-24 15:32:27.697000",
+        "active_jobs": 2,
+        "last_success_at_singapore": "2026-10-24 17:32:27 +08:00",
+        "next_run_at_singapore": "2026-10-24 23:32:27 +08:00"
+      },
+      {
+        "name": "Dexmate",
+        "source_type": "json",
+        "base_url": "https://api.ashbyhq.com/posting-api/job-board/dexmate",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "every:6h",
+        "last_success_at": "2026-10-24 08:14:26.169000",
+        "next_run_at": "2026-10-24 14:14:26.169000",
+        "active_jobs": 1,
+        "last_success_at_singapore": "2026-10-24 16:14:26 +08:00",
+        "next_run_at_singapore": "2026-10-24 22:14:26 +08:00"
+      },
+      {
+        "name": "Graviton Research Capital - Campus",
+        "source_type": "json",
+        "base_url": "https://boards-api.greenhouse.io/v1/boards/globalcampus",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "every:6h",
+        "last_success_at": "2026-10-24 09:32:38.819000",
+        "next_run_at": "2026-10-24 15:32:38.819000",
+        "active_jobs": 5,
+        "last_success_at_singapore": "2026-10-24 17:32:38 +08:00",
+        "next_run_at_singapore": "2026-10-24 23:32:38 +08:00"
+      },
+      {
+        "name": "InternSG",
+        "source_type": "html",
+        "base_url": "https://www.internsg.com",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "every:24h",
+        "last_success_at": "2026-10-24 08:23:17.457000",
+        "next_run_at": "2026-10-25 08:23:17.457000",
+        "active_jobs": 92,
+        "last_success_at_singapore": "2026-10-24 16:23:17 +08:00",
+        "next_run_at_singapore": "2026-10-25 16:23:17 +08:00"
+      },
+      {
+        "name": "Palantir Technologies",
+        "source_type": "json",
+        "base_url": "https://api.lever.co/v0/postings/palantir",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "every:6h",
+        "last_success_at": "2026-10-24 08:14:59.852000",
+        "next_run_at": "2026-10-24 14:14:59.852000",
+        "active_jobs": 2,
+        "last_success_at_singapore": "2026-10-24 16:14:59 +08:00",
+        "next_run_at_singapore": "2026-10-24 22:14:59 +08:00"
+      },
+      {
+        "name": "SP Group - verified internship email programme",
+        "source_type": "curated",
+        "base_url": "https://www.spgroup.com.sg/about-us/careers",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "manual",
+        "last_success_at": "2026-10-23 08:32:28.000000",
+        "next_run_at": null,
+        "active_jobs": 1,
+        "last_success_at_singapore": "2026-10-23 16:32:28 +08:00",
+        "next_run_at_singapore": null
+      },
+      {
+        "name": "ShopBack",
+        "source_type": "json",
+        "base_url": "https://api.lever.co/v0/postings/shopback-2",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "every:6h",
+        "last_success_at": "2026-10-24 08:14:25.390000",
+        "next_run_at": "2026-10-24 14:14:25.390000",
+        "active_jobs": 9,
+        "last_success_at_singapore": "2026-10-24 16:14:25 +08:00",
+        "next_run_at_singapore": "2026-10-24 22:14:25 +08:00"
+      },
+      {
+        "name": "SimplifyNext",
+        "source_type": "json",
+        "base_url": "https://boards-api.greenhouse.io/v1/boards/simplifynext",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "every:6h",
+        "last_success_at": "2026-10-24 08:15:10.785000",
+        "next_run_at": "2026-10-24 14:15:10.785000",
+        "active_jobs": 7,
+        "last_success_at_singapore": "2026-10-24 16:15:10 +08:00",
+        "next_run_at_singapore": "2026-10-24 22:15:10 +08:00"
+      },
+      {
+        "name": "StraitsX",
+        "source_type": "json",
+        "base_url": "https://boards-api.greenhouse.io/v1/boards/straitsx",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "every:6h",
+        "last_success_at": "2026-10-24 09:32:30.963000",
+        "next_run_at": "2026-10-24 15:32:30.963000",
+        "active_jobs": 2,
+        "last_success_at_singapore": "2026-10-24 17:32:30 +08:00",
+        "next_run_at_singapore": "2026-10-24 23:32:30 +08:00"
+      },
+      {
+        "name": "Stripe",
+        "source_type": "json",
+        "base_url": "https://boards-api.greenhouse.io/v1/boards/stripe",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "every:6h",
+        "last_success_at": "2026-10-24 09:33:46.939000",
+        "next_run_at": "2026-10-24 15:33:46.939000",
+        "active_jobs": 4,
+        "last_success_at_singapore": "2026-10-24 17:33:46 +08:00",
+        "next_run_at_singapore": "2026-10-24 23:33:46 +08:00"
+      },
+      {
+        "name": "TEST ONLY - negative email policy fixtures",
+        "source_type": "sandbox",
+        "base_url": "https://negative-fixture.jobpilot.test",
+        "enabled": 0,
+        "status": "test_only",
+        "schedule": "manual",
+        "last_success_at": null,
+        "next_run_at": null,
+        "active_jobs": 0,
+        "last_success_at_singapore": null,
+        "next_run_at_singapore": null
+      },
+      {
+        "name": "Venti Technologies",
+        "source_type": "json",
+        "base_url": "https://api.ashbyhq.com/posting-api/job-board/goventi",
+        "enabled": 1,
+        "status": "healthy",
+        "schedule": "every:6h",
+        "last_success_at": "2026-10-24 08:14:52.498000",
+        "next_run_at": "2026-10-24 14:14:52.498000",
+        "active_jobs": 18,
+        "last_success_at_singapore": "2026-10-24 16:14:52 +08:00",
+        "next_run_at_singapore": "2026-10-24 22:14:52 +08:00"
+      }
+    ],
+    "remaining_limits": [
+      "InternSG is a bounded 100-detail refresh, not a complete inventory of its 44 listing pages.",
+      "CSIT and other employer citizenship, student status, timing and availability restrictions remain subject to per-user evidence review.",
+      "A programme overview is identified separately from concrete advertised vacancies.",
+      "Historical 179-row deployment data was not located or imported; these are newly verified public source records."
+    ]
+  },
+  "live_analysis": {
+    "run_id": "f3c09c86-b212-4919-b156-b6b8c88145bd",
+    "status": "succeeded",
+    "is_current": true,
+    "execution_mode": "live",
+    "prompt_version": "ai-recommendation-v8-source-ranges",
+    "input_hash": "805d16d0116cdeaf3642a7d7678df37ed26127eb3f45dca571764c1c08805c1c",
+    "requires_review": true,
+    "usage": {
+      "input_tokens": 33733,
+      "output_tokens": 10534
+    },
+    "candidates": [
+      {
+        "id": "27861cf9-5b0c-416f-a386-c148a2c306b3",
+        "title": "Full Stack Developer (Graduate)",
+        "company": "SimplifyNext",
+        "city": "Singapore",
+        "job_type": "graduate"
+      },
+      {
+        "id": "ff105a49-7db6-4bef-bf3c-7a1fe154b452",
+        "title": "AI Software Engineer Intern",
+        "company": "Pensees Pte. Ltd.",
+        "city": "Singapore",
+        "job_type": "internship"
+      },
+      {
+        "id": "338251e0-90c6-4335-b1aa-69ec7cc9e3e6",
+        "title": "AI Engineer (Graduate)",
+        "company": "SimplifyNext",
+        "city": "Singapore",
+        "job_type": "graduate"
+      },
+      {
+        "id": "df46ae4f-2eef-4e1f-9acf-22ceb2326f7b",
+        "title": "Machine Learning Intern",
+        "company": "Cantina",
+        "city": "Singapore",
+        "job_type": "internship"
+      },
+      {
+        "id": "e0bc6d90-bb77-4e1a-b4c7-7cb93604e3d0",
+        "title": "Product Builder Intern  (Product Engineering)",
+        "company": "ShopBack",
+        "city": "Singapore",
+        "job_type": "internship"
+      }
+    ],
+    "display_order": [
+      "27861cf9-5b0c-416f-a386-c148a2c306b3",
+      "ff105a49-7db6-4bef-bf3c-7a1fe154b452",
+      "338251e0-90c6-4335-b1aa-69ec7cc9e3e6",
+      "e0bc6d90-bb77-4e1a-b4c7-7cb93604e3d0",
+      "df46ae4f-2eef-4e1f-9acf-22ceb2326f7b"
+    ],
+    "advice": {
+      "27861cf9-5b0c-416f-a386-c148a2c306b3": {
+        "version": "action-advice-v2",
+        "status": "check_first",
+        "headline": "Confirm the core requirements first",
+        "counts": {
+          "supported": 5,
+          "gap": 0,
+          "unknown": 5
+        }
+      },
+      "338251e0-90c6-4335-b1aa-69ec7cc9e3e6": {
+        "version": "action-advice-v2",
+        "status": "check_first",
+        "headline": "Confirm the core requirements first",
+        "counts": {
+          "supported": 6,
+          "gap": 0,
+          "unknown": 4
+        }
+      },
+      "ff105a49-7db6-4bef-bf3c-7a1fe154b452": {
+        "version": "action-advice-v2",
+        "status": "check_first",
+        "headline": "Confirm eligibility before applying",
+        "counts": {
+          "supported": 4,
+          "gap": 0,
+          "unknown": 5
+        }
+      },
+      "e0bc6d90-bb77-4e1a-b4c7-7cb93604e3d0": {
+        "version": "action-advice-v2",
+        "status": "check_first",
+        "headline": "Confirm eligibility before applying",
+        "counts": {
+          "supported": 3,
+          "gap": 0,
+          "unknown": 5
+        }
+      },
+      "df46ae4f-2eef-4e1f-9acf-22ceb2326f7b": {
+        "version": "action-advice-v2",
+        "status": "check_first",
+        "headline": "Confirm eligibility before applying",
+        "counts": {
+          "supported": 0,
+          "gap": 0,
+          "unknown": 8
+        }
+      }
+    },
+    "source_quotes_verified_in_own_original_field": {
+      "jd": 45,
+      "profile": 32
+    },
+    "saved_availability_in_minimized_input": true,
+    "input_profile_field_names": [
+      "availability",
+      "education",
+      "experience",
+      "skills"
+    ],
+    "free_detail_reads_reuse_same_batch_and_advice": [
+      {
+        "job_id": "27861cf9-5b0c-416f-a386-c148a2c306b3",
+        "status": "available",
+        "source_run_id": "f3c09c86-b212-4919-b156-b6b8c88145bd"
+      },
+      {
+        "job_id": "338251e0-90c6-4335-b1aa-69ec7cc9e3e6",
+        "status": "available",
+        "source_run_id": "f3c09c86-b212-4919-b156-b6b8c88145bd"
+      },
+      {
+        "job_id": "ff105a49-7db6-4bef-bf3c-7a1fe154b452",
+        "status": "available",
+        "source_run_id": "f3c09c86-b212-4919-b156-b6b8c88145bd"
+      },
+      {
+        "job_id": "e0bc6d90-bb77-4e1a-b4c7-7cb93604e3d0",
+        "status": "available",
+        "source_run_id": "f3c09c86-b212-4919-b156-b6b8c88145bd"
+      },
+      {
+        "job_id": "df46ae4f-2eef-4e1f-9acf-22ceb2326f7b",
+        "status": "available",
+        "source_run_id": "f3c09c86-b212-4919-b156-b6b8c88145bd"
+      }
+    ],
+    "database_opened_read_only": true
+  },
+  "live_attempts_this_update": {
+    "total_provider_calls": 4,
+    "rejected_and_retained": {
+      "v5": "invalid_evidence",
+      "v6": "invalid_output",
+      "v7": "invalid_evidence"
+    },
+    "v8": "succeeded_requires_review"
+  },
+  "final_free_validation": {
+    "all_8_existing_AI_records_unchanged": true,
+    "new_provider_calls": 0,
+    "repeat_recommendation_reuses_same_run": true,
+    "detail_reuses_same_advice": true
+  },
+  "browser_acceptance": {
+    "run_id": "f3c09c86-b212-4919-b156-b6b8c88145bd",
+    "bundle": "index-DHwVoHZY.js",
+    "browse_state_restored_exactly": true,
+    "browse_before": {
+      "location": "Singapore",
+      "page": "2",
+      "sort": "newest",
+      "titles": [
+        "Project Coordinator",
+        "Management Associate",
+        "Copywriting Intern",
+        "Business & Operations Intern",
+        "Export Sales & Logistic Executive (Korean)",
+        "Software Development Intern",
+        "Digital Project Executive Intern — Websites, Apps & AI Projects",
+        "Retail Sales Promotor",
+        "Social Media Videographer Intern (Production Assistant)",
+        "Marketing Internship"
+      ]
+    },
+    "browse_after": {
+      "location": "Singapore",
+      "page": "2",
+      "sort": "newest",
+      "titles": [
+        "Project Coordinator",
+        "Management Associate",
+        "Copywriting Intern",
+        "Business & Operations Intern",
+        "Export Sales & Logistic Executive (Korean)",
+        "Software Development Intern",
+        "Digital Project Executive Intern — Websites, Apps & AI Projects",
+        "Retail Sales Promotor",
+        "Social Media Videographer Intern (Production Assistant)",
+        "Marketing Internship"
+      ]
+    },
+    "desktop_width": 1280,
+    "mobile_width": 390,
+    "no_horizontal_overflow": true,
+    "official_JD_lists": 3,
+    "official_JD_headings": 7,
+    "existing_detail_has_no_repeat_analyze_button": true,
+    "detail_back_link_returns_same_batch": true
+  },
+  "tests": {
+    "full_v8_before_final_advice_only_change": {
+      "passed": 1476,
+      "seconds": 318.53,
+      "external_network_attempts": 0
+    },
+    "final_advice_v2_related": {
+      "passed": 206,
+      "seconds": 43.03,
+      "external_network_attempts": 0
+    },
+    "full_suite_repeated_after_advice_v2": false,
+    "frontend_lint_typecheck_build": "passed",
+    "browser_manual_ordinary_account": "passed",
+    "automated_browser_specs": "updated and syntax-checked; suite not executed locally",
+    "ruff_and_diff_check": "passed"
+  },
+  "local_runtime": {
+    "web_url": "http://127.0.0.1:15523/jobs",
+    "api_url": "http://127.0.0.1:18523",
+    "bundle": "index-DHwVoHZY.js",
+    "schema_revision": "20261024_0009",
+    "source_scheduler_loop_running": true,
+    "source_scheduler_is_installed_service": false,
+    "scheduled_sources": 12,
+    "manual_programme_sources": 1,
+    "InternSG_interval": "daily",
+    "ATS_interval": "6 hours",
+    "smtp": "loopback test mailbox only"
+  },
+  "semantic_acceptance": "partial; conservative guidance is available for user testing, original AI interpretation is not fully accepted",
+  "remaining_issues": [
+    "Expanded original AI responsibility assessments still overstate building/training/fine-tuning from related evaluation evidence. Responsibilities do not raise first-screen strengths or ranking.",
+    "Incomplete selection of education evidence creates false unknowns even though the saved profile includes degree information; do not ask users to re-enter their profile for this.",
+    "All five sampled jobs remain check_first; a technically successful run is not five verified matches."
+  ],
+  "boundaries": {
+    "hosted_deployment_changed": false,
+    "PR_merged": false,
+    "employer_applications_submitted": 0,
+    "employer_emails_sent": 0,
+    "raw_CV_model_payloads_or_credentials_in_this_artifact": false
+  }
+}

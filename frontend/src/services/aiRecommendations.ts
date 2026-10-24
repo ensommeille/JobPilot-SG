@@ -21,14 +21,47 @@ export interface AIRequirement {
   category: 'skill' | 'responsibility' | 'education' | 'experience' | 'work_constraint' | 'other'
   outcome: 'supported' | 'gap' | 'unknown'
   jd_quote: string
-  profile_field: 'skills' | 'education' | 'experience' | null
+  profile_field: 'skills' | 'education' | 'experience' | 'availability' | null
   profile_quote: string | null
   reason: string
+}
+
+export interface AIJobAssessment {
+  job_id: string
+  rank: number
+  summary: string
+  requirements: AIRequirement[]
+  warnings: string[]
+}
+
+export interface AdviceEvidence extends AIRequirement { requirement_index: number }
+
+export interface JobActionAdvice {
+  version: 'action-advice-v1' | 'action-advice-v2' | 'action-advice-v3'
+  status: 'priority_apply' | 'consider' | 'check_first' | 'not_priority'
+  headline: string
+  reasons: string[]
+  blockers: AdviceEvidence[]
+  strengths: AdviceEvidence[]
+  counts: { supported: number; gap: number; unknown: number }
+}
+
+export interface SavedJobAIAssessment {
+  job_id: string
+  status: 'available' | 'not_analyzed' | 'outdated' | 'running' | 'failed' | 'unavailable'
+  source_run_id: string | null
+  assessment: AIJobAssessment | null
+  advice: JobActionAdvice | null
+  execution_mode: 'live' | 'mock' | null
+  model: string | null
+  finished_at: string | null
+  reason: string | null
 }
 
 export interface AIRecommendationRun {
   id: string
   status: 'running' | 'succeeded' | 'failed'
+  is_current?: boolean
   reused: boolean
   input_hash: string
   provider: string
@@ -37,15 +70,11 @@ export interface AIRecommendationRun {
   execution_mode: 'live' | 'mock'
   profile_skill_count: number
   candidates: AICandidate[]
+  advice?: Record<string, JobActionAdvice>
+  display_order?: string[]
   result: {
     requires_review: true
-    items: {
-      job_id: string
-      rank: number
-      summary: string
-      requirements: AIRequirement[]
-      warnings: string[]
-    }[]
+    items: AIJobAssessment[]
   } | null
   error_code: string | null
   usage: { input_tokens: number | null; output_tokens: number | null }
@@ -65,10 +94,13 @@ export const fetchAICandidates = (filters: AICandidateFilters, config?: AxiosReq
     ...config, params: { ...filters, limit: 20 },
   })
 
-export const startAIRecommendations = (jobIds: string[], config?: AxiosRequestConfig) =>
+export const startAIRecommendations = (jobIds?: string[], config?: AxiosRequestConfig) =>
   api.post<AIRecommendationRun>('/jobs/ai-recommendations', {
-    confirmed: true, job_ids: jobIds,
+    confirmed: true, ...(jobIds ? { job_ids: jobIds } : {}),
   }, config)
 
 export const fetchAIRecommendationRun = (id: string, config?: AxiosRequestConfig) =>
   api.get<AIRecommendationRun>(`/ai-recommendations/${encodeURIComponent(id)}`, config)
+
+export const fetchSavedJobAIAssessment = (id: string, config?: AxiosRequestConfig) =>
+  api.get<SavedJobAIAssessment>(`/jobs/${encodeURIComponent(id)}/ai-assessment`, config)

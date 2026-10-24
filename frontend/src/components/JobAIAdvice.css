@@ -1,0 +1,10 @@
+.job-ai-advice { border-block: 1px solid var(--border-strong); padding-block: var(--s-5); margin-block: var(--s-5); min-width: 0; overflow-wrap: anywhere; }
+.job-ai-advice > h3 { font-size: 1.125rem; margin-bottom: var(--s-3); }
+.job-ai-advice > p { margin-block: var(--s-3); max-width: 74ch; line-height: 1.6; }
+.job-ai-advice a { color: var(--primary); text-underline-offset: 3px; }
+.job-ai-actions { display: flex; flex-wrap: wrap; gap: var(--s-4); align-items: center; margin-block: var(--s-3); }
+.job-ai-meta, .job-ai-consent { font-size: 0.875rem; color: var(--text-muted); }
+.job-ai-error { color: var(--danger); }
+.job-ai-notice { background: var(--warning-soft); padding: var(--s-3); }
+.job-ai-advice .btn { min-height: 40px; height: auto; padding-block: var(--s-2); white-space: normal; }
+.job-ai-advice :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }

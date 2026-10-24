@@ -77,3 +77,27 @@ It also checks both displayed branches of the narrow Python/framework condition
 and does not treat a Python quote as proof of a separate interest requirement.
 These prompt corrections improve instructions; they do not guarantee valid or
 semantically complete output from a future model call.
+
+## v4 unified discovery and conservative construction evidence
+
+The user-facing Jobs action can omit `job_ids` and use the existing automatic
+five-job batch path. Initial recall still uses saved profile terms, with bounded
+role-domain weights so generic Python overlap does not outweigh software/ML work.
+A specifically named doctoral role is investigated later when doctoral evidence
+is absent; this is an ordering caution, not an inferred degree rejection. Ordinary
+unknown abilities never become explicit gaps.
+
+AI candidates reject typed mock/sandbox sources and posting/source URLs using
+loopback, private addresses or reserved fixture domains. This inspects provenance
+metadata, never words such as “testing” in real job titles. It is not live URL
+verification. Public browsing excludes disabled/mock/sandbox sources in SQL before
+counting and pagination; historical direct-ID application records remain readable.
+
+`ai-recommendation-v4-role-recall-evidence` adds a conservative construction check:
+annotation, quality checks, evaluating models or merely using a pipeline do not
+establish building data pipelines, ML infrastructure or distributed systems. A
+supported construction claim must display an explicit corresponding action/object;
+otherwise it becomes unknown with a visible reason. Narrow AND/OR cases are
+covered by offline regressions, while arbitrary semantic equivalence still needs
+human review. New pipeline identity separates these results from unchanged legacy
+cache entries; no saved result is silently rewritten and no paid retry is added.

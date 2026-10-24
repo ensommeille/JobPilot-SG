@@ -267,7 +267,8 @@ def test_crawl_run_persists_jobs_updates_and_audit(
     assert job is not None
     assert job.title == "Updated Data Intern"
     assert job.apply_url == "https://jobs.example.test/job/sandbox-1"
-    assert client.get("/jobs").json()["total"] == 1
+    # Persisted admin fixtures remain inspectable by ID, but never enter public discovery.
+    assert client.get("/jobs").json()["total"] == 0
 
     runs = client.get("/runs", headers=admin)
     assert runs.status_code == 200

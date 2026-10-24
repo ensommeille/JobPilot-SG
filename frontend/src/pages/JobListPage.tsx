@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import JobRecommendations from '../components/JobRecommendations'
 import AIRecommendations from '../components/AIRecommendations'
 import SourceFreshness from '../components/SourceFreshness'
-import { fetchAllJobs, fetchFavorites, addFavorite, removeFavorite, normalizeFavoriteList } from '../services/jobs'
+import { fetchAllJobs, fetchFavorites, addFavorite, removeFavorite, normalizeFavoriteList, applicationAssistanceLabel } from '../services/jobs'
 import type { JobId, JobView } from '../services/jobs'
 import { getToken, watchSession } from '../services/auth'
+import { readJobBrowseState, serializeJobBrowseState, jobDetailLocation } from '../services/jobBrowseState'
 
 const DAY = 86400000
 const PAGE_SIZE = 10
@@ -93,6 +93,8 @@ const XIcon = () => (
 )
 
 const JobListPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [initialBrowse] = useState(() => readJobBrowseState(searchParams.get('browse')))
   const token = useSyncExternalStore(watchSession, getToken, getToken)
   const [jobs, setJobs] = useState<JobView[]>([])
   const [loading, setLoading] = useState(true)
@@ -111,16 +113,16 @@ const JobListPage = () => {
   const navigate = useNavigate()
 
   // 搜索 & 筛选
-  const [search, setSearch] = useState('')
-  const [place, setPlace] = useState('')
-  const [types, setTypes] = useState<string[]>([])
-  const [tags, setTags] = useState<string[]>([])
-  const [locations, setLocations] = useState<string[]>([])
-  const [deadlineDays, setDeadlineDays] = useState(0)
-  const [salaryOnly, setSalaryOnly] = useState(false)
-  const [sort, setSort] = useState<SortKey>('deadline')
+  const [search, setSearch] = useState(initialBrowse.search)
+  const [place, setPlace] = useState(initialBrowse.place)
+  const [types, setTypes] = useState<string[]>(initialBrowse.types)
+  const [tags, setTags] = useState<string[]>(initialBrowse.tags)
+  const [locations, setLocations] = useState<string[]>(initialBrowse.locations)
+  const [deadlineDays, setDeadlineDays] = useState(initialBrowse.deadlineDays)
+  const [salaryOnly, setSalaryOnly] = useState(initialBrowse.salaryOnly)
+  const [sort, setSort] = useState<SortKey>(initialBrowse.sort)
   // 页码和当前筛选条件绑定：条件一变，自动回到第 1 页
-  const [pageState, setPageState] = useState({ key: '', page: 1 })
+  const [pageState, setPageState] = useState({ key: JSON.stringify([initialBrowse.search, initialBrowse.place, initialBrowse.types, initialBrowse.tags, initialBrowse.locations, initialBrowse.salaryOnly, initialBrowse.deadlineDays, initialBrowse.sort]), page: initialBrowse.page })
 
   useEffect(() => {
     const request = new AbortController()
@@ -231,11 +233,23 @@ const JobListPage = () => {
 
   const filterKey = JSON.stringify([search, place, types, tags, locations, salaryOnly, deadlineDays, sort])
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const page = pageState.key === filterKey ? Math.min(pageState.page, pages) : 1
+  const requestedPage = pageState.key === filterKey ? pageState.page : 1
+  const page = loading || error ? requestedPage : Math.min(requestedPage, pages)
   const setPage = (next: number | ((p: number) => number)) =>
     setPageState({ key: filterKey, page: typeof next === 'function' ? next(page) : next })
 
   const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const browse = serializeJobBrowseState({ search, place, types, tags, locations, deadlineDays, salaryOnly, sort, page })
+  const currentBrowse = searchParams.get('browse') || ''
+  useEffect(() => {
+    if (browse === currentBrowse) return
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous)
+      if (browse) next.set('browse', browse)
+      else next.delete('browse')
+      return next
+    }, { replace: true })
+  }, [browse, currentBrowse, setSearchParams])
 
   const activeChips = [
     ...types.map(v => ({ label: v, remove: () => setTypes(p => p.filter(x => x !== v)) })),
@@ -265,8 +279,14 @@ const JobListPage = () => {
         </div>
 
         <SourceFreshness />
-        <JobRecommendations />
-        <AIRecommendations />
+        <AIRecommendations
+          jobs={jobs}
+          favorites={favorites}
+          favoritePending={pendingIds}
+          favoritesDisabled={Boolean(token && (favoritesLoading || favoriteError))}
+          favoriteError={favoriteError}
+          onToggleFavorite={toggleFavorite}
+        >
         <h2 style={{marginBottom: 'var(--s-4)'}}>Browse jobs</h2>
         <p className="muted" style={{ marginBottom: 'var(--s-4)' }}>Browse all currently stored jobs. Sidebar filters apply to the full result set.</p>
         <form className="searchbar" onSubmit={e => e.preventDefault()} role="search">
@@ -351,13 +371,13 @@ const JobListPage = () => {
               const posted = postedText(job.postedAt, today)
               const [logoBg, logoFg] = logoColor(job.company)
               return (
-                <article key={job.id} className="card card-clickable job-card" onClick={() => navigate(`/jobs/${job.id}`)}>
+                <article key={job.id} className="card card-clickable job-card" onClick={() => navigate(jobDetailLocation(job.id, browse))}>
                   <div className="company-logo" style={{ background: logoBg, color: logoFg }}>
                     {job.company.charAt(0).toUpperCase()}
                   </div>
 
                   <div className="job-main">
-                    <h3><a href={`/jobs/${job.id}`} onClick={e => { e.preventDefault() }}>{job.title}</a></h3>
+                    <h3><a href={jobDetailLocation(job.id, browse)} onClick={e => { e.preventDefault() }}>{job.title}</a></h3>
                     <p className="job-meta">
                       {job.company} · {job.location}{posted && ` · ${posted}`}
                     </p>
@@ -365,6 +385,7 @@ const JobListPage = () => {
                       <span className="tag tag-primary">{job.type}</span>
                       {job.tags.map(t => <span key={t} className="tag">{t}</span>)}
                       {job.source && <span className="tag tag-outline">via {job.source}</span>}
+                      {job.applicationAssistance && <span className="tag tag-outline">{applicationAssistanceLabel(job.applicationAssistance)}</span>}
                     </div>
                   </div>
 
@@ -404,6 +425,7 @@ const JobListPage = () => {
             )}
           </section>
         </div>
+        </AIRecommendations>
       </main>
     </div>
   )

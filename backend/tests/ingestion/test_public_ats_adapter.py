@@ -249,6 +249,43 @@ def test_lever_ingests_hosted_application_and_rejects_unsafe_links():
     assert batch.items[0].known_fields.apply_url == "https://jobs.lever.co/acme/abc-123/apply"
 
 
+def test_lever_keeps_requirement_lists_and_additional_text_in_source_order():
+    job = {
+        "id": "full-jd-123",
+        "text": "Software Engineer Intern",
+        "categories": {"location": "Singapore", "commitment": "Intern"},
+        "descriptionPlain": "Build internal tools.",
+        "description": "<p>Build internal tools.</p>",
+        "lists": [
+            {"text": "Responsibilities", "content": "<li>Develop APIs.</li>"},
+            {"text": "Required skills", "content": "<li>Python and SQL.</li>"},
+        ],
+        "additionalPlain": "Commit for four months.",
+        "additional": "<p>Commit for four months.</p>",
+        "hostedUrl": "https://jobs.lever.co/acme/full-jd-123",
+        "applyUrl": "https://jobs.lever.co/acme/full-jd-123/apply",
+    }
+
+    def handler(request):
+        if request.url.path == "/robots.txt":
+            return reply(request, "User-agent: *\nAllow: /", content_type="text/plain")
+        return reply(request, [job])
+
+    batch = adapter_for("lever", handler).collect(max_links=5, max_details=5)
+    record = batch.items[0].known_fields
+    assert record.description == (
+        "Build internal tools. Responsibilities Develop APIs. "
+        "Required skills Python and SQL. Commit for four months."
+    )
+    assert {block["kind"] for block in record.description_blocks} == {
+        "paragraph",
+        "heading",
+        "list",
+    }
+    assert "Python and SQL." in record.description
+    assert "<li>Python and SQL.</li>" in batch.items[0].raw_html
+
+
 def test_robots_denial_prevents_api_request():
     paths = []
 

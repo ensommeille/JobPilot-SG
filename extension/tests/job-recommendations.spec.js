@@ -1,140 +1,373 @@
 import {test, expect} from '@playwright/test';
+
 const base = process.env.FRONTEND_BASE_URL;
-test.skip(!base, 'Set FRONTEND_BASE_URL to test recommendations.');
-const evidence = {
-  requirement: 'Python', importance: 'required', reason: 'Python is explicitly listed; proficiency is not verified.',
-  job_evidence: 'Python required.', profile_evidence: 'Python',
-};
+test.skip(!base, 'Set FRONTEND_BASE_URL for the isolated unified job recommendation journey.');
+const tokenA = 'fixture-recommendation-account-a';
+const tokenB = 'fixture-recommendation-account-b';
+const runId = '11111111-2222-4333-8444-555555555555';
+const jobs = Array.from({length: 22}, (_, index) => ({
+  id: `fixture-job-${index}`, title: `Fictional fixture role ${String(index).padStart(2, '0')} — test only`,
+  company: 'Fictional fixture company', city: 'Singapore', job_type: index < 18 ? 'internship' : 'graduate',
+  deadline: null, posted_at: `2026-10-${String(index + 1).padStart(2, '0')}`,
+  salary_min: null, salary_max: null, salary_currency: null, salary_period: null,
+  source: {name: 'Isolated fixture board'}, tags: [],
+  application_assistance: index === 0 ? 'ats_extension' : 'manual_external',
+}));
 const report = {
-  status: 'ready', scanned: 3, evaluated: 2, matched: 1, truncated: false,
-  profile_skill_count: 2, preferred_job_type: null,
-  excluded: {missing_extraction: 1},
-  items: [{job_id: 'fixture', title: 'Fictional Python intern — test only', company: 'Demo only',
-    city: 'Singapore', job_type: 'internship', supported: [evidence], gaps: [],
-    unknown: [{...evidence, requirement: 'Degree', reason: 'Review education manually.', job_evidence: 'Degree required.', profile_evidence: null}]}],
+  id: runId, status: 'succeeded', reused: false, is_current: true, input_hash: 'fixture-input-hash',
+  provider: 'fixture-provider', model: 'fixture-model', prompt_version: 'fixture-only', execution_mode: 'live',
+  profile_skill_count: 2, candidates: [{
+    id: jobs[0].id, title: jobs[0].title, company: jobs[0].company, city: 'Singapore', job_type: 'internship',
+  }],
+  result: {requires_review: true, items: [{
+    job_id: jobs[0].id, rank: 1, summary: 'Python is explicitly listed in the saved profile and the job. Other conditions need review.',
+    warnings: ['Availability is not supplied in the saved profile.'], requirements: [{
+      requirement: 'Python', category: 'skill', outcome: 'supported', jd_quote: 'Python required.',
+      profile_field: 'skills', profile_quote: 'Python', reason: 'Python is named in both sources; proficiency is not verified.',
+    }, {
+      requirement: 'Full-time availability', category: 'work_constraint', outcome: 'unknown', jd_quote: 'Full-time availability required.',
+      profile_field: null, profile_quote: null, reason: 'The saved profile does not explicitly confirm availability.',
+    }],
+  }]},
+  error_code: null, usage: {input_tokens: 100, output_tokens: 80},
+  started_at: '2026-10-24T04:00:00Z', expires_at: '2026-10-24T04:03:00Z', finished_at: '2026-10-24T04:00:05Z',
 };
-async function setup(page, handler, authenticated = true) {
-  await page.addInitScript(authenticated => { if (authenticated) localStorage.setItem('jobpilot_token', 'fixture-token'); }, authenticated);
-  await page.route('**/profile', route => route.fulfill({json: {full_name: 'Demo applicant'}}));
-  // Keep fake credentials away from a running local backend's favorites endpoint.
-  await page.route(/\/favorites(\?.*)?$/, route => route.fulfill({json: {items: [], total: 0}}));
-  await page.route(/\/jobs(\?.*)?$/, route => route.request().resourceType() === 'document' ? route.continue() : route.fulfill({json: {items: [], total: 0}}));
-  await page.route('**/jobs/recommendations', handler);
-  await page.goto(base + '/jobs');
+report.advice = {[jobs[0].id]: {
+  version: 'action-advice-v3', status: 'check_first', headline: 'Check your full-time availability before applying.',
+  reasons: ['Availability is not confirmed.'],
+  blockers: [{...report.result.items[0].requirements[1], requirement_index: 1}],
+  strengths: [{...report.result.items[0].requirements[0], requirement_index: 0}],
+  counts: {supported: 1, gap: 0, unknown: 1},
+}};
+report.display_order = [jobs[0].id];
+
+function deferred() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return {promise, resolve};
 }
-test('explicit request, evidence, detail link and responsive layout', async ({page}) => {
-  let calls = 0;
-  await setup(page, route => { calls++; expect(route.request().postDataJSON()).toEqual({keyword: '', city: '', job_type: '', limit: 10, include_experience: true}); return route.fulfill({json: report}); });
-  expect(calls).toBe(0);
-  await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  await expect(page.locator('.recommendation-list')).toContainText('Python named in both the JD and your saved skills.');
-  await expect(page.locator('.job-recommendations')).toContainText('Using 2 distinct named tool or domain skills');
-  await page.getByText('Review reasons and evidence', {exact: true}).click();
-  await expect(page.locator('.recommendation-evidence dd').first()).toHaveText('Python required.');
-  await expect(page.getByRole('link', {name: 'View job and full analysis'})).toHaveAttribute('href', '/jobs/fixture');
-  await page.setViewportSize({width: 1440, height: 1000});
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({path: '../output/recommendations-desktop.png', fullPage: true});
-  await page.setViewportSize({width: 390, height: 844});
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({path: '../output/recommendations-mobile.png', fullPage: true});
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-});
-for (const [status, text] of [
-  ['profile_needed', 'Add specific skills or describe work you have done'],
-  ['no_candidates', 'No active, unexpired jobs'],
-  ['no_evidence', 'requirements are not ready'],
-  ['no_matches', 'No clear skill or project-activity overlaps'],
-]) test(status + ' is explained without invented suggestions', async ({page}) => {
-  await setup(page, route => route.fulfill({json: {...report, status, matched: 0, items: []}}));
-  await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  await expect(page.locator('.job-recommendations')).toContainText(text);
-  await expect(page.locator('.recommendation-list')).toHaveCount(0);
-});
-test('failure, retry and filter edits invalidate previous result', async ({page}) => {
-  let fail = true;
-  let body;
-  await setup(page, route => { body = route.request().postDataJSON(); return route.fulfill(fail ? {status: 503, json: {}} : {json: report}); });
-  await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  await expect(page.locator('.job-recommendations').getByRole('alert')).toContainText('Could not load');
-  fail = false;
-  await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  await expect(page.locator('.recommendation-list')).toBeVisible();
-  await page.getByLabel('Role or company (optional)').first().fill('Engineer');
-  await expect(page.locator('.recommendation-list')).toHaveCount(0);
-  await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  await expect(page.locator('.recommendation-list')).toBeVisible();
-  expect(body.keyword).toBe('Engineer');
-});
-test('signed out does not send a request', async ({page}) => {
-  let calls = 0;
-  await setup(page, route => { calls++; return route.fulfill({json: report}); }, false);
-  await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  await expect(page.locator('.job-recommendations').getByRole('alert')).toContainText('Sign in');
-  expect(calls).toBe(0);
-});
-test('account switch aborts in-flight data', async ({page}) => {
-  let release;
-  const waiting = new Promise(resolve => { release = resolve; });
-  await setup(page, async route => { await waiting; await route.fulfill({json: report}); });
-  await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  await expect(page.getByRole('button', {name: 'Finding jobs…'})).toBeDisabled();
-  await page.evaluate(() => {
-    localStorage.clear();
-    window.dispatchEvent(new StorageEvent('storage', {key: null}));
+
+async function setup(page, {post, get, authenticated = true, path = '/jobs'} = {}) {
+  const calls = {posts: 0, reads: 0, jobs: 0, legacy: 0};
+  await page.addInitScript(({token, authenticated}) => {
+    if (authenticated) localStorage.setItem('jobpilot_token', token);
+  }, {token: tokenA, authenticated});
+  await page.route('**/profile', route => route.request().resourceType() === 'document' ? route.continue()
+    : route.fulfill({json: {full_name: 'Fictional fixture applicant', skills: ['Python']}}));
+  await page.route('**/job-sources/status', route => route.fulfill({json: {sources: []}}));
+  await page.route('**/users/me', route => route.fulfill({json: {id: 'fixture-user', role: 'user'}}));
+  await page.route(/\/favorites(\?.*)?$/, route => route.fulfill({json: {items: [], total: 0, pages: 1}}));
+  await page.route(/\/jobs(\?.*)?$/, route => {
+    if (route.request().resourceType() === 'document') return route.continue();
+    calls.jobs++;
+    return route.fulfill({json: {items: jobs, total: jobs.length, pages: 1}});
   });
-  release();
-  await expect(page.locator('.job-recommendations').getByRole('alert')).toContainText('Account changed');
-  await expect(page.locator('.recommendation-list')).toHaveCount(0);
+  await page.route('**/jobs/recommendations', route => { calls.legacy++; return route.fulfill({status: 500, json: {detail: 'Legacy flow must not be called'}}); });
+  await page.route('**/jobs/ai-recommendations/candidates*', route => { calls.legacy++; return route.fulfill({status: 500, json: {detail: 'No manual candidate step'}}); });
+  await page.route('**/jobs/ai-recommendations', route => {
+    calls.posts++;
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().postDataJSON()).toEqual({confirmed: true});
+    expect(route.request().headers().authorization).toBe(`Bearer ${tokenA}`);
+    return post ? post(route, calls) : route.fulfill({status: 201, json: report});
+  });
+  await page.route(`**/ai-recommendations/${runId}`, route => {
+    calls.reads++;
+    expect(route.request().method()).toBe('GET');
+    return get ? get(route, calls) : route.fulfill({json: {...report, reused: true}});
+  });
+  await page.goto(base + path);
+  return calls;
+}
+
+test('one explicit recommendation entry uses the saved profile and replaces the browse list', async ({page}) => {
+  const calls = await setup(page);
+  await expect(page.locator('.job-card')).toHaveCount(10);
+  await expect(page.locator('.job-card').first()).toContainText('Assisted filling · extension required');
+  await expect(page.getByRole('button', {name: 'Recommend to me', exact: true})).toHaveCount(1);
+  await expect(page.getByRole('button', {name: 'Find jobs for me'})).toHaveCount(0);
+  await expect(page.getByRole('heading', {name: 'AI recommendations'})).toHaveCount(0);
+  await expect(page.getByRole('button', {name: 'Load candidate jobs'})).toHaveCount(0);
+  expect(calls.posts).toBe(0);
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.getByRole('heading', {name: 'Recommended for you'})).toBeVisible();
+  await expect(page.locator('.ai-run-state')).toContainText('Live AI');
+  await expect(page.locator('.ai-run-state')).not.toContainText('Needs your review');
+  await expect(page.locator('.ai-ranked-jobs > li')).toHaveCount(1);
+  await expect(page.locator('.job-card')).toHaveCount(0);
+  await expect(page.getByRole('search')).toHaveCount(0);
+  await expect(page.getByRole('complementary', {name: 'Filters'})).toHaveCount(0);
+  await expect(page.locator('.ai-ranked-jobs')).toContainText(report.advice[jobs[0].id].headline);
+  await expect(page.locator('.ai-ranked-jobs').getByText(report.result.items[0].warnings[0], {exact: true})).not.toBeVisible();
+  await expect(page.locator('.ai-ranked-jobs').getByRole('link', {name: 'Prepare application'})).toHaveAttribute('href', `/jobs/${jobs[0].id}/prepare`);
+  expect(calls.posts).toBe(1);
+  expect(calls.legacy).toBe(0);
 });
 
-test('natural-language overlaps never claim the compound requirement is satisfied', async ({page}) => {
-  const partial = {...evidence, requirement: 'Comfortable using Microsoft Excel or Google Sheets.',
-    reason: 'Shared skill mentions only. Proficiency, years, alternatives and other conditions remain unverified.',
-    job_evidence: 'Comfortable using Microsoft Excel or Google Sheets.',
-    profile_evidence: 'I use Excel for monthly reports.', outcome: 'unknown',
-    skill_overlaps: [{skill_id: 'excel', label: 'Microsoft Excel', kind: 'specific', profile_evidence: 'I use Excel for monthly reports.'}]};
-  const natural = {...report, items: [{...report.items[0], title: 'Fictional finance intern — test only', supported: [], overlaps: [partial], unknown: [partial, report.items[0].unknown[0]]}]};
-  await setup(page, route => route.fulfill({json: natural}));
-  await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  await expect(page.locator('.recommendation-list')).toContainText('Microsoft Excel named in both the JD and your saved skills.');
-  await expect(page.locator('.recommendation-list')).toContainText('2 requirements still need');
-  await page.getByText('Review reasons and evidence', {exact: true}).click();
-  await expect(page.locator('.recommendation-evidence').filter({hasText: 'Comfortable using'})).toHaveCount(1);
-  await expect(page.locator('.recommendation-evidence').first()).toContainText('conditions unverified');
-  await expect(page.locator('.recommendation-evidence').first()).toContainText('I use Excel for monthly reports.');
-  await page.getByText('How suggestions are ordered', {exact: true}).click();
-  await expect(page.locator('.job-recommendations')).toContainText('model-assigned priorities do not improve rank');
-  for (const [name, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]]) {
-    await page.setViewportSize({width, height});
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.screenshot({path: `../output/natural-recommendations-${name}.png`, fullPage: true});
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  }
+test('the primary recommendation shows no more than two concrete reasons', async ({page}) => {
+  const verbose = {...report, advice: {[jobs[0].id]: {...report.advice[jobs[0].id], reasons: ['First concrete condition.', 'Second concrete evidence.', 'Additional detail stays out of the primary summary.']}}};
+  await setup(page, {post: route => route.fulfill({json: verbose}), get: route => route.fulfill({json: verbose})});
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.locator('.job-advice-reasons li')).toHaveCount(2);
+  await expect(page.locator('.job-advice-reasons')).toContainText('Second concrete evidence.');
+  await expect(page.locator('.job-advice-decision')).not.toContainText('Needs your review');
 });
 
-test('experience-only suggestion explains projects without inventing matched skills', async ({page}) => {
-  const duty = {responsibility: 'Develop internal software tools.', job_evidence: 'Develop internal software tools.',
-    priority: 'unspecified', condition: null, outcome: 'related_evidence', reason: 'related_activity',
-    activities: ['software_features'], profile_evidence: ['Built a role-based internal application.']};
-  const projects = {...report, items: [{...report.items[0], supported: [], unknown: [], overlaps: [], responsibility_matches: [duty]}]};
-  await setup(page, route => route.fulfill({json: projects}));
-  await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  const list = page.locator('.recommendation-list');
-  await expect(list).toContainText('Why shown:');
-  await expect(list).not.toContainText('named in both');
-  await page.getByText('Review reasons and evidence', {exact: true}).click();
-  await expect(list.locator('.responsibility-match')).toHaveCount(1);
-  await expect(list).toContainText(duty.job_evidence);
-  await expect(list).toContainText(duty.profile_evidence[0]);
-  await expect(list.locator('.recommendation-evidence')).toHaveCount(0);
-  await expect(list.getByRole('link', {name: 'View job and full analysis'})).toHaveAttribute('href', '/jobs/fixture');
+test('source quotes and unknown conditions remain available without invented certainty', async ({page}) => {
+  await setup(page);
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  const results = page.locator('.ai-ranked-jobs');
+  await results.getByText('Review 2 requirements and source quotes', {exact: true}).click();
+  await expect(results.locator('.job-advice-quotes dd').filter({hasText: 'Python required.'})).toHaveCount(1);
+  await expect(results.locator('.job-advice-outcome-unknown')).toHaveText('Unknown');
+  await expect(results).toContainText('No explicit saved evidence cited. More information or manual review is needed.');
+  await expect(results.locator('.job-advice-note').filter({hasText: 'does not verify'})).toContainText('does not verify proficiency or employer eligibility');
+  await expect(results).toContainText('Original AI assessments may still be uncertain. Application advice applies extra conservative evidence checks.');
+  await expect(results.getByRole('link', {name: 'View job and original posting'})).toHaveAttribute('href', `/jobs/${jobs[0].id}?recommendation_run=${runId}`);
 });
 
-test('explicit internship preference and profile evidence scope are explained', async ({page}) => {
-  await setup(page, route => route.fulfill({json: {...report, profile_skill_count: 1, preferred_job_type: 'internship'}}));
-  await page.getByRole('button', {name: 'Find jobs for me'}).click();
-  await expect(page.locator('.job-recommendations')).toContainText('Using 1 distinct named tool or domain skill');
-  await expect(page.locator('.job-recommendations')).toContainText('Internship jobs appear before other job types');
-  await expect(page.locator('.job-recommendations')).toContainText('Review information extracted from your resume PDF');
+test('server action advice order replaces the raw model rank without inventing a percentage', async ({page}) => {
+  const second = {...report.result.items[0], job_id: jobs[1].id, rank: 2};
+  const reordered = {...report, candidates: [...report.candidates, {...report.candidates[0], id: jobs[1].id, title: jobs[1].title}],
+    result: {requires_review: true, items: [report.result.items[0], second]}, display_order: [jobs[1].id, jobs[0].id],
+    advice: {...report.advice, [jobs[1].id]: {...report.advice[jobs[0].id], status: 'consider', headline: 'This role has relevant saved project evidence.'}}};
+  await setup(page, {post: route => route.fulfill({json: reordered}), get: route => route.fulfill({json: reordered})});
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.locator('.ai-ranked-jobs > li').first()).toContainText(jobs[1].title);
+  await expect(page.locator('.ai-ranked-jobs > li').first().locator('.job-advice-status')).toHaveText('Worth considering');
+  await expect(page.locator('.ai-rank')).toHaveCount(0);
+  await expect(page.locator('.ai-ranked-jobs')).not.toContainText('%');
+});
+
+test('Show all jobs restores filters, sorting and page without a model or job request', async ({page}) => {
+  const calls = await setup(page);
+  await expect(page.locator('.job-card')).toHaveCount(10);
+  await page.getByRole('group', {name: 'Job type', exact: true}).getByRole('checkbox', {name: /internship/}).check();
+  await page.getByLabel('Sort by').selectOption('newest');
+  await page.getByRole('button', {name: 'Next', exact: true}).click();
+  await expect(page.getByRole('button', {name: '2', exact: true})).toHaveAttribute('aria-current', 'page');
+  const before = await page.locator('.job-card h3').allTextContents();
+  const jobsBefore = calls.jobs;
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.locator('.ai-ranked-jobs > li')).toHaveCount(1);
+  await page.getByRole('button', {name: 'Show all jobs'}).click();
+  await expect(page.locator('.job-card')).toHaveCount(before.length);
+  expect(await page.locator('.job-card h3').allTextContents()).toEqual(before);
+  await expect(page.getByRole('group', {name: 'Job type', exact: true}).getByRole('checkbox', {name: /internship/})).toBeChecked();
+  await expect(page.getByLabel('Sort by')).toHaveValue('newest');
+  await expect(page.getByRole('button', {name: '2', exact: true})).toHaveAttribute('aria-current', 'page');
+  await expect(page).not.toHaveURL(/ai_run=/);
+  await expect(page.locator('.ai-ranked-jobs')).toHaveCount(0);
+  expect(calls.posts).toBe(1);
+  expect(calls.jobs).toBe(jobsBefore);
+});
+
+test('browse location, sorting and page survive recommendation-detail-back navigation', async ({page}) => {
+  const calls = await setup(page);
+  await page.route(new RegExp(`/jobs/${jobs[0].id}(?:/(?:ai-assessment|application-context))?(?:\\?.*)?$`), route => {
+    if (route.request().resourceType() === 'document') return route.continue();
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/ai-assessment')) return route.fulfill({json: {job_id: jobs[0].id, status: 'not_analyzed', assessment: null, advice: null}});
+    if (path.endsWith('/application-context')) return route.fulfill({json: {job: jobs[0], channel: 'external', profile: {}, instructions: [], original_application_url: null}});
+    return route.fulfill({json: {...jobs[0], status: 'active', description: 'Fixture detail used only for navigation.'}});
+  });
+  await expect(page.locator('.job-card')).toHaveCount(10);
+  await page.getByLabel('Location', {exact: true}).fill('Singapore');
+  await page.getByLabel('Sort by').selectOption('newest');
+  await page.getByRole('button', {name: 'Next', exact: true}).click();
+  await expect(page.getByRole('button', {name: '2', exact: true})).toHaveAttribute('aria-current', 'page');
+  const before = await page.locator('.job-card h3').allTextContents();
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.locator('.ai-ranked-jobs > li')).toHaveCount(1);
+  await page.getByRole('link', {name: 'View job and original posting', exact: true}).click();
+  await expect(page.getByRole('heading', {name: jobs[0].title, exact: true})).toBeVisible();
+  await page.getByRole('button', {name: 'Back to Jobs', exact: true}).click();
+  await expect(page.locator('.ai-ranked-jobs > li')).toHaveCount(1);
+  await page.getByRole('button', {name: 'Show all jobs', exact: true}).click();
+  await expect(page.getByLabel('Location', {exact: true})).toHaveValue('Singapore');
+  await expect(page.getByLabel('Sort by')).toHaveValue('newest');
+  await expect(page.getByRole('button', {name: '2', exact: true})).toHaveAttribute('aria-current', 'page');
+  expect(await page.locator('.job-card h3').allTextContents()).toEqual(before);
+  expect(calls.posts).toBe(1);
+});
+
+test('a decision identical to its status is shown once while specific conclusions keep the status', async ({page}) => {
+  const duplicate = {...report, advice: {[jobs[0].id]: {...report.advice[jobs[0].id], status: 'consider', headline: 'Worth considering'}}};
+  await setup(page, {post: route => route.fulfill({json: duplicate}), get: route => route.fulfill({json: duplicate})});
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.locator('.job-advice-decision').getByText('Worth considering', {exact: true})).toHaveCount(1);
+  await expect(page.locator('.job-advice-decision .job-advice-status')).toHaveCount(0);
+  await expect(page.locator('.job-advice')).toHaveAttribute('data-advice-status', 'consider');
+});
+
+test('requesting the same saved inputs displays the reused result', async ({page}) => {
+  const calls = await setup(page, {post: (route, state) => route.fulfill({status: state.posts === 1 ? 201 : 200, json: {...report, reused: state.posts > 1}})});
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.locator('.ai-ranked-jobs > li')).toHaveCount(1);
+  await page.getByRole('button', {name: 'Show all jobs'}).click();
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.locator('.ai-run-state')).toContainText('Saved result');
+  await page.getByText('Analysis details', {exact: true}).click();
+  await expect(page.locator('.ai-run-details')).toContainText('This view uses a saved result.');
+  expect(calls.posts).toBe(2); // The server owns hash-based caching; UI never auto-retries.
+  expect(calls.legacy).toBe(0);
+});
+
+for (const [status, detail, text] of [
+  [422, 'profile_needed', 'Save your skills, education or project experience'],
+  [422, 'no_candidates', 'No current jobs with enough profile relevance'],
+  [429, '', 'AI request limit'],
+  [503, '', 'AI model is unavailable'],
+]) test(`HTTP ${status} ${detail || 'failure'} explains recovery without a ranking or automatic retry`, async ({page}) => {
+  const calls = await setup(page, {post: route => route.fulfill({status, json: {detail}})});
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.locator('.ai-recommendations').getByRole('alert')).toContainText(text);
+  await expect(page.locator('.ai-ranked-jobs')).toHaveCount(0);
+  await expect(page.getByRole('button', {name: 'Recommend to me', exact: true})).toBeEnabled();
+  await page.getByRole('button', {name: 'Show all jobs'}).click();
+  await expect(page.locator('.job-card')).toHaveCount(10);
+  expect(calls.posts).toBe(1);
+});
+
+test('a rejected model output is never rendered as a recommendation', async ({page}) => {
+  const failed = {...report, status: 'failed', result: null, error_code: 'invalid_evidence'};
+  const calls = await setup(page, {post: route => route.fulfill({json: failed}), get: route => route.fulfill({json: failed})});
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.locator('.ai-recommendations').getByRole('alert')).toContainText('quotes could not be verified');
+  await expect(page.locator('.ai-ranked-jobs')).toHaveCount(0);
+  expect(calls.posts).toBe(1);
+});
+
+test('running state can return from Show all jobs using only saved GET status checks', async ({page}) => {
+  const running = {...report, status: 'running', result: null, finished_at: null};
+  const calls = await setup(page, {post: route => route.fulfill({status: 202, json: running}), get: route => route.fulfill({json: running})});
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.getByRole('button', {name: 'Check saved status'})).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Finding recommendations…'})).toBeDisabled();
+  await page.getByRole('button', {name: 'Show all jobs'}).click();
+  await expect(page.locator('.job-card')).toHaveCount(10);
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await expect(page.getByRole('button', {name: 'Check saved status'})).toBeVisible();
+  expect(calls.posts).toBe(1);
+  expect(calls.reads).toBeGreaterThan(0);
+});
+
+test('restoring an ai_run link is read-only and Show all removes the restoration parameter', async ({page}) => {
+  const calls = await setup(page, {path: `/jobs?ai_run=${runId}`});
+  await expect(page.locator('.ai-ranked-jobs > li')).toHaveCount(1);
+  expect(calls.posts).toBe(0);
+  expect(calls.reads).toBeGreaterThan(0);
+  await page.getByRole('button', {name: 'Show all jobs'}).click();
+  await expect(page.locator('.job-card')).toHaveCount(10);
+  await expect(page).not.toHaveURL(/ai_run=/);
+  expect(calls.posts).toBe(0);
+});
+
+for (const changed of ['profile', 'job description', 'analysis rules']) test(`a historical run after ${changed} changes shows snapshot evidence without current application advice`, async ({page}) => {
+  const historical = {...report, is_current: false, advice: {}, display_order: []};
+  const calls = await setup(page, {path: `/jobs?ai_run=${runId}`, get: route => route.fulfill({json: historical})});
+  await expect(page.getByRole('heading', {name: 'Historical comparison'})).toBeVisible();
+  await expect(page.locator('.ai-notice')).toContainText('no new analysis starts automatically');
+  await expect(page.locator('.ai-run-state')).toContainText('Out of date');
+  await expect(page.locator('.job-advice-status')).toHaveCount(0);
+  await expect(page.locator('.job-advice-headline')).toHaveCount(0);
+  await expect(page.locator('.ai-recommendations')).not.toContainText('ranked using your saved profile');
+  await expect(page.locator('.ai-ranked-jobs').getByRole('link', {name: 'Prepare application'})).toHaveCount(0);
+  await page.getByText('Review historical evidence', {exact: true}).click();
+  await expect(page.locator('.job-advice-evidence')).toContainText('Snapshot only.');
+  await expect(page.locator('.job-advice-quotes')).toContainText('Python required.');
+  await expect(page.getByRole('button', {name: 'Recommend to me', exact: true})).toBeEnabled();
+  expect(calls.posts).toBe(0);
+  await page.getByRole('button', {name: 'Show all jobs'}).click();
+  await expect(page.locator('.job-card')).toHaveCount(10);
+  await expect(page).not.toHaveURL(/ai_run=/);
+  expect(calls.posts).toBe(0);
+});
+
+test('a delayed saved-run GET cannot reopen recommendations after Show all jobs', async ({page}) => {
+  const started = deferred(), release = deferred(), answered = deferred();
+  const calls = await setup(page, {path: `/jobs?ai_run=${runId}`, get: async route => {
+    started.resolve();
+    await release.promise;
+    try { await route.fulfill({json: report}); } finally { answered.resolve(); }
+  }});
+  await started.promise;
+  await page.getByRole('button', {name: 'Show all jobs'}).click();
+  release.resolve();
+  await answered.promise;
+  await expect(page.locator('.job-card')).toHaveCount(10);
+  await expect(page.locator('.ai-ranked-jobs')).toHaveCount(0);
+  await expect(page).not.toHaveURL(/ai_run=/);
+  expect(calls.posts).toBe(0);
+});
+
+test('an already-started POST may finish without reopening recommendations after Show all jobs', async ({page}) => {
+  const started = deferred(), release = deferred();
+  const calls = await setup(page, {post: async route => {
+    started.resolve();
+    await release.promise;
+    return route.fulfill({json: report});
+  }});
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await started.promise;
+  await page.getByRole('button', {name: 'Show all jobs'}).click();
+  release.resolve();
+  await expect(page.getByRole('button', {name: 'Recommend to me', exact: true})).toBeEnabled();
+  await expect(page.locator('.job-card')).toHaveCount(10);
+  await expect(page.locator('.ai-ranked-jobs')).toHaveCount(0);
+  await expect(page).not.toHaveURL(/ai_run=/);
+  expect(calls.posts).toBe(1);
+});
+
+test('signed out users cannot trigger a model call', async ({page}) => {
+  const calls = await setup(page, {authenticated: false});
+  await expect(page.getByRole('button', {name: 'Recommend to me', exact: true})).toBeDisabled();
+  await expect(page.locator('.recommendation-toolbar')).toContainText('Sign in');
+  await expect(page.locator('.job-card')).toHaveCount(10);
+  expect(calls.posts).toBe(0);
+});
+
+test('account replacement discards an in-flight private result', async ({page}) => {
+  const started = deferred(), release = deferred();
+  const calls = await setup(page, {post: async route => { started.resolve(); await release.promise; await route.fulfill({json: report}); }});
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await started.promise;
+  await page.evaluate(({oldValue, newValue}) => {
+    localStorage.setItem('jobpilot_token', newValue);
+    window.dispatchEvent(new StorageEvent('storage', {key: 'jobpilot_token', oldValue, newValue}));
+  }, {oldValue: tokenA, newValue: tokenB});
+  release.resolve();
+  await expect(page.getByRole('button', {name: 'Recommend to me', exact: true})).toBeEnabled();
+  await expect(page.locator('.ai-ranked-jobs')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText(report.advice[jobs[0].id].headline);
+  expect(calls.posts).toBe(1);
+});
+
+test('recommended job favorite action uses the existing account endpoint', async ({page}) => {
+  await setup(page);
+  let saved = 0;
+  await page.route(`**/jobs/${jobs[0].id}/favorite`, route => {
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().headers().authorization).toBe(`Bearer ${tokenA}`);
+    saved++;
+    return route.fulfill({status: 201, json: {job_id: jobs[0].id}});
+  });
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  await page.getByRole('button', {name: `Save job: ${jobs[0].title}`, exact: true}).click();
+  await expect(page.getByRole('button', {name: `Remove from saved: ${jobs[0].title}`, exact: true})).toHaveAttribute('aria-pressed', 'true');
+  expect(saved).toBe(1);
+});
+
+test('switching accounts on a saved run removes the previous account result before access is denied', async ({page}) => {
+  const calls = await setup(page, {path: `/jobs?ai_run=${runId}`, get: route => route.request().headers().authorization === `Bearer ${tokenB}`
+    ? route.fulfill({status: 404, json: {detail: 'Not found'}}) : route.fulfill({json: report})});
+  await expect(page.locator('.ai-ranked-jobs > li')).toHaveCount(1);
+  await page.evaluate(({oldValue, newValue}) => {
+    localStorage.setItem('jobpilot_token', newValue);
+    window.dispatchEvent(new StorageEvent('storage', {key: 'jobpilot_token', oldValue, newValue}));
+  }, {oldValue: tokenA, newValue: tokenB});
+  await expect(page.locator('.ai-recommendations').getByRole('alert')).toContainText('unavailable for your account');
+  await expect(page.locator('.ai-ranked-jobs')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText(report.advice[jobs[0].id].headline);
+  expect(calls.posts).toBe(0);
 });

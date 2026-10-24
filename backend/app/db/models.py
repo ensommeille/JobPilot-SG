@@ -158,6 +158,9 @@ class UserProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     full_name: Mapped[str | None] = mapped_column(String(200))
+    given_name: Mapped[str | None] = mapped_column(String(100))
+    family_name: Mapped[str | None] = mapped_column(String(100))
+    autofill_details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     phone: Mapped[str | None] = mapped_column(String(40))
     contact_email: Mapped[str | None] = mapped_column(String(320))
     resume_summary: Mapped[str | None] = mapped_column(Text)
@@ -241,6 +244,7 @@ class JobPosting(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     experience: Mapped[str | None] = mapped_column(String(200))
     job_type: Mapped[str | None] = mapped_column(String(80), index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    description_blocks: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     apply_url: Mapped[str] = mapped_column(String(2000), nullable=False)
     source_url: Mapped[str | None] = mapped_column(String(2048))
     posted_at: Mapped[date | None] = mapped_column(Date, index=True)

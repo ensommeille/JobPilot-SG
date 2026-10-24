@@ -4,7 +4,7 @@ test.skip(!base, 'Set FRONTEND_BASE_URL for profile UI checks.');
 
 async function profilePage(page, {failLoad = false, failSave = false} = {}) {
   await page.addInitScript(() => localStorage.setItem('jobpilot_token', 'profile-fixture-token'));
-  let profile = {full_name: 'Fictional Applicant', contact_email: 'fictional@example.test', phone: '123', education: '', experience: '', skills: [], links: {}, resume_summary: '', availability_period: '', nationality: null, study_country: null};
+  let profile = {full_name: 'Fictional Applicant', given_name: null, family_name: null, contact_email: 'fictional@example.test', phone: '123', education: '', experience: '', skills: [], links: {}, resume_summary: '', availability_period: '', nationality: null, study_country: null};
   await page.route('**/profile', async route => {
     if (route.request().resourceType() === 'document') return route.continue();
     if (failLoad) return route.fulfill({status: 503, json: {}});
@@ -14,12 +14,19 @@ async function profilePage(page, {failLoad = false, failSave = false} = {}) {
     }
     return route.fulfill({json: profile});
   });
+  await page.route('**/browser-assistant/autofill-profile', route => route.fulfill({json: {values: {}, sources: {}, missing_fields: [], resume: null, resumes: [], requires_resume_selection: false, extraction_status: 'no_resume', fingerprint: 'fixture-empty'}}));
+  await page.route('**/profile/resumes', route => route.fulfill({json: []}));
   await page.goto(`${base}/profile`);
+  if (!failLoad) await page.locator('#saved-profile-details > summary').click();
 }
 
 test('maintain application details once, reload, and explicitly clear', async ({page}) => {
   await page.setViewportSize({width: 1280, height: 900});
   await profilePage(page);
+  await expect(page.getByLabel('First / given name', {exact: true})).toHaveValue('');
+  await expect(page.getByLabel('Last / family name', {exact: true})).toHaveValue('');
+  await page.getByLabel('First / given name', {exact: true}).fill('Avery');
+  await page.getByLabel('Last / family name', {exact: true}).fill('Ng');
   await page.getByLabel('Personal introduction (written by you)').fill('My own introduction. 我学习计算机。');
   await page.getByLabel('Availability period', {exact: true}).fill('January to March 2027');
   await page.getByLabel('Nationality', {exact: true}).selectOption('cn');
@@ -27,6 +34,9 @@ test('maintain application details once, reload, and explicitly clear', async ({
   await page.getByRole('button', {name: 'Save Profile'}).click();
   await expect(page.getByRole('status')).toContainText('Profile saved');
   await page.reload();
+  await page.locator('#saved-profile-details > summary').click();
+  await expect(page.getByLabel('First / given name', {exact: true})).toHaveValue('Avery');
+  await expect(page.getByLabel('Last / family name', {exact: true})).toHaveValue('Ng');
   await expect(page.getByLabel('Personal introduction (written by you)')).toHaveValue('My own introduction. 我学习计算机。');
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('cn');
   await page.screenshot({path: '../output/profile-reuse-desktop.png', fullPage: true});
@@ -38,6 +48,7 @@ test('maintain application details once, reload, and explicitly clear', async ({
   await page.getByRole('button', {name: 'Save Profile'}).click();
   await expect(page.getByRole('status')).toBeVisible();
   await page.reload();
+  await page.locator('#saved-profile-details > summary').click();
   await expect(page.getByLabel('Personal introduction (written by you)')).toHaveValue('');
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('');
 });

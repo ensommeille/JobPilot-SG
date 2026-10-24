@@ -3,15 +3,23 @@ import {interactWithWidgets} from './widgets.js';
 import {submissionPage, reserveAttempt} from './submission.js';
 import {resolveApplicationTarget, assertApplicationContext} from './frames.js';
 import {DEPLOYMENTS} from './connection.js';
-import {interactWithATSPage} from './ats-page.js';
+import {interactWithATSPage, parseATSInspectionResult} from './ats-page.js';
+import {autofillSuggestion, approvedAutofillAnswers} from './popup-review.js';
+import {popupConnectionKey, capturePopupTarget, assertCapturedPopupTarget, assertPopupDocumentBinding, resolveCapturedInternSG} from './popup-autoload.js';
 
 const $ = id => document.getElementById(id);
+// This popup is a fill-only companion. Legacy submission code stays disabled.
+const SUBMISSION_ENABLED = false;
 let session = null, snapshot = null, busy = false;
 let supplements = {};
 let submissionReview = null;
-let atsReview = null;
+let atsReview = null, atsAttachmentReview = null, atsScanCounts = null;
 const atsEditors = new Map();
 let permissionVersion = 0;
+let connectionKey = '', connectionGeneration = 0, restoreVersion = 0;
+let initialization = Promise.resolve(), operationCompletion = Promise.resolve();
+let recoveryTool = null, activeTool = null;
+const showRecovery = tool => { recoveryTool = tool; $('inspect').hidden = tool !== 'original-tools'; $('ats-inspect').hidden = tool !== 'ats-tools'; };
 const embeddedOrigins = current => ['https://www.internsg.com/*', 'https://internsg.com/*', current.site + '/*'];
 async function refreshEmbeddedAccess() {
   const current = session, version = ++permissionVersion;
@@ -52,7 +60,10 @@ function checkedFillResult(result, items) {
   if (typeof reasons !== 'object' || Array.isArray(reasons) || Object.entries(reasons).some(([id, reason]) => !result.skipped.includes(id) || typeof reason !== 'string')) throw new Error('Invalid fill reasons.');
   return {filled: [...result.filled], skipped: [...result.skipped], reasons};
 }
-const status = (message, error = false) => { $('status').textContent = message; $('status').classList.toggle('error', error); };
+const status = (message, error = false) => {
+  $('status').textContent = message; $('status').classList.toggle('error', error);
+  $('status').hidden = !error && !!$('ats-fields').childElementCount;
+};
 function refresh() {
   $('fill').disabled = busy || !snapshot || ![...editors.values()].some(e => !e.blocked && e.input.value.trim());
   for (const editor of editors.values()) {
@@ -65,16 +76,34 @@ function refresh() {
   $('save-local').disabled = busy; $('clear-local').disabled = busy;
   $('import-local').disabled = busy || !$('import-consent').checked || !session?.userId;
   $('enable-embedded').disabled = busy;
-  $('prepare-submit').disabled = busy || !session?.userId;
-  $('check-result').disabled = busy || !session?.userId;
-  $('send-application').disabled = busy || !submissionReview?.captchaReady || !$('submit-consent').checked;
+  $('prepare-submit').disabled = !SUBMISSION_ENABLED || busy || !session?.userId;
+  $('check-result').disabled = !SUBMISSION_ENABLED || busy || !session?.userId;
+  $('send-application').disabled = !SUBMISSION_ENABLED || busy || !submissionReview?.captchaReady || !$('submit-consent').checked;
   $('ats-inspect').disabled = busy;
-  $('ats-fill').disabled = busy || !atsReview || ![...atsEditors.values()].some(editor => editor.confirm.checked && editor.input.value.trim());
+  $('ats-attach').disabled = busy || !atsAttachmentReview;
+  for (const editor of atsEditors.values()) editor.input.disabled = busy || !atsReview;
+  $('ats-fill').disabled = busy || !atsReview || ![...atsEditors.values()].some(editor => editor.input.value.trim());
+  $('ats-fill').hidden = !$('ats-fields').childElementCount;
+  $('ats-intro').hidden = !!$('ats-fields').childElementCount;
+  $('ats-profile-note').hidden = !$('ats-fields').childElementCount;
+  $('ats-actions').hidden = !$('ats-fields').childElementCount;
+  $('original-actions').hidden = !$('fields').childElementCount;
+  $('review-actions').hidden = $('ats-actions').hidden && $('original-actions').hidden;
+  $('status').hidden = !$('status').classList.contains('error') && !!$('ats-fields').childElementCount;
+  $('ats-fill').textContent = busy ? atsReview ? 'Checking…' : 'Filling…' : 'Fill application form';
+  $('ats-counts').hidden = !atsScanCounts;
+  if (atsScanCounts) {
+    const missing = [...atsEditors.values()].filter(editor => !editor.input.value.trim()).length;
+    const ready = atsReview ? atsEditors.size - missing : 0;
+    $('ats-counts').textContent = `${ready} ready · ${missing} missing · ${atsScanCounts.occupied} already filled · ${atsScanCounts.unsupported} unsupported · ${atsScanCounts.personal} answer yourself`;
+  }
 }
 async function run(task, validate = true) {
   if (busy) return;
   const current = session;
   const unchanged = () => { if (validate) assertSession(current); };
+  let complete;
+  operationCompletion = new Promise(resolve => { complete = resolve; });
   busy = true; refresh();
   try {
     unchanged();
@@ -83,9 +112,12 @@ async function run(task, validate = true) {
     await task(unchanged);
   } catch (error) {
     // An obsolete operation must not overwrite the next account's UI.
-    if (!validate || session === current) status(error.message || 'Operation failed. Try again.', true);
+    if (!validate || session === current) {
+      showRecovery(recoveryTool || activeTool);
+      status(error.message || 'Operation failed. Try again.', true);
+    }
   }
-  finally { busy = false; refresh(); }
+  finally { busy = false; refresh(); complete(); }
 }
 function assertSession(current) {
   if (!current || session !== current) throw new Error('Account connection changed. Read the page again.');
@@ -95,18 +127,19 @@ function clearDraft() {
   $('target').textContent = ''; $('submission-status').textContent = '';
 }
 function clearAtsReview() {
-  atsReview = null; atsEditors.clear(); $('ats-fields').replaceChildren();
+  atsReview = null; atsAttachmentReview = null; atsScanCounts = null; atsEditors.clear(); $('ats-fields').replaceChildren();
+  $('ats-attachment').hidden = true; $('ats-resume').replaceChildren(); $('ats-attach-result').textContent = '';
   $('ats-manual').replaceChildren(); $('ats-manual').hidden = true; $('ats-manual').open = false;
-  $('ats-target').textContent = ''; $('ats-result').textContent = 'Nothing was submitted.';
+  $('ats-target').textContent = ''; $('ats-target').removeAttribute('title'); $('ats-result').textContent = '';
   refresh();
 }
-async function api(path, body, method = 'POST') {
+async function api(path, body, method = 'POST', timeout = 40000) {
   const current = session;
   if (!current?.token?.startsWith('jpx_')) throw new Error('Connect through JobPilot first.');
   const response = await fetch(session.api + path, {
     method, redirect: 'error', credentials: 'omit', cache: 'no-store',
     headers: {'Content-Type': 'application/json', Authorization: `Bearer ${current.token}`},
-    body: JSON.stringify(body), signal: AbortSignal.timeout(40000),
+    body: JSON.stringify(body), signal: AbortSignal.timeout(timeout),
   });
   assertSession(current);
   if (response.status === 401) {
@@ -134,7 +167,7 @@ function clearDeviceView() {
   $('import-countries').textContent = ''; $('import-consent').checked = false;
 }
 async function signOut(message = 'Signed out.') {
-  permissionVersion++; session = null; clearDraft(); clearDeviceView();
+  permissionVersion++; connectionGeneration++; connectionKey = ''; session = null; showRecovery(null); clearDraft(); clearAtsReview(); clearDeviceView();
   $('login').hidden = false; $('workspace').hidden = true; status(message);
   await chrome.storage.session.remove('jobpilotSession');
 }
@@ -172,7 +205,9 @@ $('enable-embedded').addEventListener('click', () => {
   });
 });
 const permissionsChanged = () => {
-  clearDraft();
+  const tool = atsReview?.popupTarget?.tool || snapshot?.popupTarget?.tool || recoveryTool;
+  clearDraft(); clearAtsReview();
+  showRecovery(tool);
   refreshEmbeddedAccess().catch(() => {});
   refresh();
 };
@@ -259,22 +294,26 @@ function renderCountries(widgets, countries) {
   const countryHelp = document.createElement('p'); countryHelp.className = 'field-reason'; row.append(countryHelp);
   editors.set('applicant_countries', {input, note, widget: true, selects}); update();
 }
-$('inspect').addEventListener('click', () => run(async unchanged => {
-  clearDraft(); status('Reading the current page…');
-  const context = await resolveApplicationTarget(chrome);
+async function loadInternSGPreview(target, currentSession, unchanged) {
+  clearDraft(); clearAtsReview(); status('Loading saved answers…');
+  const context = await resolveCapturedInternSG(chrome, target, currentSession, unchanged);
   unchanged();
   const [result] = await chrome.scripting.executeScript({target: {tabId: context.tabId, documentIds: [context.documentId]}, func: interactWithPage, args: ['inspect']});
   unchanged();
-  if (!result?.result?.fields?.length || !result.documentId) throw new Error('No supported form found. Open /job-apply/ on InternSG.');
+  if (!result?.result?.fields?.length || result.documentId !== context.documentId || result.result.url !== context.url) throw new Error('No supported form found. Open /job-apply/ on InternSG.');
   const current = {...context, ...result.result, documentId: result.documentId};
   const [widgetResult] = await chrome.scripting.executeScript({target: {tabId: context.tabId, documentIds: [result.documentId]}, world: 'MAIN', func: interactWithWidgets, args: ['inspect', current.url]});
   unchanged();
   const widgets = widgetResult?.result;
   if (!widgets) throw new Error('Could not inspect page widgets. Reload the page and try again.');
   current.widgets = widgets;
-  const data = await api('/browser-assistant/draft', {page_url: current.url, field_ids: ['applicant_name', 'applicant_email', 'applicant_contact', 'applicant_period', 'applicant_summary']});
-  unchanged();
-  if (data.profile_source !== 'jobpilot') throw new Error('Update the backend and run its profile migration before using platform profile reuse.');
+  const profile = await loadAutofillProfile(unchanged);
+  current.profileFingerprint = profile.fingerprint;
+  current.popupTarget = target;
+  await assertPopupDocumentBinding(chrome, target, current, unchanged);
+  const data = {values: {applicant_name: profile.values.full_name || '', applicant_email: profile.values.contact_email || '',
+    applicant_contact: profile.values.phone || '', applicant_period: profile.values.availability_period || '', applicant_summary: profile.values.resume_summary || ''},
+    countries: {nationality: profile.values.nationality || '', campus: profile.values.study_country || ''}};
   if (widgets.richReady) current.fields = current.fields.filter(f => f.id !== 'applicant_summary').concat({id: 'applicant_summary', label: 'Resume summary', maxLength: 3000, occupied: widgets.summaryOccupied, widget: true});
   else if (!current.fields.some(f => f.id === 'applicant_summary')) current.fields.push({id: 'applicant_summary', label: 'Resume summary', unavailable: widgets.summaryReason});
   for (const [id, label] of [['applicant_name', 'Full name'], ['applicant_email', 'Email address'], ['applicant_contact', 'Contact number'], ['applicant_period', 'Availability period']]) {
@@ -282,90 +321,160 @@ $('inspect').addEventListener('click', () => run(async unchanged => {
   }
   snapshot = current; $('target').textContent = `${snapshot.title} — ${snapshot.url}`;
   const values = {...data.values};
-  render(snapshot.fields, values); renderCountries(widgets, data.countries); status('Loaded your JobPilot profile for this review. After changing your platform profile, choose Read page & load profile again. Review the shown answers, then click Fill application form.');
-}));
-$('ats-inspect').addEventListener('click', () => run(async unchanged => {
-  clearAtsReview();
-  const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-  if (!tab?.id) throw new Error('Open a Greenhouse or Lever application form first.');
-  const [response] = await chrome.scripting.executeScript({target: {tabId: tab.id}, func: interactWithATSPage, args: [{action: 'inspect'}]});
+  render(snapshot.fields, values); renderCountries(widgets, data.countries);
+  showRecovery(null); status('Saved answers loaded. Click Fill application form when ready. Nothing is submitted.');
+  refresh();
+}
+async function loadAutofillProfile(unchanged) {
+  const data = await api('/browser-assistant/autofill-profile', undefined, 'GET');
   unchanged();
+  if (!data || typeof data.values !== 'object' || !data.fingerprint || !Array.isArray(data.resumes)) throw new Error('Update JobPilot before using saved PDF answers.');
+  return data;
+}
+function atsSourceLink(text = 'Open Profile') {
+  const link = document.createElement('a'); link.textContent = text;
+  link.href = session.site + '/profile'; link.target = '_blank'; link.rel = 'noopener noreferrer';
+  return link;
+}
+async function loadATSPreview(target, currentSession, unchanged) {
+  clearDraft(); clearAtsReview(); status('Loading saved answers…');
+  await assertCapturedPopupTarget(chrome, target, unchanged);
+  const results = await chrome.scripting.executeScript({target: {tabId: target.tabId}, func: interactWithATSPage, args: [{action: 'inspect'}]});
+  unchanged();
+  const response = parseATSInspectionResult(results, target.url);
   const review = response?.result;
-  if (!review?.url || !response.documentId || !Array.isArray(review.fields)) throw new Error('No supported ATS form found. Open the original application page.');
-  const data = await api('/browser-assistant/draft', {page_url: review.url,
-    field_ids: ['applicant_name', 'applicant_email', 'applicant_contact']});
-  unchanged();
-  if (data.profile_source !== 'jobpilot') throw new Error('Could not read this JobPilot profile.');
-  const evidenceKeys = [...new Set(review.fields.map(field => field.evidenceKey).filter(Boolean))];
-  const evidence = evidenceKeys.length ? await api('/browser-assistant/ats-evidence', {
-    page_url: review.url, evidence_keys: evidenceKeys,
-  }) : {values: {}, source_labels: {}, profile_source: 'jobpilot'};
-  unchanged();
-  if (evidence.profile_source !== 'jobpilot') throw new Error('Could not verify saved evidence.');
-  const name = (data.values?.applicant_name || '').trim().split(/\s+/);
-  const values = {first_name: name.length > 1 ? name[0] : '', last_name: name.length > 1 ? name.slice(1).join(' ') : '',
-    full_name: data.values?.applicant_name || '', email: data.values?.applicant_email || '', phone: data.values?.applicant_contact || ''};
+  const profile = await loadAutofillProfile(unchanged);
+  const mappings = []; // Startup and Refresh only reuse saved facts; unknown questions stay manual.
+  const context = {...review, tabId: target.tabId, documentId: response.documentId, profileFingerprint: profile.fingerprint, popupTarget: target};
+  await assertPopupDocumentBinding(chrome, target, context, unchanged);
+  const manualQuestions = new Map((review.manualQuestions || []).map(question => [question, question]));
+  atsScanCounts = {occupied: 0, unsupported: 0, personal: 0};
   for (const field of review.fields) {
-    const row = document.createElement('div'); row.className = 'field';
-    const label = document.createElement('label'); label.textContent = field.label || ({first_name: 'First name', last_name: 'Last name', full_name: 'Full name', email: 'Email', phone: 'Phone'})[field.id] || field.id;
-    row.append(label);
+    if (field.manualOnly) {
+      const personal = /sensitive|declaration|completion|employer-specific|self-assessment/i.test(field.manualReason || '');
+      atsScanCounts[personal ? 'personal' : 'unsupported']++;
+      manualQuestions.set(field.label, `${field.label}: ${field.manualReason || 'complete this on the original website.'}`);
+      continue;
+    }
     if (!field.available || field.occupied) {
-      const note = document.createElement('p'); note.textContent = field.occupied ? 'Already filled on the website; left unchanged.' : 'Unavailable or ambiguous on this page; fill manually.';
-      row.append(note);
+      atsScanCounts[field.occupied ? 'occupied' : 'unsupported']++;
+      manualQuestions.set(field.label || field.id, `${field.label || field.id}: ${field.occupied ? 'already answered; left unchanged' : 'not supported; check on the website'}.`);
+      continue;
+    }
+    const row = document.createElement('div'); row.className = 'field';
+    if (['first_name', 'last_name'].includes(field.id)) row.classList.add('field-name');
+    const label = document.createElement('label');
+    label.textContent = field.label || field.id.replaceAll('_', ' ');
+    const {key: factKey, value: factValue, candidate} = autofillSuggestion(field, profile, mappings);
+    const isSelect = field.kind === 'select';
+    const input = document.createElement(isSelect ? 'select' : field.kind === 'text' && ['education', 'experience', 'skills', 'resume_summary', 'availability_period'].includes(factKey) ? 'textarea' : 'input');
+    input.id = 'ats-' + field.id; label.htmlFor = input.id;
+    if (isSelect) {
+      input.add(new Option('Choose an answer', ''));
+      for (const option of field.options || []) input.add(new Option(option.label, option.value));
+      input.value = factValue;
     } else {
-      const input = document.createElement(field.evidenceKey && !['linkedin', 'github'].includes(field.evidenceKey) ? 'textarea' : 'input');
-      input.id = 'ats-' + field.id; input.maxLength = field.maxLength;
-      const suggestion = field.evidenceKey ? evidence.values?.[field.evidenceKey] || '' : values[field.id] || '';
-      input.value = suggestion.length <= field.maxLength ? suggestion : '';
-      if (input instanceof HTMLInputElement) input.type = field.id === 'email' ? 'email' : field.id === 'phone' ? 'tel' : field.evidenceKey ? 'url' : 'text';
-      label.htmlFor = input.id;
-      const source = document.createElement('p'); source.className = 'field-reason';
-      source.textContent = suggestion.length > field.maxLength ? 'Saved evidence exceeds this field limit; write a shorter answer yourself.'
-        : field.evidenceKey ? (evidence.source_labels?.[field.evidenceKey] || 'No saved evidence; enter manually after checking the original question.')
-        : `JobPilot profile · ${field.id.replaceAll('_', ' ')}`;
-      const checkLabel = document.createElement('label'); checkLabel.className = 'check';
-      const confirm = document.createElement('input'); confirm.type = 'checkbox';
-      checkLabel.append(confirm, document.createTextNode('I checked this answer against the original question.'));
-      input.addEventListener('input', () => { confirm.checked = false; refresh(); });
-      confirm.addEventListener('change', refresh);
-      row.append(source, input, checkLabel); atsEditors.set(field.id, {input, confirm, field});
+      input.maxLength = field.maxLength || 10000;
+      if (input instanceof HTMLInputElement) input.type = field.kind === 'date' ? 'date' : field.kind === 'number' ? 'number'
+        : field.id === 'email' ? 'email' : field.id === 'phone' ? 'tel' : ['linkedin', 'github', 'portfolio'].includes(factKey) ? 'url' : 'text';
+      input.value = factValue;
     }
-    $('ats-fields').append(row);
+    if (field.kind === 'combobox' && field.options?.length) {
+      const choices = document.createElement('datalist'); choices.id = 'choices-' + input.id;
+      for (const option of field.options) choices.append(new Option(option.label, option.value));
+      input.setAttribute('list', choices.id); row.append(choices);
+    }
+    const note = document.createElement('p'); note.className = 'field-reason'; note.id = 'source-' + input.id;
+    if (!input.value) {
+      const savedValue = profile.values[factKey];
+      if (savedValue?.length > (field.maxLength || 10000)) note.textContent = 'Saved answer is too long. Write a shorter answer here.';
+      else if (savedValue) note.textContent = 'Your saved answer needs a different choice or format here. Review this field or complete it on the website.';
+      else if (field.needsMapping) note.textContent = 'Could not match this question to a saved answer. Enter it here or answer on the website.';
+      else note.append('No saved answer. ', atsSourceLink('Add it once in Profile'), ', or enter it here.');
+      input.setAttribute('aria-describedby', note.id);
+    } else {
+      const source = profile.sources?.[factKey];
+      if (candidate) note.textContent = 'Will search the original form; only an exact option will be selected.';
+      else if (source?.source === 'resume' && field.needsMapping) note.textContent = `Saved PDF · ${factKey.replaceAll('_', ' ')}`;
+      else note.hidden = true;
+      input.setAttribute('aria-describedby', note.hidden ? 'ats-profile-note' : note.id);
+    }
+    input.addEventListener('input', refresh); input.addEventListener('change', refresh);
+    row.append(label, input, note); $('ats-fields').append(row);
+    atsEditors.set(field.id, {input, field, factKey});
   }
-  if (review.manualQuestions?.length) {
-    const title = document.createElement('summary');
-    const count = review.manualQuestions.length;
-    title.textContent = `${count} scanned ${count === 1 ? 'field needs' : 'fields need'} manual review (not all unanswered fields)`;
-    const limit = document.createElement('p');
-    limit.textContent = 'Dropdowns, checkboxes and uploads may not appear here. Check the complete original form.';
+  if (manualQuestions.size) {
+    const title = document.createElement('summary'); title.textContent = `Other fields to check (${manualQuestions.size})`;
+    const limit = document.createElement('p'); limit.textContent = 'This scan is partial. Review the complete form, including personal declarations and consent.';
     const list = document.createElement('ul');
-    for (const question of review.manualQuestions) {
-      const item = document.createElement('li'); item.textContent = question; list.append(item);
-    }
+    for (const question of manualQuestions.values()) { const item = document.createElement('li'); item.textContent = question; list.append(item); }
     $('ats-manual').append(title, limit, list); $('ats-manual').hidden = false;
   }
-  atsReview = {...review, tabId: tab.id, documentId: response.documentId};
-  $('ats-target').textContent = `${review.provider} — ${review.url}`;
-  $('ats-result').textContent = 'Only individually checked, non-empty answers will be filled. Questions without saved evidence stay manual. Nothing has been sent.';
-  refresh();
-}));
+  atsReview = context;
+  const resumeTarget = review.resumeTarget;
+  if (resumeTarget && !resumeTarget.multiple && !resumeTarget.occupied && profile.resume?.sha256) {
+    atsAttachmentReview = {...context, resume: profile.resume, resumeTarget};
+    $('ats-resume').textContent = profile.resume.filename;
+    $('ats-attachment').hidden = false;
+  } else if (resumeTarget) {
+    $('ats-resume').replaceChildren(document.createTextNode(resumeTarget.occupied ? 'A file is already attached; it will not be replaced.' : 'Choose and read your PDF in Profile first. '), atsSourceLink());
+    $('ats-attachment').hidden = false;
+  }
+  $('ats-target').textContent = new URL(review.url).hostname; $('ats-target').title = review.url;
+  $('ats-result').textContent = 'Nothing is submitted.';
+  showRecovery(null); status('Saved answers loaded. Missing answers can be added here or on the website.'); refresh();
+  const scroller = $('workspace-content');
+  scroller.scrollTop += $('ats-fields').getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+}
 $('ats-fill').addEventListener('click', () => {
   if (busy || !atsReview) return;
-  const current = atsReview;
-  const approved = [...atsEditors].filter(([, editor]) => editor.confirm.checked && editor.input.value.trim())
-    .map(([id, editor]) => ({id, value: editor.input.value.trim(), confirmed: true,
-      ...(editor.field.evidenceKey ? {key: editor.field.key, label: editor.field.label, evidenceKey: editor.field.evidenceKey} : {})}));
+  const current = atsReview, approved = approvedAutofillAnswers(atsEditors);
   run(async unchanged => {
     if (atsReview !== current || !approved.length) throw new Error('Read and review the form again.');
-    // A single attempt only. If the page changes or reports an uncertain result,
-    // re-inspect it manually before another fill rather than retrying.
-    atsReview = null; refresh();
-    const [response] = await chrome.scripting.executeScript({target: {tabId: current.tabId, documentIds: [current.documentId]},
-      func: interactWithATSPage, args: [{action: 'fill', expectedUrl: current.url, approved}]});
+    const latest = await loadAutofillProfile(unchanged);
+    if (atsReview !== current) throw new Error('The form review changed. Read the form again.');
+    if (latest.fingerprint !== current.profileFingerprint) { clearAtsReview(); throw new Error('Your saved answers changed. Read the form again. Nothing was filled.'); }
+    await assertPopupDocumentBinding(chrome, current.popupTarget, current, unchanged);
+    if (atsReview !== current) throw new Error('The form review changed. Refresh the form before filling.');
+    atsReview = null; refresh(); $('ats-result').textContent = 'Filling the reviewed answers…';
+    let response;
+    try { [response] = await chrome.scripting.executeScript({target: {tabId: current.tabId, documentIds: [current.documentId]},
+      func: interactWithATSPage, args: [{action: 'fill', expectedUrl: current.url, approved}]}); }
+    catch { unchanged(); throw new Error('Fill was interrupted. Some answers may be filled; check the original page before reading it again. Nothing was submitted.'); }
     unchanged();
-    if (response?.result?.submitted !== false || !Array.isArray(response.result.filled)
-        || !Array.isArray(response.result.skipped)) throw new Error('Fill result is uncertain. Inspect the original page. Nothing was submitted by JobPilot.');
-    $('ats-result').textContent = `Filled ${response.result.filled.length}; skipped ${response.result.skipped.length}. Check every answer on the original site. Nothing was submitted.`;
+    let report;
+    try { report = checkedFillResult(response?.result, approved); }
+    catch { throw new Error('Fill result is uncertain. Check the original page before reading it again. Nothing was submitted.'); }
+    if (atsScanCounts) atsScanCounts.occupied += report.filled.length;
+    for (const id of report.filled) atsEditors.delete(id);
+    showRecovery('ats-tools');
+    $('ats-result').textContent = `Filled ${report.filled.length}; skipped ${report.skipped.length}. Nothing was submitted.`;
+  });
+});
+$('ats-attach').addEventListener('click', () => {
+  if (busy || !atsAttachmentReview) return;
+  const current = atsAttachmentReview;
+  run(async unchanged => {
+    const latest = await loadAutofillProfile(unchanged);
+    if (atsAttachmentReview !== current || latest.fingerprint !== current.profileFingerprint) throw new Error('Saved answers or PDF selection changed. Read the form again before attaching.');
+    await assertPopupDocumentBinding(chrome, current.popupTarget, current, unchanged);
+    const resume = current.resume;
+    const file = await api('/browser-assistant/resume-content', {page_url: current.url, resume_id: resume.id, sha256: resume.sha256, confirmed: true});
+    unchanged();
+    if (file.resume_id !== resume.id || file.page_url !== current.url || file.sha256 !== resume.sha256 || typeof file.base64 !== 'string'
+        || !file.filename?.toLowerCase().endsWith('.pdf') || !Number.isSafeInteger(file.size_bytes) || file.size_bytes < 1 || file.size_bytes > 2 * 1024 * 1024) throw new Error('Could not verify this saved PDF. Nothing was attached.');
+    await assertPopupDocumentBinding(chrome, current.popupTarget, current, unchanged);
+    if (atsAttachmentReview !== current) throw new Error('The form review changed. Refresh before attaching.');
+    atsAttachmentReview = null; refresh(); $('ats-attach-result').textContent = 'Uploading your selected PDF…';
+    const [response] = await chrome.scripting.executeScript({target: {tabId: current.tabId, documentIds: [current.documentId]}, func: interactWithATSPage,
+      args: [{action: 'attach', expectedUrl: current.url, targetKey: current.resumeTarget.key, targetLabel: current.resumeTarget.label, confirmed: true,
+        file: {name: file.filename, base64: file.base64, sha256: file.sha256, size_bytes: file.size_bytes}}]});
+    unchanged();
+    const result = response?.result;
+    if (result?.submitted !== false || typeof result.selected !== 'boolean' || !['selected_on_form', 'check_original_website'].includes(result.upload_status)) throw new Error('Attachment result is uncertain. Check the original form before trying again.');
+    $('ats-attach-result').textContent = result.selected
+      ? 'PDF selected on the form. Check the website for upload status. No application was submitted.'
+      : 'Check the original website to confirm the PDF upload before trying again. No application was submitted.';
   });
 });
 $('fill').addEventListener('click', () => {
@@ -378,6 +487,11 @@ $('fill').addEventListener('click', () => {
   try {
   resetSubmission();
   if (snapshot !== current) throw new Error('The form review changed. Read the page again.');
+  const latest = await loadAutofillProfile(unchanged);
+  if (latest.fingerprint !== current.profileFingerprint) {
+    clearDraft(); throw new Error('Your saved answers changed. Read the page again. Nothing was filled.');
+  }
+  await assertPopupDocumentBinding(chrome, current.popupTarget, current, unchanged);
   await assertApplicationContext(chrome, current);
   unchanged();
   if (snapshot !== current) throw new Error('The form review changed. Read the page again.');
@@ -402,6 +516,7 @@ $('fill').addEventListener('click', () => {
   if (widgetItems.length) {
     if (snapshot !== current) throw new Error('The form review changed. Check the original page before reading it again.');
     await assertApplicationContext(chrome, current); unchanged();
+    await assertPopupDocumentBinding(chrome, current.popupTarget, current, unchanged);
     if (snapshot !== current) throw new Error('The form review changed. Check the original page before reading it again.');
     const widgetResult = {result: await executeFill({target, world: 'MAIN', func: interactWithWidgets, args: ['fill', current.url, widgetItems]}, widgetItems)};
     unchanged();
@@ -432,7 +547,7 @@ $('fill').addEventListener('click', () => {
   });
 });
 $('submit-consent').addEventListener('change', refresh);
-$('prepare-submit').addEventListener('click', () => run(async unchanged => {
+$('prepare-submit').addEventListener('click', () => SUBMISSION_ENABLED && run(async unchanged => {
   resetSubmission();
   $('submission-status').textContent = 'Checking the website. Nothing is being sent.';
   const context = await resolveApplicationTarget(chrome);
@@ -459,7 +574,7 @@ $('prepare-submit').addEventListener('click', () => run(async unchanged => {
     ? 'Review every answer and the recipient. Confirmation expires in two minutes; changed answers require a new review.'
     : 'CAPTCHA is incomplete. Complete it yourself on InternSG, then click Review website answers again.';
 }));
-$('send-application').addEventListener('click', () => run(async unchanged => {
+$('send-application').addEventListener('click', () => SUBMISSION_ENABLED && run(async unchanged => {
   if (!submissionReview?.captchaReady || !$('submit-consent').checked) throw new Error('Review the website answers and explicitly confirm first.');
   const review = submissionReview, key = attemptKey(review.url);
   resetSubmission();
@@ -489,7 +604,7 @@ $('send-application').addEventListener('click', () => run(async unchanged => {
     $('submission-status').textContent = 'The page changed or the operation was interrupted. Submission outcome is unknown. Do not retry; check the original page. The attempt record is retained.';
   }
 }));
-$('check-result').addEventListener('click', () => run(async unchanged => {
+$('check-result').addEventListener('click', () => SUBMISSION_ENABLED && run(async unchanged => {
   try {
     const context = await resolveApplicationTarget(chrome);
     unchanged();
@@ -501,42 +616,85 @@ $('check-result').addEventListener('click', () => run(async unchanged => {
       : 'No recognized result message. Delivery remains unverified. Inspect the original page; a changed URL or missing form does not prove success.';
   } catch { unchanged(); $('submission-status').textContent = 'Cannot read this result page. Inspect it directly in Chrome. Delivery remains unverified; do not resend automatically.'; }
 }));
-let restoreVersion = 0;
-async function restoreConnection() {
-  const version = ++restoreVersion;
-  for (const id of ['settings', 'local-profile', 'original-tools', 'advanced-submission', 'ats-tools']) $(id).open = false;
-  clearDraft();
-  clearAtsReview();
-  const saved = (await chrome.storage.session.get('jobpilotSession')).jobpilotSession;
-  if (version !== restoreVersion) return;
-  session = saved?.token?.startsWith('jpx_') && DEPLOYMENTS[saved.site] === saved.api ? saved : null;
-  $('login').hidden = !!session; $('workspace').hidden = true;
-  if (session) {
-    try {
-      await validateSession();
-      if (version !== restoreVersion) return;
-      await loadLocal();
-      if (version !== restoreVersion) return;
-      $('open-jobpilot').href = session.site + '/jobs';
-      await refreshEmbeddedAccess();
-      if (version !== restoreVersion) return;
-      $('workspace').hidden = false; status('Filling never submits an application.');
-    }
-    catch (error) { if (version === restoreVersion) await signOut(error.message || 'Reconnect through JobPilot.'); }
-  } else {
-    await chrome.storage.session.remove('jobpilotSession');
-    $('login').hidden = false;
+function showCurrentTools(target) {
+  activeTool = target?.tool || null;
+  for (const id of ['original-tools', 'ats-tools']) $(id).open = false;
+  $('active-tool').textContent = target ? target.tool === 'ats-tools' ? 'Current application · ATS' : 'Current application · InternSG' : 'Open a supported application form';
+  if (!target) return;
+  $(target.tool).open = true;
+  const other = $(target.tool === 'ats-tools' ? 'original-tools' : 'ats-tools');
+  $('workspace-content').insertBefore($(target.tool), other);
+}
+async function loadCapturedPreview(target, current, unchanged) {
+  try {
+    await assertCapturedPopupTarget(chrome, target, unchanged);
+    if (target.mode === 'ats') await loadATSPreview(target, current, unchanged);
+    else await loadInternSGPreview(target, current, unchanged);
+  } catch (error) {
+    unchanged();
+    clearDraft(); clearAtsReview(); showRecovery(target.tool);
+    throw error;
   }
-  refresh();
+}
+async function refreshCurrentForm() {
+  if (busy || !session) return;
+  const current = session;
+  return run(async unchanged => {
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    unchanged();
+    const target = capturePopupTarget(tab, current);
+    if (!target) { clearDraft(); clearAtsReview(); showCurrentTools(null); showRecovery(null); throw new Error('Open the original supported application form, then reopen the extension.'); }
+    showCurrentTools(target);
+    await loadCapturedPreview(target, current, unchanged);
+  });
+}
+$('inspect').addEventListener('click', refreshCurrentForm);
+$('ats-inspect').addEventListener('click', refreshCurrentForm);
+async function restoreConnection(savedOverride, hasOverride = false) {
+  const version = ++restoreVersion;
+  const saved = hasOverride ? savedOverride : (await chrome.storage.session.get('jobpilotSession')).jobpilotSession;
+  if (version !== restoreVersion) return;
+  const nextKey = popupConnectionKey(saved);
+  // Storage may emit the same grant repeatedly. Keep its in-flight/loaded preview.
+  if (nextKey && nextKey === connectionKey && session) return initialization;
+  if (!nextKey && !session && !connectionKey) { $('login').hidden = false; $('workspace').hidden = true; return; }
+  const generation = ++connectionGeneration;
+  connectionKey = nextKey; session = nextKey ? saved : null;
+  const current = session;
+  const unchanged = () => { assertSession(current); if (generation !== connectionGeneration) throw new Error('Account connection changed. Reopen the extension.'); };
+  for (const id of ['settings', 'local-profile', 'original-tools', 'advanced-submission', 'ats-tools']) $(id).open = false;
+  clearDraft(); clearAtsReview(); clearDeviceView(); showRecovery(null);
+  $('login').hidden = !!current; $('workspace').hidden = !current;
+  if (!current) { refresh(); return; }
+  status('Loading saved answers…');
+  // Capture once before auth/profile awaits. Later checks may abort but never retarget.
+  const targetPromise = chrome.tabs.query({active: true, currentWindow: true}).then(([tab]) => capturePopupTarget(tab, current));
+  const previousOperation = operationCompletion;
+  initialization = (async () => {
+    let target;
+    try {
+      target = await targetPromise;
+      await previousOperation;
+      unchanged();
+      return await run(async operationUnchanged => {
+        unchanged(); operationUnchanged();
+        await loadLocal(); unchanged();
+        $('open-jobpilot').href = current.site + '/jobs';
+        await refreshEmbeddedAccess(); unchanged();
+        showCurrentTools(target); $('workspace').hidden = false;
+        if (!target) { status('Open the original InternSG, Greenhouse, Lever or Ashby application form, then reopen this extension.'); return; }
+        await loadCapturedPreview(target, current, () => { unchanged(); operationUnchanged(); });
+      });
+    } catch (error) {
+      if (session === current && generation === connectionGeneration) {
+        showRecovery(target?.tool || null); status(error.message || 'Could not load the form. Refresh once it is ready.', true);
+      }
+    }
+  })();
+  return initialization;
 }
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'session' && changes.jobpilotSession) {
-    restoreVersion++;
-    session = null; clearDraft(); clearDeviceView(); $('workspace').hidden = true; $('login').hidden = false;
-    clearAtsReview();
-    if (changes.jobpilotSession.newValue) restoreConnection();
-    else refresh();
-  }
+  if (area === 'session' && changes.jobpilotSession) restoreConnection(changes.jobpilotSession.newValue, true).catch(() => {});
 });
 try {
   await chrome.storage.session.setAccessLevel({accessLevel: 'TRUSTED_CONTEXTS'});

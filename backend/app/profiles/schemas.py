@@ -62,6 +62,7 @@ COUNTRY_CODES = frozenset(
     "TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".lower().split()
 )
 APPLICATION_FIELDS = {"resume_summary", "availability_period", "nationality", "study_country"}
+NAME_PART_FIELDS = {"given_name", "family_name"}
 
 
 class ApplicationDetails(BaseModel):
@@ -101,12 +102,24 @@ class LocalProfileImport(ApplicationDetails):
 
 class ProfileUpdate(ApplicationDetails):
     full_name: str | None = Field(default=None, max_length=200)
+    given_name: str | None = Field(default=None, max_length=100)
+    family_name: str | None = Field(default=None, max_length=100)
     phone: str | None = Field(default=None, max_length=40)
     contact_email: EmailStr | None = None
     education: str | None = Field(default=None, max_length=5000)
     experience: str | None = Field(default=None, max_length=10000)
     skills: list[str] = Field(default_factory=list, max_length=100)
     links: dict[str, str] = Field(default_factory=dict, max_length=30)
+
+    @field_validator("given_name", "family_name")
+    @classmethod
+    def normalize_name_part(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        cleaned = value.strip()
+        if any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in cleaned):
+            raise ValueError("Name parts must be single-line text without control characters")
+        return cleaned
 
     @field_validator("full_name", "phone", "education", "experience")
     @classmethod
@@ -144,6 +157,8 @@ class ProfileRead(ApplicationDetails):
 
     id: UUID
     full_name: str | None
+    given_name: str | None = None
+    family_name: str | None = None
     phone: str | None
     contact_email: EmailStr | None
     education: str | None

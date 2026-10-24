@@ -3,6 +3,7 @@ export const DEPLOYMENTS = {
   'http://127.0.0.1:5173': 'http://127.0.0.1:8001',
   'http://localhost:5173': 'http://localhost:8000',
   'http://127.0.0.1:5174': 'http://127.0.0.1:8002',
+  'http://127.0.0.1:15523': 'http://127.0.0.1:18523',
 };
 const random = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 const challengeFor = async value => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))))).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
@@ -41,6 +42,28 @@ export function createConnectionHandler(chromeApi, fetcher = fetch) {
       return {ok: true};
     }
     if (sender.id || sender.frameId !== 0 || !Object.hasOwn(DEPLOYMENTS, url.origin) || sender.origin !== url.origin) throw new Error('Untrusted platform caller');
+    if (message.kind === 'connection-status') {
+      if (message.version !== 1) throw new Error('Unsupported connection status version');
+      const base = {ok: true, version: 1, extension_version: chromeApi.runtime.getManifest().version,
+        connected: false, platform_origin: url.origin, api_origin: DEPLOYMENTS[url.origin]};
+      const {jobpilotSession: session} = await chromeApi.storage.session.get('jobpilotSession');
+      if (!session || session.site !== url.origin || session.api !== base.api_origin || !session.token?.startsWith('jpx_')
+          || !Number.isFinite(session.expiresAt) || session.expiresAt * 1000 <= Date.now()) return base;
+      // Only the restricted extension token reaches its fixed API; the page receives metadata.
+      const response = await fetcher(base.api_origin + '/auth/extension/session', {
+        method: 'GET', redirect: 'error', credentials: 'omit', cache: 'no-store',
+        headers: {Authorization: `Bearer ${session.token}`}, signal: AbortSignal.timeout(15000),
+      });
+      if (!response.ok) return base;
+      const identity = await response.json();
+      const {jobpilotSession: current} = await chromeApi.storage.session.get('jobpilotSession');
+      if (!current || current.token !== session.token || current.site !== session.site || current.api !== session.api
+          || current.userId !== session.userId || current.expiresAt !== session.expiresAt
+          || current.expiresAt * 1000 <= Date.now()
+          || identity.user_id !== session.userId || typeof identity.user_id !== 'string'
+          || !Number.isFinite(identity.expires_at) || identity.expires_at * 1000 <= Date.now()) return base;
+      return {...base, connected: true, user_id: identity.user_id, expires_at: Math.min(session.expiresAt, identity.expires_at)};
+    }
     if (message.kind === 'platform-signed-out') {
       const data = await chromeApi.storage.session.get(['jobpilotSession', 'jobpilotPending']);
       if (data.jobpilotSession?.site === url.origin) await chromeApi.storage.session.remove('jobpilotSession');

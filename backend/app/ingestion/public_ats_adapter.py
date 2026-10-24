@@ -30,7 +30,7 @@ from .models import (
 from .normalization import normalize_job_types, sha256_text
 from .source_adapter import SourceAdapter
 
-PARSER_VERSION = "public-ats-2026-10-v2"
+PARSER_VERSION = "public-ats-2026-10-v3"
 BOARD_PATHS = {
     "boards-api.greenhouse.io": ("greenhouse", re.compile(r"/v1/boards/([A-Za-z0-9_-]+)")),
     "api.lever.co": ("lever", re.compile(r"/v0/postings/([A-Za-z0-9_-]+)")),
@@ -363,6 +363,8 @@ class PublicATSAdapter(SourceAdapter):
         )
 
     def _item(self, job: dict) -> RawJobItem:
+        from app.jobs.description import build_description_blocks
+
         if self.provider == "greenhouse":
             external_id = str(job["id"])
             if not external_id.isascii() or not external_id.isdecimal():
@@ -399,8 +401,32 @@ class PublicATSAdapter(SourceAdapter):
             job_type_raw = (
                 _plain(categories.get("commitment")) if isinstance(categories, dict) else ""
             )
-            raw_html = str(job.get("description") or "")
-            description = _plain(job.get("descriptionPlain") or raw_html)
+            # Lever separates the introduction from requirement/responsibility lists.
+            # Saving descriptionPlain alone silently drops the actual qualifications.
+            raw_sections = [str(job.get("description") or "")]
+            plain_sections = [_plain(job.get("descriptionPlain") or raw_sections[0])]
+            if not raw_sections[0]:
+                raw_sections[0] = "<p>" + html.escape(plain_sections[0]) + "</p>"
+            lists = job.get("lists")
+            for section in lists if isinstance(lists, list) else []:
+                if not isinstance(section, dict):
+                    continue
+                heading = _plain(section.get("text"))
+                content = str(section.get("content") or "")
+                if heading:
+                    plain_sections.append(heading)
+                    raw_sections.append("<h2>" + html.escape(heading) + "</h2>")
+                if content:
+                    plain_sections.append(_plain(content))
+                    raw_sections.append("<ul>" + content + "</ul>")
+            additional = _plain(job.get("additionalPlain") or job.get("additional"))
+            if additional:
+                plain_sections.append(additional)
+                raw_sections.append(
+                    str(job.get("additional") or "<p>" + html.escape(additional) + "</p>")
+                )
+            raw_html = "\n".join(raw_sections)
+            description = " ".join(part for part in plain_sections if part)
         else:
             external_id = job["id"]
             if not isinstance(external_id, str) or not re.fullmatch(r"[A-Za-z0-9-]+", external_id):
@@ -439,6 +465,7 @@ class PublicATSAdapter(SourceAdapter):
             job_type=list(dict.fromkeys([*career_types, *normalize_job_types(job_type_raw)])),
             job_type_raw=job_type_raw,
             description=description,
+            description_blocks=build_description_blocks(description, raw_html),
             apply_url=apply_url,
             raw_hash=sha256_text(raw_text),
             # Published ATS IDs identify postings even when title and city are identical.

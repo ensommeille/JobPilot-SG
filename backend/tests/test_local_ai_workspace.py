@@ -89,3 +89,49 @@ def test_helper_audit_has_a_hard_call_budget_and_exact_job_allowlist(local_ai, t
     assert json.loads(inputs[0].read_text("utf-8"))["profile"]["skills"] == ["Python"]
     events = (tmp_path / "model-call-ledger.jsonl").read_text("utf-8").splitlines()
     assert len(events) == 1 and json.loads(events[0])["job_count"] == 1
+
+
+def test_autofill_purposes_share_budget_but_cannot_escape_a_job_allowlist(local_ai, tmp_path):
+    def request(purpose):
+        return SimpleNamespace(request_id="offline", messages=[SimpleNamespace(content=json.dumps({"purpose": purpose, "text": "Fictional resume source"}))])
+
+    restricted = local_ai.AcceptanceAudit(tmp_path / "restricted", max_calls=2, allowed_ids={"chosen"})
+    with pytest.raises(ProviderCapabilityError):
+        restricted.start(request("resume_autofill"))
+    assert restricted.calls == 0
+    audit = local_ai.AcceptanceAudit(tmp_path / "autofill", max_calls=2, allowed_ids=set())
+    assert audit.start(request("resume_autofill")) == 1
+    assert audit.start(request("form_mapping")) == 2
+    with pytest.raises(ProviderCapabilityError):
+        audit.start(request("form_mapping"))
+    with pytest.raises(ProviderCapabilityError):
+        audit.start(request("arbitrary_provider_workflow"))
+    events = [json.loads(line) for line in (audit.directory / "model-call-ledger.jsonl").read_text().splitlines()]
+    assert [event["purpose"] for event in events] == ["resume_autofill", "form_mapping"]
+    assert len(events) == 2
+
+
+@pytest.mark.parametrize("extension_id", [None, "abcdefghijklmnopabcdefghijklmnop"])
+def test_ai_helper_forwards_extension_registration_before_any_model_runtime(
+    local_ai, tmp_path, monkeypatch, extension_id
+):
+    class StopBeforeRuntime(Exception):
+        pass
+
+    calls = []
+
+    def seed(*args, **kwargs):
+        calls.append(kwargs)
+        raise StopBeforeRuntime
+
+    monkeypatch.setattr(local_ai, "seed_workspace", seed)
+    monkeypatch.setattr(local_ai.sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    arguments = ["--workspace", str(tmp_path / "workspace"), "--allow-live-ai",
+                 "--audit-directory", str(tmp_path / "audit")]
+    if extension_id:
+        arguments += ["--extension-client-id", extension_id]
+    with pytest.raises(StopBeforeRuntime):
+        local_ai.main(arguments)
+    assert calls[0]["extension_client_id"] == extension_id
+    assert not (tmp_path / "workspace").exists()
+    assert not (tmp_path / "audit").exists()

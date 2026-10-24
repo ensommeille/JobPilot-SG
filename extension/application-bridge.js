@@ -36,7 +36,8 @@ const sameApplication = (actual, expected) => validApplication(actual) && validA
 // Serialized into the trusted platform's ISOLATED world. The platform JWT never
 // leaves this function except as Authorization to its fixed, paired API origin.
 export async function verifyPlatformApplication(expectedOrigin, expectedPageUrl, jobId, deadline = Date.now() + 15000) {
-  const deployments = {'http://127.0.0.1:5173': 'http://127.0.0.1:8001', 'http://localhost:5173': 'http://localhost:8000'};
+  const deployments = {'http://127.0.0.1:5173': 'http://127.0.0.1:8001', 'http://localhost:5173': 'http://localhost:8000',
+    'http://127.0.0.1:15523': 'http://127.0.0.1:18523'};
   const api = deployments[location.origin];
   // Sender URL metadata can retain the initial document URL after SPA navigation.
   // Read the current route only inside the sender's exact isolated document.

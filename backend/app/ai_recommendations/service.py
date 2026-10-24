@@ -15,21 +15,27 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.db.models import JobPosting, JobSource, User, UserProfile
 from app.ingestion.locks import database_now
 from app.ingestion.schedule import utc_timestamp
+from app.jobs.provenance import is_public_job
 from app.llm import LLMProviderError, Message, StructuredGenerationRequest
 
+from .advice import advice_for_batch, derive_advice
+from .candidate_recall import role_adjustment
+from .citations import ReferencedBatch, request_with_sources, resolve_assessment, source_catalog
 from .evidence_rules import prioritize_assessment
+from .gap_evidence import NEGATIVE, correct_unverified_gaps, unverified_gap_reason
 from .models import AIRecommendationRun
 from .prompts import SYSTEM_PROMPT
-from .runtime import AIRuntime
+from .runtime import PROMPT_VERSION, AIRuntime
 from .schemas import (
     BatchAssessment,
     Candidate,
     CandidatePreview,
+    JobAssessmentReport,
     RecommendationReport,
     RecommendationRequest,
 )
@@ -77,12 +83,13 @@ URL = re.compile(
     re.I,
 )
 PHONE = re.compile(r"(?<!\w)\+?\d[\d ()+.-]{5,}\d(?!\w)")
-NEGATIVE = re.compile(
-    r"\b(?:no|without|lack(?:s)?)\s+(?:(?:prior|professional|production|commercial|hands-on)\s+)?(?:experience|knowledge|proficiency|familiarity)\b"
-    r"|\b(?:cannot|unable\s+to|do\s+not\s+know|don't\s+know|have\s+never)\b|没有.{0,20}(?:经验|知识)|不具备|不会",
-    re.I,
-)
 YEARS = re.compile(r"\b(\d+(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)\b", re.I)
+YEAR_RANGE = re.compile(
+    r"\b(\d+(?:\.\d+)?)\s*(?:[-–—]|to)\s*\d+(?:\.\d+)?\s*(?:years?|yrs?)\b", re.I
+)
+DURATIONS = re.compile(
+    r"\b(\d+(?:\.\d+)?)\s*(?:consecutive\s+)?(hours?|weeks?|months?|days?)\b", re.I
+)
 
 
 def _canonical(value) -> str:
@@ -121,10 +128,19 @@ def _clean(text: str | None, identifiers: list[str]) -> str | None:
 
 
 def reviewed_profile(db: Session, user: User) -> tuple[dict, list[str]]:
-    profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == user.id)
+        .execution_options(populate_existing=True)
+    )
     identifiers = [user.email]
     if profile is None:
-        return {"education": None, "experience": None, "skills": []}, identifiers
+        return {
+            "education": None,
+            "experience": None,
+            "skills": [],
+            "availability": None,
+        }, identifiers
     identifiers += [
         value for value in (profile.full_name, profile.contact_email, profile.phone) if value
     ]
@@ -132,6 +148,7 @@ def reviewed_profile(db: Session, user: User) -> tuple[dict, list[str]]:
         "education": _clean(profile.education, identifiers),
         "experience": _clean(profile.experience, identifiers),
         "skills": [_clean(value, identifiers) for value in profile.skills],
+        "availability": _clean(profile.availability_period, identifiers),
     }, identifiers
 
 
@@ -164,9 +181,16 @@ def _candidates(
         filters.append(func.lower(JobPosting.city) == city.casefold())
     if job_type:
         filters.append(func.lower(JobPosting.job_type) == job_type.casefold())
-    query = select(JobPosting).join(JobSource, JobPosting.source_id == JobSource.id).where(*filters)
+    query = (
+        select(JobPosting)
+        .options(joinedload(JobPosting.source))
+        .join(JobSource, JobPosting.source_id == JobSource.id)
+        .where(*filters)
+    )
     if job_ids:
-        jobs = list(db.scalars(query.where(JobPosting.id.in_(job_ids))))
+        jobs = [
+            job for job in db.scalars(query.where(JobPosting.id.in_(job_ids))) if is_public_job(job)
+        ]
         by_id = {job.id: job for job in jobs}
         if set(by_id) != set(job_ids):
             raise HTTPException(422, "invalid_candidates")
@@ -181,7 +205,7 @@ def _candidates(
         )
     )
     truncated = len(jobs) > MAX_SCAN
-    jobs = jobs[:MAX_SCAN]
+    jobs = [job for job in jobs[:MAX_SCAN] if is_public_job(job)]
     texts = [(job.title + "\n" + job.description).casefold() for job in jobs]
     phrases = [
         value.casefold() for value in profile["skills"] if value and "[redacted]" not in value
@@ -204,9 +228,10 @@ def _candidates(
     for index, (job, text, words) in enumerate(zip(jobs, texts, document_tokens, strict=True)):
         score = sum(math.log(1 + len(jobs) / (1 + frequencies[token])) for token in tokens & words)
         score += sum(4 for phrase in phrases if phrase in text)
-        scored.append((-score, index, job))
-    scored.sort(key=lambda row: (row[0], row[1]))
-    return [row[2] for row in scored[:limit]], profile, identifiers, len(jobs), truncated
+        review_priority, role_points = role_adjustment(job.title, profile)
+        scored.append((review_priority, -(score + role_points), index, job))
+    scored.sort(key=lambda row: row[:3])
+    return [row[3] for row in scored[:limit]], profile, identifiers, len(jobs), truncated
 
 
 def candidate_preview(db: Session, user: User, **filters) -> CandidatePreview:
@@ -233,7 +258,9 @@ def _append_reason(row, note: str) -> None:
     row.reason = row.reason[: 1999 - len(note)].rstrip() + " " + note
 
 
-def validate_assessment(data: dict, payload: dict) -> BatchAssessment:
+def validate_assessment(
+    data: dict, payload: dict, *, allow_promotions: bool = True
+) -> BatchAssessment:
     result = BatchAssessment.model_validate(data)
     jobs = {job["id"]: job for job in payload["jobs"]}
     if (
@@ -262,14 +289,54 @@ def validate_assessment(data: dict, payload: dict) -> BatchAssessment:
                 not row.profile_quote or not NEGATIVE.search(row.profile_quote)
             ):
                 row.outcome = "unknown"
-                _append_reason(
-                    row,
-                    "No explicit contradictory profile evidence; missing information remains unknown.",
+                row.reason = unverified_gap_reason(
+                    row.category, row.requirement, row.profile_field, row.profile_quote
                 )
+            if row.outcome == "supported" and row.category == "work_constraint":
+                quote = row.profile_quote or ""
+                timing_inferred = row.profile_field == "education" or (
+                    row.profile_field != "availability"
+                    and not re.search(
+                        r"\b(?:availab(?:le|ility)|can (?:work|start)|able to work)\b", quote, re.I
+                    )
+                )
+                requested_duration = {
+                    (number, unit.casefold().rstrip("s"))
+                    for number, unit in DURATIONS.findall(row.jd_quote)
+                }
+                stated_duration = {
+                    (number, unit.casefold().rstrip("s"))
+                    for number, unit in DURATIONS.findall(quote)
+                }
+                qualifiers_missing = any(
+                    re.search(pattern, row.jd_quote, re.I) and not re.search(pattern, quote, re.I)
+                    for pattern in (r"\bfull[ -]?time\b", r"\bpart[ -]?time\b", r"\bon[ -]?site\b")
+                )
+                if (
+                    timing_inferred
+                    or not requested_duration <= stated_duration
+                    or qualifiers_missing
+                ):
+                    row.outcome = "unknown"
+                    _append_reason(
+                        row,
+                        "The displayed evidence does not explicitly establish every availability condition. "
+                        "Course/project dates are not availability; a broad period does not prove a "
+                        "specific duration, full-time hours or onsite attendance.",
+                    )
             if row.outcome == "supported" and row.category == "experience":
-                requested = [float(value) for value in YEARS.findall(row.jd_quote)]
+                # A range's upper bound is not a required minimum. Keep the
+                # condition local instead of borrowing years from a neighbour.
+                local = row.requirement
+                requested = [float(value) for value in YEAR_RANGE.findall(local)]
+                rest = YEAR_RANGE.sub("", local)
+                requested += [float(value) for value in YEARS.findall(rest)]
                 stated = [float(value) for value in YEARS.findall(row.profile_quote or "")]
-                if requested and (not stated or max(stated) < max(requested)):
+                if (
+                    requested
+                    and max(requested) > 0
+                    and (not stated or max(stated) < max(requested))
+                ):
                     row.outcome = "unknown"
                     _append_reason(
                         row,
@@ -312,8 +379,8 @@ def validate_assessment(data: dict, payload: dict) -> BatchAssessment:
                     _append_reason(
                         row, "Complete explicit education/date evidence is not established."
                     )
-    result = prioritize_assessment(result, payload["profile"])
-    return BatchAssessment.model_validate(result.model_dump())
+    result = prioritize_assessment(result, payload["profile"], allow_promotions=allow_promotions)
+    return correct_unverified_gaps(BatchAssessment.model_validate(result.model_dump()))
 
 
 def expire_run(db: Session, run: AIRecommendationRun) -> AIRecommendationRun:
@@ -345,12 +412,70 @@ def read_run(db: Session, user: User, run_id: UUID) -> AIRecommendationRun:
     return expire_run(db, run)
 
 
-def present(run: AIRecommendationRun, *, reused: bool) -> RecommendationReport:
+def _run_is_current(db: Session, user: User, run: AIRecommendationRun) -> bool:
+    """Validate the entire displayed batch against current inputs, without rewriting it."""
     pipeline = run.pipeline_json
+    if (
+        run.user_id != user.id
+        or pipeline.get("prompt_version") != PROMPT_VERSION
+        or pipeline.get("execution_mode") not in {"live", "mock"}
+        or not isinstance(pipeline.get("model"), str)
+    ):
+        return False
+    profile, identifiers = reviewed_profile(db, user)
+    if run.input_json.get("profile") != profile:
+        return False
+    saved_jobs = run.input_json.get("jobs", [])
+    if not saved_jobs:
+        return False
+    today = database_now(db).astimezone(timezone(timedelta(hours=8))).date()
+    for saved in saved_jobs:
+        try:
+            job_id = UUID(saved["id"])
+        except (ValueError, KeyError, TypeError):
+            return False
+        job = db.scalar(
+            select(JobPosting)
+            .options(joinedload(JobPosting.source))
+            .where(JobPosting.id == job_id)
+            .execution_options(populate_existing=True)
+        )
+        if (
+            job is None
+            or job.status != "active"
+            or (job.deadline is not None and job.deadline < today)
+            or not job.source.enabled
+            or not is_public_job(job)
+            or saved
+            != {
+                "id": str(job.id),
+                "title": _clean(job.title, identifiers),
+                "company": _clean(job.company, identifiers),
+                "description": _clean(job.description, identifiers),
+            }
+        ):
+            return False
+    return True
+
+
+def present(
+    run: AIRecommendationRun, *, reused: bool, db: Session, user: User
+) -> RecommendationReport:
+    pipeline = run.pipeline_json
+    is_current = _run_is_current(db, user, run)
+    advice, display_order = {}, []
+    result = (
+        correct_unverified_gaps(BatchAssessment.model_validate(run.result_json))
+        if run.status == "succeeded"
+        else None
+    )
+    if run.status == "succeeded" and is_current:
+        advice, display_order = advice_for_batch(result, run.input_json["profile"])
     return RecommendationReport(
         id=run.id,
         status=run.status,
         reused=reused,
+        is_current=is_current,
         input_hash=run.input_hash,
         provider=pipeline["provider"],
         model=pipeline["model"],
@@ -358,13 +483,100 @@ def present(run: AIRecommendationRun, *, reused: bool) -> RecommendationReport:
         execution_mode=pipeline["execution_mode"],
         profile_skill_count=len(run.input_json["profile"]["skills"]),
         candidates=run.candidates_json,
-        result=run.result_json,
+        result=result,
+        advice=advice,
+        display_order=display_order,
         error_code=run.error_code,
         usage=run.usage_json or {},
         started_at=run.started_at,
         expires_at=run.expires_at,
         finished_at=run.finished_at,
     )
+
+
+def job_assessment(db: Session, user: User, job_id: UUID) -> JobAssessmentReport:
+    """Read an existing matching item across batches; never reserve or run a model.
+
+    Historical batch rank is retained as source context, not a global job rank.
+    The bounded user history scan and current-input checks also allow a completed
+    batch to be reused before a new single-job POST could incur a separate charge.
+    """
+    job = db.get(JobPosting, job_id)
+    if job is None:
+        raise HTTPException(404, "Job not found")
+    today = database_now(db).astimezone(timezone(timedelta(hours=8))).date()
+    if (
+        job.status != "active"
+        or (job.deadline is not None and job.deadline < today)
+        or not job.source.enabled
+        or not is_public_job(job)
+    ):
+        return JobAssessmentReport(job_id=job_id, status="unavailable", reason="job_unavailable")
+    profile, identifiers = reviewed_profile(db, user)
+    if not _ready(profile):
+        return JobAssessmentReport(job_id=job_id, status="unavailable", reason="profile_needed")
+    current_job = {
+        "id": str(job.id),
+        "title": _clean(job.title, identifiers),
+        "company": _clean(job.company, identifiers),
+        "description": _clean(job.description, identifiers),
+    }
+    fallback = JobAssessmentReport(job_id=job_id, status="not_analyzed", reason="no_saved_analysis")
+    for run in db.scalars(
+        select(AIRecommendationRun)
+        .where(AIRecommendationRun.user_id == user.id)
+        .order_by(AIRecommendationRun.started_at.desc(), AIRecommendationRun.id.desc())
+        .limit(100)
+    ):
+        saved_jobs = run.input_json.get("jobs", [])
+        saved = next((item for item in saved_jobs if item.get("id") == str(job_id)), None)
+        if saved is None:
+            continue
+        pipeline = run.pipeline_json
+        if (
+            saved != current_job
+            or run.input_json.get("profile") != profile
+            or pipeline.get("prompt_version") != PROMPT_VERSION
+            or pipeline.get("execution_mode") not in {"live", "mock"}
+            or not isinstance(pipeline.get("model"), str)
+        ):
+            if fallback.status == "not_analyzed":
+                fallback = JobAssessmentReport(
+                    job_id=job_id, status="outdated", reason="inputs_changed"
+                )
+            continue
+        base = {
+            "job_id": job_id,
+            "source_run_id": run.id,
+            "execution_mode": pipeline["execution_mode"],
+            "model": pipeline["model"],
+            "finished_at": run.finished_at,
+        }
+        if run.status == "succeeded":
+            try:
+                batch = correct_unverified_gaps(BatchAssessment.model_validate(run.result_json))
+                assessed = next(item for item in batch.items if item.job_id == job_id)
+                if len(batch.items) != len(saved_jobs) or {
+                    str(item.job_id) for item in batch.items
+                } != {item["id"] for item in saved_jobs}:
+                    raise ValueError("invalid_saved_analysis")
+            except (ValidationError, ValueError, StopIteration):
+                if fallback.status in {"not_analyzed", "outdated"}:
+                    fallback = JobAssessmentReport(
+                        **base, status="failed", reason="invalid_saved_analysis"
+                    )
+                continue
+            return JobAssessmentReport(
+                **base, status="available", assessment=assessed, advice=derive_advice(assessed)
+            )
+        if fallback.status in {"not_analyzed", "outdated"}:
+            if run.status == "running" and utc_timestamp(run.expires_at) > database_now(db):
+                fallback = JobAssessmentReport(**base, status="running", reason="analysis_running")
+            else:
+                fallback = JobAssessmentReport(
+                    **base, status="failed", reason=run.error_code or "lease_expired"
+                )
+    return fallback
 
 
 async def execute(db: Session, *, user: User, payload: RecommendationRequest, runtime: AIRuntime):
@@ -448,6 +660,8 @@ async def execute(db: Session, *, user: User, payload: RecommendationRequest, ru
         return expire_run(db, existing), True
     run_id = run.id
     generated, result, error = None, None, None
+    catalog = source_catalog(model_input)
+    wire_input = request_with_sources(model_input, catalog)
 
     async def call_once():
         async with runtime.provider_factory() as provider:
@@ -458,10 +672,10 @@ async def execute(db: Session, *, user: User, payload: RecommendationRequest, ru
                     request_id=str(run_id),
                     messages=[
                         Message(role="system", content=SYSTEM_PROMPT),
-                        Message(role="user", content=_canonical(model_input)),
+                        Message(role="user", content=_canonical(wire_input)),
                     ],
-                    schema_name="ai_recommendation_v1",
-                    output_schema=BatchAssessment.model_json_schema(),
+                    schema_name="ai_recommendation_ranges_v1",
+                    output_schema=ReferencedBatch.model_json_schema(),
                     max_output_tokens=runtime.max_output_tokens,
                 )
             )
@@ -471,7 +685,8 @@ async def execute(db: Session, *, user: User, payload: RecommendationRequest, ru
         if generated.finish_reason != "stop" or generated.data is None:
             error = "incomplete_output"
         else:
-            result = validate_assessment(generated.data, model_input)
+            resolved = resolve_assessment(generated.data, model_input, catalog)
+            result = validate_assessment(resolved, model_input, allow_promotions=False)
     except ValidationError:
         error = "invalid_output"
     except ValueError as exc:

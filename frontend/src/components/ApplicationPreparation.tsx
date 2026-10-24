@@ -8,6 +8,7 @@ import { applicationFields, draftFingerprint, parseApplicationReview, parseFillR
   type ApplicationFieldId, type ApplicationValues, type CountryChoices,
   type FillReport, type SavedApplicationDraft } from '../services/applicationPreparation'
 import InternSGApplication from './InternSGApplication'
+import ExtensionStatus from './ExtensionStatus'
 import './ApplicationPreparation.css'
 
 export default function ApplicationPreparation({jobId, url, token}: {jobId: string; url: string; token: string}) {
@@ -20,6 +21,8 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
   const [error, setError] = useState('')
   const [report, setReport] = useState<FillReport | null>(null)
   const [frameLoaded, setFrameLoaded] = useState(false)
+  const [extensionConnected, setExtensionConnected] = useState(false)
+  const [editingSaved, setEditingSaved] = useState(false)
   const alive = useRef(true)
   const generation = useRef(0)
   const busy = useRef(false)
@@ -49,6 +52,8 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
     generation.current++
     setReport(null); setError('')
     setDraftBusy(true); setDraftError(''); setSavedDraft(null)
+    setEditingSaved(false)
+    setExtensionConnected(false)
     void loadDraft()
   }
 
@@ -74,7 +79,7 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
 
   const handleFill = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (busy.current || !savedDraft || draftBusy || !frameLoaded || getToken() !== token) return
+    if (busy.current || !savedDraft || draftBusy || !frameLoaded || !extensionConnected || getToken() !== token) return
     if (!event.currentTarget.reportValidity()) return
     // The explicit click approves this snapshot, never later edits or a stale review.
     const shown = {values: {...values}, countries: {...choices}}
@@ -134,25 +139,29 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
   const missingCount = applicationFields.filter(field => !values[field.id].trim()).length
     + Number(!choices.nationality) + Number(!choices.campus)
 
+  const hasMissingSavedAnswers = savedDraft && (applicationFields.some(field => !savedDraft.values[field.id].trim()) || !savedDraft.countries.nationality || !savedDraft.countries.campus)
+  const fillState = operation === 'inspect' ? 'Checking the original form…' : operation === 'fill' ? 'Filling approved answers…'
+    : !frameLoaded ? 'Waiting for the original form to load.' : !extensionConnected ? 'Connect this account’s extension to fill supported fields.'
+      : draftBusy ? 'Loading saved details…' : 'Ready to fill your saved details.'
+
   return <div className="application-preparation">
     <section className="application-review" aria-labelledby="application-review-title" aria-busy={draftBusy}>
-      <header className="stack">
-        <h2 id="application-review-title">Review your application details</h2>
-        <p>Review or edit your saved details, then fill the original form in one click. Your introduction stays user-written.</p>
-        <p className="muted">Edits here apply only to this review. <Link to={profileLink}>Update my saved profile</Link> to reuse changes in future applications.</p>
+      <header className="preparation-summary">
+        <h2 id="application-review-title">Your application details</h2>
+        {savedDraft && <p role="status">{missingCount ? `${7 - missingCount} saved details loaded; ${missingCount} need your input.` : 'All seven saved details are loaded.'} No need to type them again.</p>}
       </header>
       {draftBusy && <p role="status" className="preparation-loading">Loading your saved application details…</p>}
-      {draftError && <p role="alert" className="alert alert-error">{draftError}</p>}
-      <div className="preparation-actions">
-        <button type="button" className="btn btn-secondary" disabled={draftBusy || !!operation} onClick={() => void reloadDraft()}>Reload saved details</button>
-        <span className="muted">Reloading replaces any one-off edits below.</span>
-      </div>
+      {draftError && <p role="alert" className="alert alert-error">{draftError} <button type="button" className="link" onClick={() => void reloadDraft()}>Reload saved details</button></p>}
       {savedDraft && <>
-        <p role="status">{missingCount ? `${missingCount} details are not saved yet. Missing answers stay blank; nothing is invented.` : 'All seven reusable details are present. Check that they are right for this role.'}</p>
-        <form noValidate onSubmit={handleFill}>
-          <fieldset disabled={!!operation || draftBusy} className="preparation-fields">
-            <legend className="preparation-legend">Application answers</legend>
-            {applicationFields.map(field => <div className={'preparation-field' + (field.id === 'applicant_summary' ? ' preparation-field-wide' : '')} key={field.id}>
+        <details className="preparation-saved-details"><summary>Review the details already loaded</summary><dl>{applicationFields.filter(field => values[field.id].trim()).map(field => <div key={field.id}><dt>{field.label}</dt><dd>{values[field.id]}</dd></div>)}{(['nationality', 'campus'] as const).filter(key => choices[key]).map(key => <div key={key}><dt>{key === 'nationality' ? 'Nationality' : 'Country of study / graduation'}</dt><dd>{countries.find(country => country.code === choices[key])?.name || choices[key]}</dd></div>)}</dl>
+          <div className="preparation-actions"><Link to={profileLink}>Update my saved profile</Link><button type="button" className="link" disabled={draftBusy || !!operation} onClick={() => void reloadDraft()}>Reload saved details</button></div>
+          <p className="muted preparation-hint">Reloading replaces one-off edits. Edits below apply only to this application.</p>
+        </details>
+        <button type="button" className="link preparation-edit" disabled={!!operation} onClick={() => setEditingSaved(value => !value)}>{editingSaved ? 'Show only missing answers' : 'Edit loaded answers for this application'}</button>
+        <form id="jobpilot-application-review" noValidate onSubmit={handleFill}>
+          {(editingSaved || hasMissingSavedAnswers) && <fieldset disabled={!!operation || draftBusy} className="preparation-fields">
+            <legend className="preparation-legend">{editingSaved ? 'Application answers' : 'Complete missing answers'}</legend>
+            {applicationFields.filter(field => editingSaved || !savedDraft.values[field.id].trim()).map(field => <div className={'preparation-field' + (field.id === 'applicant_summary' ? ' preparation-field-wide' : '')} key={field.id}>
               <label htmlFor={'review-' + field.id}>{field.label}</label>
               {field.id === 'applicant_summary'
                 ? <textarea id={'review-' + field.id} rows={5} value={values[field.id]} maxLength={field.maxLength} onChange={event => changeValue(field.id, event.target.value)} aria-describedby={fieldReason(field.id) ? field.id + '-reason' : undefined} />
@@ -160,41 +169,35 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
                     value={values[field.id]} maxLength={field.maxLength} onChange={event => changeValue(field.id, event.target.value)} aria-describedby={fieldReason(field.id) ? field.id + '-reason' : undefined} />}
               {fieldReason(field.id) && <p className="muted preparation-hint" id={field.id + '-reason'}>{fieldReason(field.id)}</p>}
             </div>)}
-            {(['nationality', 'campus'] as const).map(key => <div className="preparation-field" key={key}>
+            {(['nationality', 'campus'] as const).filter(key => editingSaved || !savedDraft.countries[key]).map(key => <div className="preparation-field" key={key}>
               <label htmlFor={'review-country-' + key}>{key === 'nationality' ? 'Nationality' : 'Country of study / graduation'}</label>
-              <select id={'review-country-' + key} value={choices[key]} onChange={event => {
-                setChoices(previous => ({...previous, [key]: event.target.value})); setReport(null)
-              }}>
-                <option value="">Not specified</option>
-                {countries.map(country => <option key={country.code} value={country.code}>{country.name}</option>)}
+              <select id={'review-country-' + key} value={choices[key]} onChange={event => { setChoices(previous => ({...previous, [key]: event.target.value})); setReport(null) }}>
+                <option value="">Not specified</option>{countries.map(country => <option key={country.code} value={country.code}>{country.name}</option>)}
               </select>
             </div>)}
             {report?.skipped.includes('applicant_countries') && <p className="preparation-field-wide preparation-hint">{report.reasons.applicant_countries}</p>}
-          </fieldset>
-          <p id="fill-permission" className="preparation-hint">Clicking fills the details shown above, including replacing nationality and study country with your choices. Existing text is preserved; missing or unsupported answers are skipped. It never submits. CAPTCHA and final submission remain yours.</p>
-          <div className="preparation-actions">
-            <button type="submit" className="btn btn-primary" aria-describedby="fill-permission" disabled={!!operation || !frameLoaded || draftBusy}>
-              {operation === 'inspect' ? 'Checking original form…' : operation === 'fill' ? 'Filling application form…' : 'Fill application form'}</button>
-          </div>
-          {!frameLoaded && <p className="muted preparation-hint">Load the original application below first. Your answers are not sent to InternSG until you click Fill application form.</p>}
+          </fieldset>}
         </form>
       </>}
+    </section>
+    <InternSGApplication url={url} platformManaged onFrameChange={frameChanged} controls={savedDraft && <div className="preparation-fill-controls">
+      <ExtensionStatus token={token} onConnectionChange={setExtensionConnected} />
+      <div className="preparation-actions">
+        {frameLoaded && <button type="submit" form="jobpilot-application-review" className="btn btn-primary" aria-describedby="fill-permission fill-readiness" disabled={!!operation || draftBusy || !extensionConnected}>
+          {operation === 'inspect' ? 'Checking original form…' : operation === 'fill' ? 'Filling application form…' : 'Fill application form'}</button>}
+        <span id="fill-readiness" role="status">{fillState}</span>
+      </div>
+      <p id="fill-permission" className="preparation-hint muted">Clicking Fill approves these answers, including your nationality and study-country choices. Existing text stays unchanged. PDF upload, CAPTCHA and final submission are yours.</p>
       {error && <p role="alert" className="alert alert-error">{error}</p>}
       {report && <div className="preparation-result" role="status">
         <p><strong>Filled {report.filled.length}; skipped {report.skipped.length}. Nothing was submitted.</strong></p>
         {report.skipped.length > 0 && <ul>{report.skipped.map(id => <li key={id}>{applicationFields.find(field => field.id === id)?.label || 'Nationality / study country'}: {report.reasons[id]}</li>)}</ul>}
-        <p>Review the original form below. This is not a delivery receipt and no application record was marked as sent.</p>
+        <p>Check the original form below. This is not an employer delivery receipt.</p>
       </div>}
-      <details className="preparation-setup">
-        <summary>First-time setup or extension not responding?</summary>
-        <ol>
-          <li>Use Chrome with the updated JobPilot extension. Reload the existing extension after an update; keep its original ID.</li>
-          <li>Open the extension once, choose Connect through JobPilot and confirm the same platform account. No second password is needed.</li>
-          <li>In the extension, choose Enable embedded InternSG access and approve access to this platform and InternSG. Then return here to fill the form.</li>
-        </ol>
-        <p>An older extension can still use Read page &amp; load profile in its popup. Platform filling needs the updated extension and explicit website permissions.</p>
-      </details>
-    </section>
-    <InternSGApplication url={url} platformManaged onFrameChange={frameChanged} />
+    </div>} />
+    <details className="preparation-setup"><summary>Connection and filling help</summary>
+      <ol><li>Use Chrome with the updated JobPilot extension.</li><li>Choose Connect through JobPilot in the extension and confirm this same account.</li><li>Enable embedded InternSG access in its popup, then return here.</li></ol>
+      <p>Unsupported fields stay manual. Reload saved details after profile changes. Nothing is filled or submitted automatically.</p>
+    </details>
   </div>
 }

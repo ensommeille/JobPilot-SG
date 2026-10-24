@@ -152,6 +152,174 @@ def test_invalid_collection_limits_fail_before_network() -> None:
         adapter.collect(max_links=1, max_details=2)
 
 
+@pytest.mark.parametrize("base_url", ["https://www.internsg.com", "https://www.internsg.com/jobs/"])
+def test_catalog_listing_url_is_normalized_to_origin(base_url, fixture_text):
+    from app.ingestion.internsg_adapter import default_internsg_config
+
+    requested = []
+
+    def handler(request):
+        requested.append(request.url.path)
+        if request.url.path == "/robots.txt":
+            return response(request, fixture_text("robots_allow.txt"), content_type="text/plain")
+        return response(request, fixture_text("listing.html"))
+
+    adapter = InternSGAdapter(
+        default_internsg_config().model_copy(update={"base_url": base_url}),
+        client=client_for(handler),
+        sleep=lambda _: None,
+    )
+    adapter.fetch_listing_page()
+    assert requested == ["/robots.txt", "/jobs/"]
+    assert adapter.config.base_url == "https://www.internsg.com"
+
+
+def test_collect_follows_real_next_page_and_deduplicates_links(fixture_text):
+    requested = []
+    sleeps = []
+
+    def handler(request):
+        requested.append(request.url.path)
+        if request.url.path == "/robots.txt":
+            return response(request, fixture_text("robots_allow.txt"), content_type="text/plain")
+        if request.url.path == "/jobs/":
+            return response(
+                request,
+                '<a class="job-listing-row" href="/job/one/">One</a>'
+                '<a rel="next" href="/jobs/2#isg-top">Next</a>',
+            )
+        if request.url.path == "/jobs/2/":
+            return response(
+                request,
+                '<a class="job-listing-row" href="/job/one/?f_pg=2#duplicate">One</a>'
+                '<a class="job-listing-row" href="/job/two/?f_pg=2">Two</a>'
+                '<a rel="next" href="/jobs/3#isg-top">Next</a>',
+            )
+        return response(request, fixture_text("detail_complete.html"))
+
+    adapter = InternSGAdapter(client=client_for(handler), sleep=sleeps.append)
+    batch = adapter.collect(max_links=2, max_details=2)
+    assert batch.status is RunStatus.SUCCEEDED
+    assert batch.discovered_count == batch.attempted_count == 2
+    assert requested == ["/robots.txt", "/jobs/", "/jobs/2/", "/job/one/", "/job/two/"]
+    assert len(sleeps) == len(requested) - 1
+    assert all(delay >= 1.5 for delay in sleeps)
+
+
+@pytest.mark.parametrize("next_url", ["https://evil.example/jobs/2", "/jobs/1", "/jobs/2?token=x"])
+def test_bad_pagination_never_fetches_outside_scope_and_keeps_first_page(next_url, fixture_text):
+    requested = []
+
+    def handler(request):
+        requested.append(str(request.url))
+        if request.url.path == "/robots.txt":
+            return response(request, fixture_text("robots_allow.txt"), content_type="text/plain")
+        if request.url.path == "/jobs/":
+            return response(
+                request,
+                '<a class="job-listing-row" href="/job/one/">One</a>'
+                f'<a rel="next" href="{next_url}">Next</a>',
+            )
+        return response(request, fixture_text("detail_complete.html"))
+
+    batch = InternSGAdapter(client=client_for(handler), sleep=lambda _: None).collect(
+        max_links=2, max_details=2
+    )
+    assert batch.status is RunStatus.PARTIAL
+    assert batch.attempted_count == len(batch.items) == 1
+    assert batch.failures[0].stage == "listing"
+    assert len(requested) == 3
+    assert requested[-1] == "https://www.internsg.com/job/one/"
+
+
+def test_later_listing_failure_keeps_successful_details(fixture_text):
+    def handler(request):
+        if request.url.path == "/robots.txt":
+            return response(request, fixture_text("robots_allow.txt"), content_type="text/plain")
+        if request.url.path == "/jobs/":
+            return response(
+                request,
+                '<a class="job-listing-row" href="/job/one/">One</a>'
+                '<a rel="next" href="/jobs/2">Next</a>',
+            )
+        if request.url.path == "/jobs/2/":
+            return response(request, "temporarily unavailable", status=503)
+        return response(request, fixture_text("detail_complete.html"))
+
+    batch = InternSGAdapter(client=client_for(handler), sleep=lambda _: None).collect(
+        max_links=2, max_details=2
+    )
+    assert batch.status is RunStatus.PARTIAL
+    assert batch.listing_accessible and len(batch.items) == 1
+    assert batch.failures[0].stage == "listing"
+
+
+@pytest.mark.parametrize("stage", ["listing", "detail"])
+def test_rate_limit_stops_batch_without_requesting_more_pages_or_details(stage, fixture_text):
+    requested = []
+
+    def handler(request):
+        requested.append(request.url.path)
+        if request.url.path == "/robots.txt":
+            return response(request, fixture_text("robots_allow.txt"), content_type="text/plain")
+        if request.url.path == "/jobs/":
+            return response(
+                request,
+                '<a class="job-listing-row" href="/job/one/">One</a>'
+                '<a class="job-listing-row" href="/job/two/">Two</a>'
+                + ('<a rel="next" href="/jobs/2">Next</a>' if stage == "listing" else ""),
+            )
+        return response(request, "rate limited", status=429)
+
+    batch = InternSGAdapter(client=client_for(handler), sleep=lambda _: None).collect(
+        max_links=3, max_details=3
+    )
+    assert batch.status is RunStatus.FAILED
+    assert len(batch.failures) == 1
+    assert requested == ["/robots.txt", "/jobs/", "/jobs/2/" if stage == "listing" else "/job/one/"]
+
+
+def test_listing_page_cap_and_invalid_config_fail_without_network():
+    from app.ingestion.internsg_adapter import default_internsg_config
+
+    adapter = InternSGAdapter(client=client_for(lambda _: pytest.fail("unexpected request")))
+    with pytest.raises(ValueError, match="page must be between"):
+        adapter.fetch_listing_page(page=adapter.MAX_LISTING_PAGES + 1)
+    with pytest.raises(AdapterPolicyError, match="origin or /jobs"):
+        InternSGAdapter(
+            default_internsg_config().model_copy(
+                update={"base_url": "https://www.internsg.com/jobs/?private=1"}
+            )
+        )
+
+
+def test_live_scope_requires_source_singapore_and_early_career_and_excludes_senior(fixture_text):
+    adapter = InternSGAdapter(client=client_for(lambda _: pytest.fail("no network")))
+    record = adapter.parse_job_detail(
+        fixture_text("detail_complete.html"), "https://www.internsg.com/job/example/"
+    )
+    assert adapter._in_scope(record)
+    assert not adapter._in_scope(record.model_copy(update={"city": None}))
+    assert not adapter._in_scope(
+        record.model_copy(update={"title": "Senior Software Engineer Intern"})
+    )
+    assert not adapter._in_scope(
+        record.model_copy(
+            update={"title": "Software Engineer", "job_type": ["full-time"], "experience": None}
+        )
+    )
+    assert adapter._in_scope(
+        record.model_copy(
+            update={
+                "title": "Software Engineer",
+                "job_type": ["full-time"],
+                "experience": "Entry Level / Junior Executive",
+            }
+        )
+    )
+    assert adapter._in_scope(record.model_copy(update={"city": None, "status": JobStatus.CLOSED}))
+
+
 def test_title_change_changes_raw_hash(fixture_text) -> None:
     adapter = InternSGAdapter(
         client=client_for(lambda request: response(request, "")), sleep=lambda _: None

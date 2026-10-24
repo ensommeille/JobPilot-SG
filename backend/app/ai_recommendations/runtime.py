@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 from app.llm import LLMProvider, LLMSettings, build_live_provider
 
-PROMPT_VERSION = "ai-recommendation-v3-complete-rows"
+PROMPT_VERSION = "ai-recommendation-v9-evidence-scope"
 
 
 @dataclass(frozen=True)
@@ -19,8 +19,8 @@ class AIRuntime:
     provider: str = "mock"
     model: str = "scripted-fixture-v1"
     is_mock: bool = True
-    timeout_seconds: float = 60
-    max_output_tokens: int = 12000
+    timeout_seconds: float = 75
+    max_output_tokens: int = 20000
     revision: str = PROMPT_VERSION
 
     def snapshot(self) -> dict:
@@ -45,7 +45,7 @@ def get_ai_runtime() -> AIRuntime:
     settings = configured.model_copy(
         update={
             "max_retries": 0,
-            "timeout_seconds": 60,
+            "timeout_seconds": 75,
             "thinking": "disabled",
             "model": selected_model,
         }
