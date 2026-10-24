@@ -139,14 +139,7 @@ test('saved natural skills lead to evidence and the correct explicit InternSG en
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   await page.getByRole('link', {name: 'Prepare application'}).click();
-  await expect(page).toHaveURL(`${base}/jobs/${job.id}/apply-external`);
-  await expect(page.locator('iframe')).toHaveCount(0);
-  await expect(page.getByLabel('Full name', {exact: true})).toHaveValue('Fictional Maintained Applicant');
-  await expect(page.getByLabel('Personal introduction', {exact: true})).toHaveValue('My own reusable introduction.');
-  await expect(page.getByRole('link', {name: 'View original posting'})).toHaveAttribute('href', job.apply_url);
-  await page.getByRole('button', {name: 'Load InternSG application here'}).click();
-  await expect(page.frameLocator('iframe').locator('#applicant_name')).toBeVisible();
-  await expect(page.getByRole('status').filter({hasText: 'does not mean an application was sent'})).toBeVisible();
+  await expect(page).toHaveURL(`${base}/jobs/${job.id}/prepare`);
   expect(externalPosts).toBe(0);
   expect(recommendationCalls).toBe(1);
 });
@@ -350,29 +343,8 @@ test('delayed login replacement cannot overwrite an account selected during logo
   await expect(page).toHaveURL(`${base}/profile`);
 });
 
-test('changing accounts closes an embedded form and requires a fresh explicit load', async ({page}) => {
-  await applicationOptions(page, {});
-  let loads = 0, externalPosts = 0;
-  await page.route('https://www.internsg.com/**', route => {
-    if (route.request().method() === 'GET') loads++;
-    else externalPosts++;
-    expect(route.request().headers().authorization).toBeUndefined();
-    return route.fulfill({contentType: 'text/html', body: '<!doctype html><title>Account isolation fixture</title><form><label>Name<input id="applicant_name"></label><p>Fixture only. No submission.</p></form>'});
-  });
-  await page.getByRole('link', {name: 'Prepare application'}).click();
-  await page.getByRole('button', {name: 'Load InternSG application here'}).click();
-  const applicant = page.frameLocator('iframe').locator('#applicant_name');
-  await expect(applicant).toBeVisible();
-  await applicant.fill('Private account A unsent draft');
-  expect(loads).toBe(1);
-  await switchAccount(page);
+test('job page offers the preparation entry without an inline embedded form', async ({page}) => {
+  const options = await applicationOptions(page, {});
+  await expect(options.getByRole('link', {name: 'Prepare application'})).toHaveAttribute('href', `/jobs/${job.id}/prepare`);
   await expect(page.locator('iframe')).toHaveCount(0);
-  await expect(page.getByRole('alert')).toContainText('The embedded form has been closed');
-  await expect(page.getByRole('button', {name: 'Load InternSG application here'})).toBeVisible();
-  expect(loads).toBe(1);
-  expect(externalPosts).toBe(0);
-  await page.getByRole('button', {name: 'Load InternSG application here'}).click();
-  await expect(page.frameLocator('iframe').locator('#applicant_name')).toHaveValue('');
-  expect(loads).toBe(2);
-  expect(externalPosts).toBe(0);
 });
