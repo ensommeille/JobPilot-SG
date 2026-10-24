@@ -18,8 +18,19 @@ class SqlAlchemyJobRepository:
 
     def upsert(self, records: list[JobRecord]) -> UpsertStats:
         items_new = items_updated = items_unchanged = 0
+        seen_dedup: set[str] = set()
+        seen_key: set[tuple] = set()
 
         for record in records:
+            key = (self.source.id, record.external_id)
+            if record.dedup_hash in seen_dedup or key in seen_key:
+                # Duplicate within this batch: the first occurrence is canonical.
+                # Without this, two identical postings flush to the same dedup_hash
+                # and trip the UNIQUE constraint.
+                items_unchanged += 1
+                continue
+            seen_dedup.add(record.dedup_hash)
+            seen_key.add(key)
             job = self.db.scalar(
                 select(JobPosting).where(
                     or_(
