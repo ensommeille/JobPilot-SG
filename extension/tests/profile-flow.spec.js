@@ -272,7 +272,7 @@ async function applicationOptions(page, changes, forms = [], onBootstrap) {
 
 test('a job without a configured platform form never offers a fake AI application', async ({page}) => {
   const options = await applicationOptions(page, {apply_url: 'https://employer.example.test/apply'});
-  await expect(options).toContainText('Review your saved details and resume, then continue through this employer's application channel.');
+  await expect(options).toContainText("Review your saved details and resume, then continue through this employer's application channel.");
   await expect(options.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveCount(0);
   await expect(options.getByRole('link', {name: /View original posting/})).toHaveAttribute('href', 'https://employer.example.test/apply');
 });
@@ -318,7 +318,7 @@ test('unsafe original URLs are not rendered as clickable application actions', a
     source_url: 'javascript:alert("fixture")',
     apply_url: 'https://account:password@employer.example.test/apply',
   });
-  await expect(options).toContainText('Review your saved details and resume, then continue through this employer's application channel.');
+  await expect(options).toContainText("Review your saved details and resume, then continue through this employer's application channel.");
   await expect(options.getByRole('link')).toHaveCount(0);
   await expect(page.locator('iframe')).toHaveCount(0);
 });
