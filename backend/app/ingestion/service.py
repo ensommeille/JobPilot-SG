@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from math import ceil
+from typing import Literal
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -18,7 +19,7 @@ from app.ingestion.db_repository import SqlAlchemyJobRepository
 from app.ingestion.internsg_adapter import InternSGAdapter, default_internsg_config
 from app.ingestion.models import SourceConfig, SourceType
 from app.ingestion.public_ats_adapter import PublicATSAdapter, public_ats_identity
-from app.ingestion.schemas import SourceCreate
+from app.ingestion.schemas import SourceCreate, SourceUpdate
 from app.ingestion.source_adapter import SourceAdapter
 
 LOGGER = logging.getLogger(__name__)
@@ -75,6 +76,26 @@ def list_sources(db: Session) -> list[JobSource]:
     return list(db.scalars(statement).all())
 
 
+def update_source(db: Session, *, source: JobSource, payload: SourceUpdate, actor: User) -> JobSource:
+    before = {"schedule": source.schedule, "enabled": source.enabled}
+    if "schedule" in payload.model_fields_set:
+        source.schedule = payload.schedule
+    if "enabled" in payload.model_fields_set:
+        source.enabled = bool(payload.enabled)
+    db.add(AuditLog(
+        actor_id=actor.id,
+        action="source.update",
+        entity_type="job_source",
+        entity_id=str(source.id),
+        metadata_json={"before": before, "after": {
+            "schedule": source.schedule, "enabled": source.enabled,
+        }},
+    ))
+    db.commit()
+    db.refresh(source)
+    return source
+
+
 def get_source(db: Session, source_id: UUID) -> JobSource | None:
     return db.get(JobSource, source_id)
 
@@ -93,6 +114,25 @@ def list_crawl_runs(db: Session, *, page: int, page_size: int) -> tuple[list[Cra
     )
     return (
         list(db.scalars(statement).all()),
+        total,
+        ceil(total / page_size) if total else 0,
+    )
+
+
+def list_audit_events(db: Session, *, page: int, page_size: int) -> tuple[list[dict], int, int]:
+    """Return only non-sensitive audit columns to the administrator view."""
+    total = db.scalar(select(func.count()).select_from(AuditLog)) or 0
+    statement = (
+        select(
+            AuditLog.id, AuditLog.actor_id, AuditLog.action,
+            AuditLog.entity_type, AuditLog.entity_id, AuditLog.created_at,
+        )
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return (
+        [dict(row._mapping) for row in db.execute(statement)],
         total,
         ceil(total / page_size) if total else 0,
     )
@@ -151,7 +191,8 @@ def run_source(
     db: Session,
     *,
     source: JobSource,
-    actor: User,
+    actor: User | None,
+    trigger: Literal["manual", "scheduled"] = "manual",
     adapter_factory: SourceAdapterFactory,
     max_links: int,
     max_details: int,
@@ -162,7 +203,7 @@ def run_source(
     crawl_run = CrawlRun(
         source_id=source.id,
         status=CrawlRunStatus.RUNNING,
-        trigger="manual",
+        trigger=trigger,
         started_at=started_at,
     )
     db.add(crawl_run)
@@ -239,10 +280,10 @@ def _reload_run(db: Session, run_id: UUID) -> CrawlRun:
     return crawl_run
 
 
-def _add_run_audit(db: Session, *, actor: User, source: JobSource, crawl_run: CrawlRun) -> None:
+def _add_run_audit(db: Session, *, actor: User | None, source: JobSource, crawl_run: CrawlRun) -> None:
     db.add(
         AuditLog(
-            actor_id=actor.id,
+            actor_id=actor.id if actor is not None else None,
             action="source.run",
             entity_type="crawl_run",
             entity_id=str(crawl_run.id),

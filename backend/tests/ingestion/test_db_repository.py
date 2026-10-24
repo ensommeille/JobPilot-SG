@@ -127,6 +127,49 @@ def test_recrawl_backfills_original_url_without_inventing_it(db: Session) -> Non
     assert job.apply_url != job.source_url
 
 
+def test_recrawl_migrates_a_legacy_identity_hash_without_recreating_job(db: Session) -> None:
+    source = JobSource(name="Legacy ATS", source_type="json", base_url="https://jobs.example.test")
+    db.add(source)
+    db.commit()
+    repository = SqlAlchemyJobRepository(db, source)
+    repository.upsert([make_record()])
+    db.commit()
+
+    stats = repository.upsert([make_record(dedup_hash="b" * 64)])
+    db.commit()
+
+    jobs = list(db.scalars(select(JobPosting)).all())
+    assert stats.items_updated == 1
+    assert len(jobs) == 1
+    assert jobs[0].external_id == "job-1"
+    assert jobs[0].dedup_hash == "b" * 64
+
+
+def test_legacy_hash_migration_does_not_claim_another_posting_identity(db: Session) -> None:
+    source = JobSource(name="Legacy ATS", source_type="json", base_url="https://jobs.example.test")
+    db.add(source)
+    db.commit()
+    repository = SqlAlchemyJobRepository(db, source)
+    repository.upsert([make_record(), make_record(external_id="job-2", dedup_hash="b" * 64)])
+    db.commit()
+
+    recrawl = make_record(
+        title="Renamed Internship",
+        description="Updated details.",
+        raw_hash="2" * 64,
+        dedup_hash="b" * 64,
+    )
+    stats = repository.upsert([recrawl])
+    db.commit()
+
+    jobs = {job.external_id: job for job in db.scalars(select(JobPosting)).all()}
+    assert stats.items_updated == 1
+    assert len(jobs) == 2
+    assert jobs["job-1"].title == "Renamed Internship"
+    assert jobs["job-1"].dedup_hash == "a" * 64
+    assert jobs["job-2"].dedup_hash == "b" * 64
+
+
 def test_cross_source_duplicate_preserves_canonical_identity(db: Session) -> None:
     first = JobSource(name="First", source_type="mock", base_url="https://jobs.example.test")
     second = JobSource(name="Second", source_type="mock", base_url="https://other.example.test")
@@ -149,6 +192,53 @@ def test_cross_source_duplicate_preserves_canonical_identity(db: Session) -> Non
     assert job.source_id == first.id
     assert job.external_id == "job-1"
     assert job.source_url == "https://jobs.example.test/job/job-1"
+
+
+def test_same_batch_duplicate_hash_preserves_first_canonical_posting(db: Session) -> None:
+    source = JobSource(name="Batch", source_type="mock", base_url="https://jobs.example.test")
+    db.add(source)
+    db.commit()
+
+    first = make_record()
+    duplicate = make_record(
+        external_id="job-2",
+        source_url="https://jobs.example.test/job/job-2",
+        raw_hash="2" * 64,
+        description="A second listing with the same normalized identity.",
+    )
+    stats = SqlAlchemyJobRepository(db, source).upsert([first, duplicate])
+    db.commit()
+
+    jobs = list(db.scalars(select(JobPosting)).all())
+    assert stats.items_new == 1
+    assert stats.items_unchanged == 1
+    assert len(jobs) == 1
+    assert jobs[0].external_id == "job-1"
+    assert jobs[0].source_url == first.source_url
+
+
+def test_existing_same_source_hash_collision_keeps_original_external_id(db: Session) -> None:
+    source = JobSource(name="Batch", source_type="mock", base_url="https://jobs.example.test")
+    db.add(source)
+    db.commit()
+    repository = SqlAlchemyJobRepository(db, source)
+    first = make_record()
+    repository.upsert([first])
+    db.commit()
+
+    duplicate = make_record(
+        external_id="job-2",
+        source_url="https://jobs.example.test/job/job-2",
+        raw_hash="2" * 64,
+    )
+    stats = repository.upsert([duplicate])
+    db.commit()
+
+    jobs = list(db.scalars(select(JobPosting)).all())
+    assert stats.items_unchanged == 1
+    assert len(jobs) == 1
+    assert jobs[0].external_id == first.external_id
+    assert jobs[0].source_url == first.source_url
 
 
 def test_recrawl_updates_closed_status_even_when_content_hash_is_unchanged(db: Session):

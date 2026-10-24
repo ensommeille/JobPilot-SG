@@ -201,8 +201,10 @@ For frontend journeys, set `FRONTEND_BASE_URL` to a running local Vite server.
 CI sets it to `http://127.0.0.1:5197` and sets `PLAYWRIGHT_START_FRONTEND=1`
 to start the test server automatically after installing frontend dependencies.
 Set `WIDGET_ASSET_DIR` to the directory containing `jquery.js` (3.7.1),
-`country.js` (CountrySelect 2.1.0), and `froala.js` (4.0.7) for the three optional
-downloaded-widget-library cases. The PR publication checkpoint passed 99 cases
+`country.js` (CountrySelect 2.1.0), and `froala.js` (4.0.7) for the four current
+downloaded-widget-library cases. Set `PLAYWRIGHT_NATIVE_EXTENSION=1` to run the
+two native-extension fixture cases in a disposable Chromium profile. The historical
+PR publication checkpoint passed 99 cases
 with these three explicitly skipped; the earlier local run covered those three.
 Tests use intercepted pages and mocked Chrome APIs; they do not replace installed
 Chrome permission/child-frame acceptance. The real embedded form/editor/CAPTCHA

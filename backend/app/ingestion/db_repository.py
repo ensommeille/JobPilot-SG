@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import JobPosting, JobSource, JobTag
@@ -33,31 +33,48 @@ class SqlAlchemyJobRepository:
             seen_key.add(key)
             job = self.db.scalar(
                 select(JobPosting).where(
-                    or_(
-                        (
-                            (JobPosting.source_id == self.source.id)
-                            & (JobPosting.external_id == record.external_id)
-                        ),
-                        JobPosting.dedup_hash == record.dedup_hash,
-                    )
+                    JobPosting.source_id == self.source.id,
+                    JobPosting.external_id == record.external_id,
                 )
             )
+            if job is None:
+                job = self.db.scalar(
+                    select(JobPosting).where(JobPosting.dedup_hash == record.dedup_hash)
+                )
 
             if job is None:
                 job = JobPosting(source_id=self.source.id, external_id=record.external_id)
                 self._copy_record(job, record)
                 self.db.add(job)
                 items_new += 1
-            elif job.source_id != self.source.id:
-                # Keep the canonical source identity intact on cross-source deduplication.
+                # SessionLocal has autoflush=False. Flush within the transaction so
+                # later records see this identity instead of failing at batch end.
+                self.db.flush()
+            elif job.source_id != self.source.id or job.external_id != record.external_id:
+                # A matching hash never authorizes replacing another posting's
+                # canonical source/external ID, even within the same source.
                 items_unchanged += 1
             elif job.raw_hash == record.raw_hash and job.status == record.status.value:
                 # Backfill provenance for legacy rows even when page content is unchanged.
                 job.source_url = record.source_url
-                items_unchanged += 1
+                if job.dedup_hash != record.dedup_hash and self._hash_available(
+                    job, record.dedup_hash
+                ):
+                    job.dedup_hash = record.dedup_hash
+                    self.db.flush()
+                    items_updated += 1
+                else:
+                    items_unchanged += 1
             else:
+                previous_hash = job.dedup_hash
+                hash_available = self._hash_available(job, record.dedup_hash)
                 self._copy_record(job, record)
+                if not hash_available:
+                    # Existing legacy duplicates may already claim the v2 key.
+                    # Update content but never violate the unique identity index.
+                    job.dedup_hash = previous_hash
                 items_updated += 1
+                self.db.flush()
 
         self.db.flush()
         total_stored = (
@@ -74,6 +91,12 @@ class SqlAlchemyJobRepository:
             items_unchanged=items_unchanged,
             total_stored=total_stored,
         )
+
+    def _hash_available(self, job: JobPosting, dedup_hash: str) -> bool:
+        if job.dedup_hash == dedup_hash:
+            return True
+        owner = self.db.scalar(select(JobPosting).where(JobPosting.dedup_hash == dedup_hash))
+        return owner is None or owner.id == job.id
 
     def close_missing(self, external_ids: set[str]) -> int:
         """Close vanished postings after a complete, successful API listing only."""

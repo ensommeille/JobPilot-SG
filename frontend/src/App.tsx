@@ -11,6 +11,7 @@ import ApplicationFormPage from './pages/ApplicationFormPage'
 import ApplicationHistoryPage from './pages/ApplicationHistoryPage'
 import ExternalApplicationPage from './pages/ExternalApplicationPage'
 import InternSGPreviewPage from './pages/InternSGPreviewPage'
+import AdminPage from './pages/AdminPage'
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
         <Route path="/connect-extension" element={<ConnectExtensionPage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
         <Route path="/applications" element={<ApplicationHistoryPage />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="/register" element={<RegisterPage />} />
       </Routes>
     </BrowserRouter>

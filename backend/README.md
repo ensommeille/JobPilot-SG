@@ -44,6 +44,12 @@ POST /assistant/map-fields
 POST /assistant/applications
 GET  /assistant/mappings/{mapping_id}
 GET  /health
+GET  /sources              # administrator only
+POST /sources              # administrator only
+PATCH /sources/{id}        # administrator only, schedule/enablement
+POST /sources/{id}/run     # administrator only, bounded manual crawl
+GET  /runs                 # administrator only
+GET  /audit-events         # administrator only, excludes audit metadata
 ```
 
 Registration creates both the user account and its one-to-one empty profile in one transaction.
@@ -70,6 +76,36 @@ page, and page-size parameters; multiple tag values are combined as an intersect
 Profile and resume routes store the structured pre-fill source and validated resume metadata. The
 MVP does not store uploaded resume bytes. Application routes provide user-owned history and a
 controlled lifecycle from draft through submitted, interviewing, offered, rejected, or withdrawn.
+
+## Optional scheduled collection
+
+Source creation accepts `schedule: "manual"` (or no schedule), `"daily"`, or a bounded
+interval such as `"every 6h"` or `"every 2d"` (1 hour to 7 days). The default is manual.
+Only supported live Greenhouse/Lever or InternSG sources may be scheduled. A source is due
+only after its last completed crawl has aged by that interval; a running crawl is not
+restarted. Each cycle processes at most three sources and five jobs per source by default.
+An administrator can change an existing source with `PATCH /sources/{id}` using
+`{"schedule":"every 6h"}`; `{"schedule":null}` returns it to manual-only mode.
+Scheduled runs are recorded with `trigger=scheduled` and an audit entry whose actor is
+`null` (system-initiated). This is a **single-worker** design; do not run multiple
+scheduler instances against one database.
+
+The worker is **off by default**. Preview due sources without network access:
+
+```bash
+python -m app.ingestion.scheduler_cli
+```
+
+To run one due cycle (this does access the configured external sites):
+
+```bash
+python -m app.ingestion.scheduler_cli --apply --max-sources 1 --max-jobs 5
+```
+
+With the normal Compose stack and migrations already running, opt in to a single
+periodic worker using `docker compose --profile scheduler up -d scheduler`.
+Stop it with `docker compose --profile scheduler stop scheduler`. The worker does
+not run LLM extraction or submit any applications.
 
 The `/assistant/map-fields` route delegates to Member 4's concrete profile-to-form mapping service.
 It returns a partial `MappingDraft` even when no LLM key is configured: direct fields are mapped,

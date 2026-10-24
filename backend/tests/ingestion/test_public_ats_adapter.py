@@ -11,14 +11,14 @@ from app.ingestion.schemas import SourceCreate
 from app.ingestion.service import SourceRunError, build_source_adapter
 
 
-def adapter_for(provider: str, handler) -> PublicATSAdapter:
+def adapter_for(provider: str, handler, *, source_id: str = "source-1") -> PublicATSAdapter:
     base = (
         "https://boards-api.greenhouse.io/v1/boards/acme"
         if provider == "greenhouse"
         else "https://api.lever.co/v0/postings/acme"
     )
     config = SourceConfig(
-        source_id="source-1",
+        source_id=source_id,
         name="Acme",
         source_type=SourceType.JSON,
         base_url=base,
@@ -115,6 +115,90 @@ def test_greenhouse_ingests_only_published_internships_and_keeps_hosted_url():
     assert record.description == "Build Python services."
     assert record.apply_url == "https://job-boards.greenhouse.io/acme/jobs/123"
     assert not any("/jobs/123" in request for request in requests)
+
+
+def test_distinct_ats_posting_ids_keep_distinct_identities_with_the_same_title():
+    jobs = {
+        "jobs": [
+            {
+                "id": posting_id,
+                "title": "Data Analyst, Intern",
+                "absolute_url": f"https://job-boards.greenhouse.io/acme/jobs/{posting_id}",
+                "location": {"name": "Singapore"},
+                "content": f"<p>Work with team {posting_id}.</p>",
+            }
+            for posting_id in (8194291, 8194287)
+        ]
+    }
+
+    def handler(request):
+        if request.url.path == "/robots.txt":
+            return reply(request, "User-agent: *\nAllow: /", content_type="text/plain")
+        return reply(request, jobs)
+
+    batch = adapter_for("greenhouse", handler).collect(max_links=2, max_details=2)
+
+    assert batch.status is RunStatus.SUCCEEDED
+    assert [item.external_id for item in batch.items] == ["8194291", "8194287"]
+    assert batch.items[0].known_fields.dedup_hash != batch.items[1].known_fields.dedup_hash
+
+
+def test_ats_posting_identity_survives_a_title_change():
+    title = "Data Analyst, Intern"
+
+    def handler(request):
+        if request.url.path == "/robots.txt":
+            return reply(request, "User-agent: *\nAllow: /", content_type="text/plain")
+        return reply(
+            request,
+            {
+                "jobs": [
+                    {
+                        "id": 8194291,
+                        "title": title,
+                        "absolute_url": "https://job-boards.greenhouse.io/acme/jobs/8194291",
+                        "location": {"name": "Singapore"},
+                        "content": "<p>Build services.</p>",
+                    }
+                ]
+            },
+        )
+
+    adapter = adapter_for("greenhouse", handler)
+    first = adapter.collect(max_links=1, max_details=1).items[0].known_fields
+    title = "Senior Data Analyst, Intern"
+    second = adapter.collect(max_links=1, max_details=1).items[0].known_fields
+
+    assert first.raw_hash != second.raw_hash
+    assert first.dedup_hash == second.dedup_hash
+
+
+def test_same_public_board_posting_keeps_identity_across_source_configurations():
+    def handler(request):
+        if request.url.path == "/robots.txt":
+            return reply(request, "User-agent: *\nAllow: /", content_type="text/plain")
+        return reply(
+            request,
+            {
+                "jobs": [
+                    {
+                        "id": 8194291,
+                        "title": "Data Analyst Intern",
+                        "absolute_url": "https://job-boards.greenhouse.io/acme/jobs/8194291",
+                        "content": "<p>Build services.</p>",
+                    }
+                ]
+            },
+        )
+
+    first = adapter_for("greenhouse", handler, source_id="first").collect(
+        max_links=1, max_details=1
+    )
+    second = adapter_for("greenhouse", handler, source_id="second").collect(
+        max_links=1, max_details=1
+    )
+
+    assert first.items[0].known_fields.dedup_hash == second.items[0].known_fields.dedup_hash
 
 
 def test_lever_ingests_hosted_application_and_rejects_unsafe_links():

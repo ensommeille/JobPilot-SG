@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.db.models import CrawlRunStatus
 from app.ingestion.models import SourceType
 from app.ingestion.public_ats_adapter import public_ats_identity
+from app.ingestion.schedule_policy import schedule_interval
 
 
 class SourceCreate(BaseModel):
@@ -35,7 +36,10 @@ class SourceCreate(BaseModel):
         if value is None:
             return None
         normalized = value.strip()
-        return normalized or None
+        if not normalized:
+            return None
+        schedule_interval(normalized)
+        return normalized
 
     @field_validator("base_url")
     @classmethod
@@ -52,6 +56,14 @@ class SourceCreate(BaseModel):
             raise ValueError(
                 "JSON sources require an exact Greenhouse or Lever public board API URL"
             )
+        if schedule_interval(self.schedule) is not None:
+            host = (urlparse(self.base_url).hostname or "").casefold().rstrip(".")
+            if self.source_type is SourceType.HTML and host in {
+                "internsg.com", "www.internsg.com",
+            }:
+                return self
+            if self.source_type is not SourceType.JSON:
+                raise ValueError("Scheduled sources require a supported live ATS or InternSG adapter")
         return self
 
 
@@ -67,6 +79,24 @@ class SourceRead(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+
+
+class SourceUpdate(BaseModel):
+    schedule: str | None = Field(default=None, max_length=120)
+    enabled: bool | None = None
+
+    @field_validator("schedule")
+    @classmethod
+    def normalize_schedule(cls, value: str | None) -> str | None:
+        return SourceCreate.normalize_schedule(value)
+
+    @model_validator(mode="after")
+    def require_change(self) -> SourceUpdate:
+        if not self.model_fields_set or (
+            "enabled" in self.model_fields_set and self.enabled is None
+        ):
+            raise ValueError("Provide schedule or a non-null enabled value")
+        return self
 
 
 class SourceRunRequest(BaseModel):
@@ -99,6 +129,23 @@ class CrawlRunRead(BaseModel):
 
 class CrawlRunPage(BaseModel):
     items: list[CrawlRunRead]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1)
+    total: int = Field(ge=0)
+    pages: int = Field(ge=0)
+
+
+class AuditEventRead(BaseModel):
+    id: UUID
+    actor_id: UUID | None
+    action: str
+    entity_type: str
+    entity_id: str | None
+    created_at: datetime
+
+
+class AuditEventPage(BaseModel):
+    items: list[AuditEventRead]
     page: int = Field(ge=1)
     page_size: int = Field(ge=1)
     total: int = Field(ge=0)

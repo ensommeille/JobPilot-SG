@@ -16,11 +16,25 @@ export function interactWithWidgets(command, expectedUrl = null, approved = [], 
   const summary = node('applicant_summary', 'TEXTAREA', true);
   const instances = window.FroalaEditor?.INSTANCES;
   const editor = Array.isArray(instances) ? instances.find(e => e.el === summary || e.$oel?.[0] === summary) : null;
-  const richReady = !!(summary && editor?.html?.set && editor?.html?.get && editor?.core?.isEmpty
+  const froalaReady = !!(summary && editor?.html?.set && editor?.html?.get && editor?.core?.isEmpty
     && editor.el?.getClientRects().length);
+  // InternSG now mounts Quill after the hidden textarea. Resolve only that exact widget,
+  // through Quill's public instance lookup, so an unrelated editable area is never filled.
+  const quillBox = summary?.nextElementSibling?.classList.contains('isg-quill-box')
+    ? summary.nextElementSibling : null;
+  const quillRoot = quillBox?.querySelector('.ql-container > .ql-editor');
+  const quillContainer = quillRoot?.parentElement;
+  const quill = quillRoot && window.Quill?.find
+    ? (window.Quill.find(quillContainer) || window.Quill.find(quillRoot)) : null;
+  const quillReady = !!(summary && !froalaReady && quillBox
+    && quillBox.querySelectorAll('.ql-editor').length === 1 && quill?.root === quillRoot
+    && quillRoot.isContentEditable && quillRoot.getClientRects().length
+    && typeof quill.getText === 'function' && typeof quill.setText === 'function');
+  const richReady = froalaReady || quillReady;
+  const editorEmpty = () => froalaReady ? editor.core.isEmpty() : !quill.getText().trim();
   const backingHasContent = () => {
     // Froala can serialize its own attribution into an otherwise empty editor.
-    if (richReady && editor.core.isEmpty() && summary.value === editor.html.get()) return false;
+    if (froalaReady && editor.core.isEmpty() && summary.value === editor.html.get()) return false;
     const parsed = new DOMParser().parseFromString(summary?.value || '', 'text/html');
     return !!parsed.body.textContent.trim() || !!parsed.body.querySelector('img,video,audio,iframe,table,hr');
   };
@@ -40,7 +54,7 @@ export function interactWithWidgets(command, expectedUrl = null, approved = [], 
     }
   } catch { countries = []; countryState = null; }
   if (command === 'inspect') return {
-    richReady, summaryOccupied: richReady ? !editor.core.isEmpty() || backingHasContent() : false,
+    richReady, summaryOccupied: richReady ? !editorEmpty() || backingHasContent() : false,
     summaryReason: richReady ? '' : 'Rich-text editor is not ready or has changed. Fill the summary on the website.',
     countries, countryState,
     countryReason: countryState ? '' : 'Country widgets are unavailable or have changed. Select both countries on the website.',
@@ -64,20 +78,30 @@ export function interactWithWidgets(command, expectedUrl = null, approved = [], 
     try {
       if (item.id === 'applicant_summary') {
         if (!richReady) throw new Error('Rich-text editor is not ready. Reload the page and read fields again.');
-        if (!editor.core.isEmpty() || backingHasContent()) throw new Error('The website already contains a summary; it was not overwritten.');
-        const container = document.createElement('div');
-        for (const line of item.value.split(/\r?\n/)) {
-          const paragraph = document.createElement('p'); paragraph.textContent = line;
-          if (!line) paragraph.append(document.createElement('br'));
-          container.append(paragraph);
+        if (!editorEmpty() || backingHasContent()) throw new Error('The website already contains a summary; it was not overwritten.');
+        if (quillReady) {
+          const normalized = item.value.replace(/\r\n/g, '\n');
+          quill.setText(normalized, 'api');
+          // InternSG's onChange handler mirrors Quill into the form's textarea.
+          // Never claim success if that site-level synchronization did not happen.
+          if (quill.getText().replace(/\n$/, '') !== normalized || !backingHasContent()) {
+            throw new Error('Editor synchronization failed. Check the summary on the website.');
+          }
+        } else {
+          const container = document.createElement('div');
+          for (const line of item.value.split(/\r?\n/)) {
+            const paragraph = document.createElement('p'); paragraph.textContent = line;
+            if (!line) paragraph.append(document.createElement('br'));
+            container.append(paragraph);
+          }
+          editor.html.set(container.innerHTML);
+          const html = editor.html.get();
+          Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(summary, html);
+          editor.events?.trigger('contentChanged');
+          summary.dispatchEvent(new Event('input', {bubbles: true}));
+          summary.dispatchEvent(new Event('change', {bubbles: true}));
+          if (editor.core.isEmpty() || summary.value !== editor.html.get()) throw new Error('Editor synchronization failed. Check the summary on the website.');
         }
-        editor.html.set(container.innerHTML);
-        const html = editor.html.get();
-        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(summary, html);
-        editor.events?.trigger('contentChanged');
-        summary.dispatchEvent(new Event('input', {bubbles: true}));
-        summary.dispatchEvent(new Event('change', {bubbles: true}));
-        if (editor.core.isEmpty() || summary.value !== editor.html.get()) throw new Error('Editor synchronization failed. Check the summary on the website.');
       } else {
         // Extension serialization may reorder keys. Compare values, not JSON text.
         const stateKeys = ['nationality', 'campus', 'same', 'nationalityText', 'campusText'];
