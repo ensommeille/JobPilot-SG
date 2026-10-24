@@ -27,7 +27,7 @@ from .models import (
     SourceConfig,
     SourceType,
 )
-from .normalization import build_external_dedup_hash, normalize_job_types, sha256_text
+from .normalization import infer_city, normalize_job_types, sha256_text
 from .source_adapter import SourceAdapter
 
 PARSER_VERSION = "public-ats-2026-10-v2"
@@ -441,7 +441,11 @@ class PublicATSAdapter(SourceAdapter):
             description=description,
             apply_url=apply_url,
             raw_hash=sha256_text(raw_text),
-            dedup_hash=build_external_dedup_hash(self.config.source_id, external_id),
+            # Published ATS IDs identify postings even when title and city are identical.
+            # A title change must not create a new identity for the same posting.
+            dedup_hash=sha256_text(
+                f"public-ats-posting-v1\x1f{self.provider}\x1f{self.board}\x1f{external_id}"
+            ),
             parser_version=PARSER_VERSION,
             posted_at=_posted_at(job, self.provider),
         )

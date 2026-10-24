@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.db.models import CrawlRunStatus
 from app.ingestion.models import SourceType
 from app.ingestion.public_ats_adapter import public_ats_identity
-from app.ingestion.schedule import normalize_schedule, utc_timestamp
+from app.ingestion.schedule import INTERVAL_HOURS, normalize_schedule, utc_timestamp
 
 
 class SourceCreate(BaseModel):
@@ -109,6 +109,24 @@ class SourceScheduleUpdate(BaseModel):
         return self
 
 
+class SourceUpdate(BaseModel):
+    schedule: str | None = Field(default=None, max_length=120)
+    enabled: bool | None = None
+
+    @field_validator("schedule")
+    @classmethod
+    def normalize_schedule(cls, value: str | None) -> str | None:
+        return SourceCreate.normalize_schedule(value)
+
+    @model_validator(mode="after")
+    def require_change(self) -> SourceUpdate:
+        if not self.model_fields_set or (
+            "enabled" in self.model_fields_set and self.enabled is None
+        ):
+            raise ValueError("Provide schedule or a non-null enabled value")
+        return self
+
+
 class SourceRunRequest(BaseModel):
     max_links: int = Field(default=20, ge=1, le=100)
     max_details: int = Field(default=5, ge=1, le=100)
@@ -143,6 +161,23 @@ class CrawlRunRead(BaseModel):
 
 class CrawlRunPage(BaseModel):
     items: list[CrawlRunRead]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1)
+    total: int = Field(ge=0)
+    pages: int = Field(ge=0)
+
+
+class AuditEventRead(BaseModel):
+    id: UUID
+    actor_id: UUID | None
+    action: str
+    entity_type: str
+    entity_id: str | None
+    created_at: datetime
+
+
+class AuditEventPage(BaseModel):
+    items: list[AuditEventRead]
     page: int = Field(ge=1)
     page_size: int = Field(ge=1)
     total: int = Field(ge=0)

@@ -158,6 +158,68 @@ def test_source_routes_require_admin_and_reject_duplicates(
     assert client.get("/sources", headers=admin).json()[0]["id"] == created.json()["id"]
 
 
+def test_admin_can_page_audit_events_without_exposing_metadata(
+    client: TestClient, db: Session
+) -> None:
+    seeker = auth_headers(client, db, "seeker-audit@example.com", admin=False)
+    admin = auth_headers(client, db, "admin-audit@example.com", admin=True)
+    created = client.post("/sources", headers=admin, json=source_payload())
+    assert created.status_code == 201
+    db.add(
+        AuditLog(
+            action="ingestion.review",
+            entity_type="job_source",
+            entity_id=created.json()["id"],
+            metadata_json={"private_note": "must not appear in audit list"},
+        )
+    )
+    db.commit()
+
+    assert client.get("/audit-events").status_code == 401
+    assert client.get("/audit-events", headers=seeker).status_code == 403
+    first = client.get("/audit-events?page=1&page_size=1", headers=admin)
+    second = client.get("/audit-events?page=2&page_size=1", headers=admin)
+
+    assert first.status_code == second.status_code == 200
+    assert first.json()["total"] == second.json()["total"] == 2
+    assert first.json()["pages"] == 2
+    assert {first.json()["items"][0]["action"], second.json()["items"][0]["action"]} == {
+        "source.create", "ingestion.review"
+    }
+    assert "metadata_json" not in first.json()["items"][0]
+    assert "private_note" not in first.text + second.text
+    assert client.get("/audit-events?page_size=101", headers=admin).status_code == 422
+
+
+def test_only_admin_can_change_existing_source_schedule_and_enabled_state(
+    client: TestClient, db: Session,
+) -> None:
+    seeker = auth_headers(client, db, "seeker-schedule@example.com", admin=False)
+    admin = auth_headers(client, db, "admin-schedule@example.com", admin=True)
+    created = client.post("/sources", headers=admin, json={
+        "name": "Scheduled ATS", "source_type": "json",
+        "base_url": "https://boards-api.greenhouse.io/v1/boards/example",
+    })
+    assert created.status_code == 201
+    source_id = created.json()["id"]
+
+    assert client.patch(f"/sources/{source_id}", json={"schedule": "every:24h"}).status_code == 401
+    assert client.patch(f"/sources/{source_id}", headers=seeker, json={"schedule": "every:24h"}).status_code == 403
+    assert client.patch(f"/sources/{source_id}", headers=admin, json={"schedule": "every:5m"}).status_code == 422
+    assert client.patch(f"/sources/{source_id}", headers=admin, json={}).status_code == 422
+    changed = client.patch(f"/sources/{source_id}", headers=admin, json={
+        "schedule": "every:6h", "enabled": False,
+    })
+    assert changed.status_code == 200
+    assert changed.json()["schedule"] == "every:6h"
+    assert changed.json()["enabled"] is False
+
+    cleared = client.patch(f"/sources/{source_id}", headers=admin, json={"schedule": None})
+    assert cleared.status_code == 200
+    assert cleared.json()["schedule"] is None
+    assert db.scalar(select(func.count()).select_from(AuditLog).where(AuditLog.action == "source.configure")) == 2
+
+
 def test_crawl_run_persists_jobs_updates_and_audit(
     client: TestClient, db: Session
 ) -> None:

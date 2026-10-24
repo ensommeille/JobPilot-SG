@@ -21,19 +21,29 @@ class SqlAlchemyJobRepository:
     def upsert(self, records: list[JobRecord], *, seen_at: datetime | None = None) -> UpsertStats:
         items_new = items_updated = items_unchanged = 0
         seen_at = seen_at or datetime.now(UTC)
+        seen_dedup: set[str] = set()
+        seen_key: set[tuple] = set()
 
         for record in records:
+            key = (self.source.id, record.external_id)
+            if record.dedup_hash in seen_dedup or key in seen_key:
+                # Duplicate within this batch: the first occurrence is canonical.
+                # Without this, two identical postings flush to the same dedup_hash
+                # and trip the UNIQUE constraint.
+                items_unchanged += 1
+                continue
+            seen_dedup.add(record.dedup_hash)
+            seen_key.add(key)
             job = self.db.scalar(
                 select(JobPosting).where(
-                    or_(
-                        (
-                            (JobPosting.source_id == self.source.id)
-                            & (JobPosting.external_id == record.external_id)
-                        ),
-                        JobPosting.dedup_hash == record.dedup_hash,
-                    )
+                    JobPosting.source_id == self.source.id,
+                    JobPosting.external_id == record.external_id,
                 )
             )
+            if job is None:
+                job = self.db.scalar(
+                    select(JobPosting).where(JobPosting.dedup_hash == record.dedup_hash)
+                )
 
             if job is None:
                 job = JobPosting(source_id=self.source.id, external_id=record.external_id)
@@ -41,17 +51,28 @@ class SqlAlchemyJobRepository:
                 job.last_seen_at = seen_at
                 self.db.add(job)
                 items_new += 1
-            elif job.source_id != self.source.id:
-                # Keep the canonical source identity intact on cross-source deduplication.
+                # SessionLocal has autoflush=False. Flush within the transaction so
+                # later records see this identity instead of failing at batch end.
+                self.db.flush()
+            elif job.source_id != self.source.id or job.external_id != record.external_id:
+                # A matching hash never authorizes replacing another posting's
+                # canonical source/external ID, even within the same source.
                 items_unchanged += 1
             else:
                 before = self._snapshot(job)
+                previous_hash = job.dedup_hash
+                hash_available = self._hash_available(job, record.dedup_hash)
                 self._copy_record(job, record)
                 job.last_seen_at = seen_at
+                if not hash_available:
+                    # Existing legacy duplicates may already claim the v2 key.
+                    # Update content but never violate the unique identity index.
+                    job.dedup_hash = previous_hash
                 if self._snapshot(job) == before:
                     items_unchanged += 1
                 else:
                     items_updated += 1
+                self.db.flush()
 
         self.db.flush()
         total_stored = (
@@ -68,6 +89,12 @@ class SqlAlchemyJobRepository:
             items_unchanged=items_unchanged,
             total_stored=total_stored,
         )
+
+    def _hash_available(self, job: JobPosting, dedup_hash: str) -> bool:
+        if job.dedup_hash == dedup_hash:
+            return True
+        owner = self.db.scalar(select(JobPosting).where(JobPosting.dedup_hash == dedup_hash))
+        return owner is None or owner.id == job.id
 
     def close_missing(self, external_ids: set[str]) -> int:
         """Close vanished postings after a complete, successful API listing only."""

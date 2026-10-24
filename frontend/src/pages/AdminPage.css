@@ -1,0 +1,25 @@
+.admin-page { max-width: 1100px; }
+.admin-page .page-header { max-width: 68ch; }
+.admin-section { margin-top: var(--s-7); }
+.admin-section-heading { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-4); margin-bottom: var(--s-3); }
+.admin-section-heading span { color: var(--text-muted); font-size: 13px; }
+.admin-list { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--border-strong); }
+.admin-list-item { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--s-3) var(--s-5); padding: var(--s-4) 0; border-bottom: 1px solid var(--border); }
+.admin-list-item strong { font-weight: 600; }
+.admin-list-item p { margin-top: var(--s-1); font-size: 13px; }
+.admin-url, .admin-entity { overflow-wrap: anywhere; }
+.admin-url { color: var(--text-muted); max-width: 65ch; }
+.admin-facts { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--s-2) var(--s-3); color: var(--text-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.admin-status { font-weight: 600; text-transform: capitalize; }
+.admin-status-succeeded { color: var(--success); }
+.admin-status-partial, .admin-status-pending { color: var(--warning); }
+.admin-status-failed { color: var(--danger); }
+.admin-run-error { width: 100%; color: var(--danger); }
+.admin-pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--s-3); margin-top: var(--s-4); color: var(--text-muted); font-size: 13px; }
+.admin-error { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--s-3); }
+@media (max-width: 700px) {
+  .admin-section { margin-top: var(--s-6); }
+  .admin-section-heading { align-items: flex-start; flex-direction: column; gap: var(--s-1); }
+  .admin-list-item { align-items: flex-start; flex-direction: column; }
+  .admin-facts { justify-content: flex-start; }
+}

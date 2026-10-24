@@ -37,3 +37,6 @@ data/
 output/
 playwright-report/
 test-results/
+
+# local demo SQLite artifact
+backend/jobpilot_demo.db

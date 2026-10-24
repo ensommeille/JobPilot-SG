@@ -234,7 +234,7 @@ try {
     source: 'Saved actual live artifact plus explicit source-bound agent correction; final human review pending',
     new_model_calls: 0, employer_submissions: 0, test_accounts: 2,
     optional_font_stylesheet_blocked: optionalFonts.size > 0,
-    note: 'Isolated integration snapshot of pending PRs; not current main or a new live model acceptance.',
+    note: 'Isolated integration using saved source-bound evidence; not a new live model acceptance or employer submission.',
   };
   await fs.writeFile(path.join(output, 'verification.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify({result: 'passed', checks: checks.length, output}));

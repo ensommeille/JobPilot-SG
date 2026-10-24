@@ -18,6 +18,7 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
   const navigate = useNavigate()
   const location = useLocation()
   const [userName, setUserName] = useState('')
+  const [adminToken, setAdminToken] = useState<string | null>(null)
   const [logoutError, setLogoutError] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
 
@@ -26,6 +27,7 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
     const load = () => {
       pending?.abort()
       setUserName('')
+      setAdminToken(null)
       const token = getToken()
       if (!token) return
       const request = new AbortController()
@@ -33,6 +35,9 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
       api.get('/profile', {signal: request.signal, headers: {Authorization: `Bearer ${token}`}, timeout: 15000})
         .then(res => { if (!request.signal.aborted && getToken() === token) setUserName(res.data.full_name ?? res.data.contact_email ?? 'Account') })
         .catch(() => { if (!request.signal.aborted && getToken() === token) setUserName('Account') })
+      api.get<{role: string}>('/users/me', {signal: request.signal, headers: {Authorization: `Bearer ${token}`}, timeout: 15000})
+        .then(res => { if (!request.signal.aborted && getToken() === token && res.data.role === 'admin') setAdminToken(token) })
+        .catch(() => { /* Keep the admin entry hidden when role verification fails. */ })
     }
     load()
     const unwatch = watchSession(load)
@@ -74,6 +79,12 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
               {item.icon} <span className="nav-link-label">{item.label}</span>
             </button>
           ))}
+
+          {adminToken && adminToken === getToken() && <button
+            aria-label="Admin"
+            className={`nav-link ${location.pathname === '/admin' ? 'active' : ''}`}
+            onClick={() => navigate('/admin')}
+          >Admin</button>}
 
           <div className="nav-divider" />
 

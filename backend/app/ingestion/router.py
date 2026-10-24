@@ -6,12 +6,15 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import AdminUser
 from app.db.session import get_db
 from app.ingestion.locks import SourceBusyError, SourceLeaseLostError
 from app.ingestion.schemas import (
+    AuditEventPage,
+    AuditEventRead,
     CrawlRunPage,
     CrawlRunRead,
     SourceCreate,
@@ -27,6 +30,7 @@ from app.ingestion.service import (
     get_crawl_run,
     get_source,
     get_source_adapter_factory,
+    list_audit_events,
     list_crawl_runs,
     list_sources,
     run_source,
@@ -120,3 +124,20 @@ def read_crawl_run(run_id: UUID, db: DatabaseSession, _admin: AdminUser) -> Craw
     if crawl_run is None:
         raise HTTPException(status_code=404, detail="Crawl run not found")
     return CrawlRunRead.model_validate(crawl_run)
+
+
+@router.get("/audit-events", response_model=AuditEventPage)
+def read_audit_events(
+    db: DatabaseSession,
+    _admin: AdminUser,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> AuditEventPage:
+    items, total, pages = list_audit_events(db, page=page, page_size=page_size)
+    return AuditEventPage(
+        items=[AuditEventRead.model_validate(item) for item in items],
+        page=page,
+        page_size=page_size,
+        total=total,
+        pages=pages,
+    )

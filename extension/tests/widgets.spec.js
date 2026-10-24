@@ -32,6 +32,56 @@ test('rejects unsafe hosts and unconfirmed widget operations', async ({page}) =>
   await expect(inspect(page)).rejects.toThrow();
 });
 
+test('current InternSG Quill editor syncs a plain-text summary without submitting', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => {
+    const summary = document.getElementById('applicant_summary');
+    summary.style.display = 'none';
+    const box = document.createElement('div');
+    box.className = 'isg-quill-box';
+    box.innerHTML = '<div class="ql-container"><div class="ql-editor" contenteditable="true"><p><br></p></div></div>';
+    summary.after(box);
+    const root = box.querySelector('.ql-editor');
+    const quill = {
+      root,
+      getText: () => root.textContent || '\n',
+      setText(text) {
+        root.textContent = text;
+        summary.value = `<p>${root.innerHTML}</p>`;
+      },
+    };
+    window.Quill = {find: node => node === root ? quill : null};
+  });
+  expect((await inspect(page)).richReady).toBe(true);
+  const result = await fill(page, [{id: 'applicant_summary', value: 'Fictional summary <script>never runs</script>', confirmed: true}]);
+  expect(result.filled).toEqual(['applicant_summary']);
+  await expect(page.locator('.ql-editor')).toContainText('<script>never runs</script>');
+  expect(await page.locator('#applicant_summary').inputValue()).toContain('&lt;script&gt;');
+  expect((await fill(page, [{id: 'applicant_summary', value: 'Overwrite', confirmed: true}])).reasons.applicant_summary).toContain('not overwritten');
+  expect(await page.evaluate(() => window.submits)).toBe(0);
+});
+
+test('Quill changes without the website textarea sync are reported, not accepted', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => {
+    const summary = document.getElementById('applicant_summary');
+    summary.style.display = 'none';
+    const box = document.createElement('div');
+    box.className = 'isg-quill-box';
+    box.innerHTML = '<div class="ql-container"><div class="ql-editor" contenteditable="true"><p><br></p></div></div>';
+    summary.after(box);
+    const root = box.querySelector('.ql-editor');
+    const quill = {root, getText: () => root.textContent || '\n', setText: text => { root.textContent = text; }};
+    window.Quill = {find: node => node === root.parentElement ? quill : null};
+  });
+  expect((await inspect(page)).richReady).toBe(true);
+  const result = await fill(page, [{id: 'applicant_summary', value: 'Unsynced synthetic text', confirmed: true}]);
+  expect(result.skipped).toEqual(['applicant_summary']);
+  expect(result.reasons.applicant_summary).toContain('synchronization failed');
+  expect(await page.locator('#applicant_summary').inputValue()).toBe('');
+  expect(await page.evaluate(() => window.submits)).toBe(0);
+});
+
 // Offline coverage of extension-style key reordering, independent of downloaded libraries.
 async function mockCountries(page) {
   await setup(page);
