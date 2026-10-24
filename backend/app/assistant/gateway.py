@@ -14,6 +14,7 @@ class FormMappingGateway(Protocol):
         *,
         form_snapshot: list[FormSnapshotField],
         profile_data: dict[str, Any],
+        job_context: dict[str, Any] | None = None,
     ) -> MappingDraft: ...
 
 
@@ -25,9 +26,17 @@ class LiveFormMappingGateway:
     """M2's synchronous gateway boundary, executed in FastAPI's worker thread."""
 
     def map_fields(
-        self, *, form_snapshot: list[FormSnapshotField], profile_data: dict[str, Any]
+        self,
+        *,
+        form_snapshot: list[FormSnapshotField],
+        profile_data: dict[str, Any],
+        job_context: dict[str, Any] | None = None,
     ) -> MappingDraft:
         service = ProfileFormMappingService(provider_factory=build_live_provider)
         return asyncio.run(
-            service.map_fields(form_snapshot=form_snapshot, profile_data=profile_data)
+            service.map_fields(
+                form_snapshot=form_snapshot,
+                profile_data=profile_data,
+                job_context=job_context,
+            )
         )

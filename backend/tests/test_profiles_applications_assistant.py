@@ -226,7 +226,7 @@ def test_mapping_route_uses_deterministic_gateway_without_api_key(
 def test_mapping_gateway_receives_minimized_profile(
     client: TestClient, application_context: tuple[JobPosting, ApplicationForm]
 ) -> None:
-    _, form = application_context
+    job, form = application_context
     headers = auth_headers(client, "gateway@example.com")
     client.put(
         "/profile",
@@ -236,14 +236,17 @@ def test_mapping_gateway_receives_minimized_profile(
 
     class FakeGateway:
         profile_data: dict[str, Any] | None = None
+        job_context: dict[str, Any] | None = None
 
         def map_fields(
             self,
             *,
             form_snapshot: list[FormSnapshotField],
             profile_data: dict[str, Any],
+            job_context: dict[str, Any] | None = None,
         ) -> MappingDraft:
             self.profile_data = profile_data
+            self.job_context = job_context
             return MappingDraft(
                 mapping=[
                     MappingFieldSuggestion(
@@ -283,6 +286,11 @@ def test_mapping_gateway_receives_minimized_profile(
         "experience",
         "skills",
         "links",
+    }
+    assert fake.job_context == {
+        "title": job.title,
+        "company": job.company,
+        "description": job.description,
     }
 
 
