@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.db.models import CrawlRunStatus
 from app.ingestion.models import SourceType
 from app.ingestion.public_ats_adapter import public_ats_identity
-from app.ingestion.schedule import INTERVAL_HOURS, normalize_schedule, utc_timestamp
+from app.ingestion.schedule import normalize_schedule, utc_timestamp
 
 
 class SourceCreate(BaseModel):

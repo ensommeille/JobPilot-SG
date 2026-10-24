@@ -6,7 +6,6 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import AdminUser

@@ -27,7 +27,7 @@ from .models import (
     SourceConfig,
     SourceType,
 )
-from .normalization import infer_city, normalize_job_types, sha256_text
+from .normalization import normalize_job_types, sha256_text
 from .source_adapter import SourceAdapter
 
 PARSER_VERSION = "public-ats-2026-10-v2"
