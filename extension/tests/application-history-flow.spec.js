@@ -85,7 +85,7 @@ test('failed history can retry and cross-tab sign-out immediately clears private
     calls++;
     return route.fulfill(failing ? {status: 503, json: {}} : {json: historyPage([record('private-account-a')])});
   });
-  await expect(page.getByRole('alert')).toContainText('Could not load your application records');
+  await expect(page.getByRole('alert')).toContainText('Could not load your applications. Check your connection and retry.');
   failing = false;
   await page.getByRole('button', {name: 'Retry history'}).click();
   await expect(page.getByRole('article')).toBeVisible();
@@ -134,7 +134,7 @@ test('a status conflict offers an explicit reload instead of claiming the update
   const manual = page.getByRole('article', {name: 'Fictional manual role'});
   await manual.getByLabel('Update reported status').selectOption('interviewing');
   await manual.getByRole('button', {name: 'Save status'}).click();
-  await expect(manual.getByRole('alert')).toContainText('Could not update this record');
+  await expect(manual.getByRole('alert')).toContainText('The status could not be saved. Reload the record before trying again.');
   await expect(manual).toContainText('Submitted (self-reported)');
   await manual.getByRole('button', {name: 'Reload history'}).click();
   await expect(page.getByRole('article', {name: 'Fictional manual role'})).toContainText('Rejected');

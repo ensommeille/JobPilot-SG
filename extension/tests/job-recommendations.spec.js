@@ -136,5 +136,5 @@ test('explicit internship preference and profile evidence scope are explained', 
   await page.getByRole('button', {name: 'Find jobs for me'}).click();
   await expect(page.locator('.job-recommendations')).toContainText('Using 1 distinct named tool or domain skill');
   await expect(page.locator('.job-recommendations')).toContainText('Internship jobs appear before other job types');
-  await expect(page.locator('.job-recommendations')).toContainText('Resume files are not parsed');
+  await expect(page.locator('.job-recommendations')).toContainText('Review information extracted from your resume PDF');
 });
