@@ -107,12 +107,12 @@ test('detail exposes the manual application channel before the job description',
   expect(await page.locator('.application-channel-info').evaluate(element => Boolean(element.compareDocumentPosition(document.querySelector('.job-description')) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
 });
 
-for (const [connection, text] of [
-  [{connected: false}, 'Extension not connected.'],
-  [{connected: true, user_id: 'another-account'}, 'connected to a different account'],
-  [{connected: true, user_id: 'fixture-user', api_origin: 'https://different-api.example.test'}, 'another JobPilot address'],
-  [{connected: true, user_id: 'fixture-user', expires_at: 1}, 'Extension not connected.'],
-]) test(`a remembered extension ID cannot claim ready: ${text}`, async ({page}) => {
+for (const [scenario, connection, text] of [
+  ['disconnected', {connected: false}, 'Extension not connected.'],
+  ['different account', {connected: true, user_id: 'another-account'}, 'connected to a different account'],
+  ['different API', {connected: true, user_id: 'fixture-user', api_origin: 'https://different-api.example.test'}, 'another JobPilot address'],
+  ['expired', {connected: true, user_id: 'fixture-user', expires_at: 1}, 'Extension not connected.'],
+]) test(`a remembered extension ID cannot claim ready: ${scenario}`, async ({page}) => {
   await setup(page, {channel: 'ats', connection});
   await expect(page.locator('.application-extension-status')).toContainText(text);
   const messages = await page.evaluate(() => window.fixtureExtensionMessages);
