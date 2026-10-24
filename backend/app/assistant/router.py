@@ -67,9 +67,15 @@ def map_fields(
         validate_snapshot(form, {item.field_id for item in payload.form_snapshot})
     except AssistantConfirmationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    job_context = {
+        "title": form.job.title,
+        "company": form.job.company,
+        "description": form.job.description,
+    }
     return gateway.map_fields(
         form_snapshot=payload.form_snapshot,
         profile_data=profile_snapshot(db, user=current_user),
+        job_context=job_context,
     )
 
 
