@@ -23,6 +23,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    false,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -198,8 +199,13 @@ class JobSource(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     source_type: Mapped[str] = mapped_column(String(30), nullable=False)
     base_url: Mapped[str] = mapped_column(String(1000), nullable=False)
     schedule: Mapped[str | None] = mapped_column(String(120))
+    max_links: Mapped[int] = mapped_column(Integer, default=20, server_default="20", nullable=False)
+    max_details: Mapped[int] = mapped_column(Integer, default=5, server_default="5", nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="healthy", nullable=False)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     jobs: Mapped[list[JobPosting]] = relationship(back_populates="source")
     crawl_runs: Mapped[list[CrawlRun]] = relationship(
@@ -242,6 +248,7 @@ class JobPosting(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     dedup_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     raw_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="active", nullable=False, index=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     source: Mapped[JobSource] = relationship(back_populates="jobs")
     tags: Mapped[list[JobTag]] = relationship(secondary=job_posting_tags, back_populates="jobs")
@@ -393,12 +400,40 @@ class CrawlRun(UUIDPrimaryKeyMixin, Base):
     items_new: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     items_updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     items_failed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    items_attempted: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    items_unchanged: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    items_closed: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    is_complete: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     error_summary: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     source: Mapped[JobSource] = relationship(back_populates="crawl_runs")
+
+
+class SourceCrawlLease(Base):
+    """A portable source-level lease shared by manual and scheduled ingestion."""
+
+    __tablename__ = "source_crawl_leases"
+
+    source_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("job_sources.id", ondelete="CASCADE"), primary_key=True
+    )
+    owner_token: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), unique=True)
+    run_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("crawl_runs.id", ondelete="SET NULL")
+    )
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
 
 class AuditLog(UUIDPrimaryKeyMixin, Base):
@@ -453,3 +488,16 @@ class JobExtractionRun(UUIDPrimaryKeyMixin, Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# Register private discovery results, email pilot tables and resume contents.
+from app.ai_recommendations.models import AIRecommendationRun as AIRecommendationRun  # noqa: E402
+from app.email_applications.models import (  # noqa: E402
+    EmailApplication as EmailApplication,
+)
+from app.email_applications.models import (  # noqa: E402
+    EmailApplicationPolicy as EmailApplicationPolicy,
+)
+
+# Private file contents are separate from the backwards-compatible resume metadata.
+from app.profiles.resume_models import ResumeFileContent as ResumeFileContent  # noqa: E402

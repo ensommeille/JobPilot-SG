@@ -47,6 +47,10 @@ class ResumeRead(BaseModel):
     content_type: str
     size_bytes: int
     uploaded_at: datetime
+    has_file: bool = False
+    sha256: str | None = None
+    extraction_status: Literal["metadata_only", "parsed", "needs_text"] = "metadata_only"
+    page_count: int | None = None
 
 
 COUNTRY_CODES = frozenset(

@@ -1,0 +1,32 @@
+.prepare-container { max-width: 940px; }
+.prepare-steps { display: flex; gap: var(--s-4); margin: 0 0 var(--s-6); padding: 0; list-style-position: inside; color: var(--text-muted); }
+.prepare-steps li { padding-bottom: var(--s-3); border-bottom: 1px solid var(--border-strong); flex: 1; }
+.prepare-section { display: flex; flex-direction: column; gap: var(--s-4); padding-block: var(--s-5); border-top: 1px solid var(--border); align-items: flex-start; }
+.prepare-section-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--s-3); width: 100%; }
+.prepare-section > p, .prepare-instructions { max-width: 72ch; }
+.prepare-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4) var(--s-5); margin: 0; width: 100%; }
+.prepare-details dt { color: var(--text-muted); font-size: 13px; margin-bottom: var(--s-1); }
+.prepare-details dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.prepare-profile-detail { width: 100%; }
+.prepare-profile-detail summary { cursor: pointer; color: var(--primary); }
+.prepare-long-details { grid-template-columns: 1fr; margin-top: var(--s-4); max-width: 72ch; }
+.prepare-pdf-field { width: 100%; padding-top: var(--s-3); }
+.prepare-pdf-field .select { width: 100%; max-width: 640px; }
+.prepare-pdf-summary { display: flex; gap: var(--s-3); flex-wrap: wrap; align-items: center; overflow-wrap: anywhere; }
+.prepare-pdf-summary p { min-width: 0; overflow-wrap: anywhere; }
+.prepare-instructions { margin: 0; padding-left: var(--s-5); }
+.prepare-instructions li + li { margin-top: var(--s-2); }
+.prepare-confirm { display: flex; align-items: flex-start; gap: var(--s-2); max-width: 72ch; cursor: pointer; }
+.prepare-confirm input { margin-top: var(--s-1); flex: 0 0 auto; }
+.prepare-error { color: var(--danger); }
+.prepare-section .email-application { width: 100%; margin: 0; padding-top: 0; border-top: 0; }
+.prepare-section .btn { max-width: 100%; height: auto; min-height: 38px; white-space: normal; padding-block: var(--s-2); text-align: center; }
+.prepare-section a[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+.prepare-application-page a { text-underline-offset: 3px; }
+.prepare-application-page summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+@media (max-width: 600px) {
+  .prepare-steps { flex-direction: column; gap: var(--s-2); }
+  .prepare-steps li { padding-bottom: var(--s-2); }
+  .prepare-details { grid-template-columns: 1fr; }
+  .prepare-section-heading { align-items: flex-start; }
+}

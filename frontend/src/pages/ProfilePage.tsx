@@ -5,6 +5,8 @@ import Navbar from '../components/Navbar'
 import { fetchProfile, updateProfile } from '../services/profile'
 import ApplicationProfileFields, { type ApplicationDetails } from '../components/ApplicationProfileFields'
 import { getToken, watchSession } from '../services/auth'
+import ResumeLibrary from '../components/ResumeLibrary'
+import type { ResumeSuggestions } from '../services/resumes'
 
 const SKILL_CATEGORIES: Record<string, string[]> = {
   'Programming Languages': ['Python', 'Java', 'JavaScript', 'TypeScript', 'C++', 'C#', 'R', 'SQL', 'MATLAB', 'Go', 'Swift', 'Kotlin', 'PHP', 'Ruby', 'Scala', 'HTML/CSS', 'Bash/Shell'],
@@ -77,7 +79,7 @@ interface LinkItem { label: string; url: string }
 const ProfilePage = () => {
   const [searchParams] = useSearchParams()
   const requestedReturn = searchParams.get('returnTo') || ''
-  const returnTo = /^\/jobs\/[A-Za-z0-9-]{1,80}\/apply-external$/.test(requestedReturn) ? requestedReturn : null
+  const returnTo = /^\/jobs\/[A-Za-z0-9-]{1,80}\/(apply-external|prepare|apply)(\?resume=[A-Fa-f0-9-]{36})?$/.test(requestedReturn) ? requestedReturn : null
   const loadedToken = useRef<string | null>(null)
   const pending = useRef<AbortController | null>(null)
   const savingRef = useRef(false)
@@ -98,6 +100,17 @@ const ProfilePage = () => {
   const [experience, setExperience] = useState('')
   const [skills, setSkills] = useState<string[]>([])
   const [links, setLinks] = useState<LinkItem[]>([])
+
+  const useResumeSuggestions = (suggestions: ResumeSuggestions) => {
+    if (loadFailed || loading || saving || getToken() !== loadedToken.current) return
+    if (suggestions.full_name != null) setFullName(suggestions.full_name)
+    if (suggestions.contact_email != null) setContactEmail(suggestions.contact_email)
+    if (suggestions.phone != null) setPhone(suggestions.phone)
+    if (suggestions.education != null) setEducation(suggestions.education)
+    if (suggestions.experience != null) setExperience(suggestions.experience)
+    if (suggestions.skills) setSkills(previous => [...new Set([...previous, ...suggestions.skills!])].slice(0, 100))
+    setSaved(false)
+  }
 
   useEffect(() => {
     const token = getToken()
@@ -199,6 +212,7 @@ const ProfilePage = () => {
 
         {returnTo && <p><Link to={returnTo}>Back to application</Link>. Save your changes before returning to reuse them.</p>}
         {loadFailed && <p role="alert">{error} <button onClick={() => window.location.reload()}>Reload profile</button></p>}
+        {!loadFailed && <ResumeLibrary onUseSuggestions={useResumeSuggestions} />}
         <form ref={form} onSubmit={event => { event.preventDefault(); void save() }}>
         <fieldset disabled={loading || saving || loadFailed} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} onChange={() => setSaved(false)}>
 

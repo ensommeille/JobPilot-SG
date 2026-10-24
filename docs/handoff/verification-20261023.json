@@ -1,0 +1,43 @@
+{
+  "scope": "Local source refresh, PDF/application preparation and optional AI recommendations",
+  "date": "2026-10-23",
+  "base_commit": "7d1d6fe493d2a992ebcc13118f1c4fcd8271fabf",
+  "backend_full_suite": {
+    "version": "Frozen AI v1 and all prior functionality; not the final v3 snapshot",
+    "passed": 1258,
+    "failed": 0,
+    "external_network_attempts": 0,
+    "combined_statement_branch_coverage_percent": 89.33,
+    "pure_branch_coverage_percent": 80.03
+  },
+  "final_targeted_suite": {
+    "prompt_version": "ai-recommendation-v3-complete-rows",
+    "passed": 118,
+    "failed": 0,
+    "external_network_attempts": 0,
+    "scope": "AI routes, caching, privacy, concurrency, semantic boundaries and local AI helper"
+  },
+  "frontend": {
+    "lint": "passed",
+    "typescript_and_production_build": "passed",
+    "desktop_and_390px_mobile_review": "passed"
+  },
+  "live_acceptance": {
+    "same_selected_real_jobs_each_batch": 5,
+    "model_calls": 3,
+    "second_batch": "invalid_output; missing required fields; correctly rejected",
+    "final_batch_technical_flow_passed": true,
+    "final_batch_semantic_fully_passed": false,
+    "requires_review": true,
+    "jd_quotes_found": 56,
+    "profile_quotes_found": 13,
+    "quote_existence_is_not_semantic_validation": true,
+    "future_responsibility_rows": 15,
+    "repeat_final_selection_and_refresh_additional_calls": 0,
+    "remaining_issue": "Cantina ML overclaims data-pipeline or ML-infrastructure construction experience from dataset annotation, quality checking and model-evaluation evidence. Human review should mark this unknown unless stronger evidence is supplied.",
+    "human_review_correction_layer_implemented": false
+  },
+  "deployment_changed": false,
+  "real_employer_submissions": 0,
+  "private_pdf_profile_contacts_credentials_database_payloads_or_responses_included": false
+}

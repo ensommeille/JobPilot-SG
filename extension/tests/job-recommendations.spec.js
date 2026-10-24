@@ -60,7 +60,7 @@ test('failure, retry and filter edits invalidate previous result', async ({page}
   fail = false;
   await page.getByRole('button', {name: 'Find jobs for me'}).click();
   await expect(page.locator('.recommendation-list')).toBeVisible();
-  await page.getByLabel('Role or company (optional)').fill('Engineer');
+  await page.getByLabel('Role or company (optional)').first().fill('Engineer');
   await expect(page.locator('.recommendation-list')).toHaveCount(0);
   await page.getByRole('button', {name: 'Find jobs for me'}).click();
   await expect(page.locator('.recommendation-list')).toBeVisible();
@@ -136,5 +136,5 @@ test('explicit internship preference and profile evidence scope are explained', 
   await page.getByRole('button', {name: 'Find jobs for me'}).click();
   await expect(page.locator('.job-recommendations')).toContainText('Using 1 distinct named tool or domain skill');
   await expect(page.locator('.job-recommendations')).toContainText('Internship jobs appear before other job types');
-  await expect(page.locator('.job-recommendations')).toContainText('Resume files are not parsed');
+  await expect(page.locator('.job-recommendations')).toContainText('Review information extracted from your resume PDF');
 });

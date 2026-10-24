@@ -2,17 +2,31 @@ import {test, expect} from '@playwright/test';
 
 const base = process.env.FRONTEND_BASE_URL;
 test.skip(!base, 'Set FRONTEND_BASE_URL for application-history checks.');
-const record = (id, method = 'assistant', status = 'submitted') => ({
-  id, method, status, job: {id: `job-${id}`, title: `Fictional ${id} role`, company: 'Test employer'},
-  created_at: '2026-10-14T09:00:00Z', updated_at: '2026-10-14T09:00:00Z', submitted_at: '2026-10-14T09:00:00Z',
-});
+const cap = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+const record = (id, method = 'assistant', status = 'submitted') => {
+  const manual = method === 'manual';
+  const display_status = manual
+    ? (status === 'draft' ? 'Preparation draft' : `${cap(status)} (self-reported)`)
+    : (status === 'submitted' ? 'Application record saved' : `${cap(status)} (recorded)`);
+  return {
+    id: `doc:${id}`, record_id: id, kind: 'application',
+    job: {id: `job-${id}`, title: `Fictional ${id} role`, company: 'Test employer'},
+    channel: manual ? 'manual' : 'assistant', method, status, display_status,
+    next_action: manual
+      ? 'This status was recorded by you; employer receipt is not verified.'
+      : 'Review the saved record. It does not establish submission to or receipt by an employer.',
+    created_at: '2026-10-14T09:00:00Z', updated_at: '2026-10-14T09:00:00Z', submitted_at: '2026-10-14T09:00:00Z',
+    sent_at: null, resume_filename: null, actual_recipient: null, original_recipient: null,
+    receipt: null, failure_code: null,
+  };
+};
 const historyPage = (items, page = 1, total = items.length, pages = total ? Math.ceil(total / 20) : 0) =>
   ({items, page, page_size: 20, total, pages});
 
 async function setup(page, history) {
   await page.addInitScript(() => localStorage.setItem('jobpilot_token', 'account-a-token'));
   await page.route('**/profile', route => route.fulfill({json: {full_name: 'Fixture account'}}));
-  await page.route(/\/applications(?:\?.*)?$/, route => route.request().resourceType() === 'document' ? route.continue() : history(route));
+  await page.route(/\/application-history(?:\?.*)?$/, route => route.request().resourceType() === 'document' ? route.continue() : history(route));
   await page.goto(base + '/applications');
 }
 
@@ -20,13 +34,13 @@ test('history distinguishes saved answers from user-reported applications and tr
   await setup(page, route => route.fulfill({json: historyPage([record('assistant'), record('manual', 'manual'), record('interview', 'manual', 'interviewing')])}));
   const saved = page.getByRole('article', {name: 'Fictional assistant role'});
   const manual = page.getByRole('article', {name: 'Fictional manual role'});
-  await expect(saved).toContainText('Record saved');
-  await expect(saved).toContainText('JobPilot has not sent these answers to an employer');
-  await expect(saved).toContainText('Recorded:');
-  await expect(manual).toContainText('Reported applied');
-  await expect(manual).toContainText('User-reported record');
-  await expect(page.getByRole('article', {name: 'Fictional interview role'})).toContainText('Interviewing');
-  await expect(page.getByText('These are your JobPilot records and tracked statuses', {exact: false})).toContainText('not verified employer receipts');
+  await expect(saved).toContainText('Application record saved');
+  await expect(saved).toContainText('does not establish submission to or receipt by an employer');
+  await expect(saved).toContainText('Updated');
+  await expect(manual).toContainText('Submitted (self-reported)');
+  await expect(manual).toContainText('Manually tracked');
+  await expect(page.getByRole('article', {name: 'Fictional interview role'})).toContainText('Interviewing (self-reported)');
+  await expect(page.getByText('Preparation drafts, saved answers and email records in one place', {exact: false})).toContainText('do not verify employer receipt');
   await expect(page.getByText('Applied:', {exact: false})).toHaveCount(0);
   await page.setViewportSize({width: 1440, height: 1000});
   await page.screenshot({path: '../output/application-history-desktop.png', fullPage: true});
@@ -71,7 +85,7 @@ test('failed history can retry and cross-tab sign-out immediately clears private
     calls++;
     return route.fulfill(failing ? {status: 503, json: {}} : {json: historyPage([record('private-account-a')])});
   });
-  await expect(page.getByRole('alert')).toContainText('Could not load your application records');
+  await expect(page.getByRole('alert')).toContainText('Could not load your applications. Check your connection and retry.');
   failing = false;
   await page.getByRole('button', {name: 'Retry history'}).click();
   await expect(page.getByRole('article')).toBeVisible();
@@ -120,8 +134,8 @@ test('a status conflict offers an explicit reload instead of claiming the update
   const manual = page.getByRole('article', {name: 'Fictional manual role'});
   await manual.getByLabel('Update reported status').selectOption('interviewing');
   await manual.getByRole('button', {name: 'Save status'}).click();
-  await expect(manual.getByRole('alert')).toContainText('Could not update this record');
-  await expect(manual).toContainText('Reported applied');
+  await expect(manual.getByRole('alert')).toContainText('The status could not be saved. Reload the record before trying again.');
+  await expect(manual).toContainText('Submitted (self-reported)');
   await manual.getByRole('button', {name: 'Reload history'}).click();
   await expect(page.getByRole('article', {name: 'Fictional manual role'})).toContainText('Rejected');
 });

@@ -1,0 +1,76 @@
+{
+  "retrieved_at": "2026-10-23T08:21:35.608960+00:00",
+  "provider": "greenhouse",
+  "employer": "Graviton Research Capital - Campus",
+  "api_url": "https://boards-api.greenhouse.io/v1/boards/globalcampus",
+  "api_documentation": "https://docs.greenhouse.io/job-board.html",
+  "selection": "Up to two published Singapore early-career examples, software/ML first; not a full board snapshot.",
+  "redaction": "Allowlisted public posting fields only. Public email addresses redacted; no candidate, credential or form-answer data was requested.",
+  "board_posts_observed": 5,
+  "scope_candidates_observed": 5,
+  "payload": {
+    "jobs": [
+      {
+        "first_published": "2026-09-06T21:36:01-04:00",
+        "content": "&lt;p&gt;At Graviton, we don&#39;t believe great systems are built by chasing speed alone. They&#39;re built by chasing precision. Every research breakthrough, every trading decision and every competitive advantage begins with the systems built to support it.&lt;/p&gt;\n&lt;p&gt;As a Software Engineering Intern, you&#39;ll spend 10-12 weeks building systems that power our quantitative research and live trading platforms. You&#39;ll work alongside experienced software engineers and quantitative researchers to solve engineering problems where performance, reliability and precision are essential.&lt;/p&gt;\n&lt;p&gt;This isn&#39;t an internship where you observe from the sidelines. Outstanding work has the potential to shape production systems that support live trading every day.&lt;/p&gt;\n&lt;p&gt;Ideal candidates are practically minded engineers who enjoy building elegant software, solving complex systems problems and pushing technology to its limits, based in our Singapore office.&lt;/p&gt;\n&lt;p&gt;&lt;strong&gt;What You&#39;ll Work On&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;You&#39;ll contribute to the engineering systems that power modern systematic trading. Your work would include:&lt;/p&gt;\n&lt;ul&gt;\n&lt;li&gt;Designing and building software components for our trading and research platforms&lt;/li&gt;\n&lt;li&gt;Developing high-performance applications in modern C++ and across our engineering stack&lt;/li&gt;\n&lt;li&gt;Building distributed systems that process and analyze massive volumes of market data&lt;/li&gt;\n&lt;li&gt;Optimizing systems where latency, throughput and reliability directly influence trading performance&lt;/li&gt;\n&lt;li&gt;Debugging complex production systems and improving performance through thoughtful engineering&lt;/li&gt;\n&lt;li&gt;Building AI-powered developer tools and intelligent automation&lt;/li&gt;\n&lt;li&gt;Collaborating with quantitative researchers to transform ideas into production systems&lt;/li&gt;\n&lt;/ul&gt;\n&lt;p&gt;&lt;strong&gt;What You&#39;ll Learn&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;Beyond the technical exposure, you&#39;ll learn how experienced engineers approach difficult technical problems: breaking them down, weighing performance against simplicity, and deciding based on evidence rather than habit. You&#39;ll be paired with a mentor, reporting manager and buddy, with regular code reviews and architecture discussions throughout the internship.&lt;/p&gt;\n&lt;p&gt;&lt;strong&gt;What Success Looks Like&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;Successful interns leave having delivered a complete engineering project from design through deployment, written production-quality software used by research or trading teams, improved the performance, scalability or reliability of critical systems, and presented their solutions to experienced software engineers and quantitative researchers, demonstrating strong ownership, technical curiosity and engineering excellence.&lt;/p&gt;\n&lt;p&gt;&lt;strong&gt;Who We&#39;re Looking For&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;We&#39;re looking for exceptional students who genuinely enjoy solving hard problems.&lt;/p&gt;\n&lt;ul&gt;\n&lt;li&gt;Full-time undergraduate student studying computer science or a related field, graduating 2028&lt;/li&gt;\n&lt;li&gt;Strong programming skills in Python and/or C++&lt;/li&gt;\n&lt;li&gt;Excellent understanding of data structures, algorithms and object-oriented programming&lt;/li&gt;\n&lt;li&gt;Familiarity with operating systems, computer architecture and networking fundamentals&lt;/li&gt;\n&lt;li&gt;Strong analytical thinking and problem-solving ability&lt;/li&gt;\n&lt;li&gt;A passion for writing clean, efficient and reliable software&lt;/li&gt;\n&lt;/ul&gt;\n&lt;p&gt;&lt;strong&gt;Our Culture&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;More than specific technologies, we care how you think. We look for people who are curious enough to question assumptions, analytical enough to separate signal from noise, persistent enough to keep searching past the first answer, humble enough to keep learning, and excited by problems without textbook solutions.&lt;/p&gt;\n&lt;p&gt;At Graviton, researchers sit alongside engineers to solve problems where milliseconds matter and better models create real competitive advantage. You&#39;ll get meaningful ownership from day one, in a culture built on intellectual honesty and continuous improvement. Your contribution won&#39;t be measured by hours spent, but by the quality of your thinking.&lt;/p&gt;\n&lt;p&gt;Markets are among the most complex systems humans have ever created. Every day, someone discovers a better answer. This summer, that someone could be you.&lt;/p&gt;",
+        "title": "2027 Summer Internship - Software Developer",
+        "updated_at": "2026-10-23T03:48:51-04:00",
+        "offices": [
+          {
+            "id": 4006084002,
+            "name": "Singapore",
+            "location": "Singapore",
+            "child_ids": [],
+            "parent_id": null
+          }
+        ],
+        "id": 8780794002,
+        "location": {
+          "name": "Singapore"
+        },
+        "absolute_url": "https://job-boards.greenhouse.io/globalcampus/jobs/8780794002"
+      },
+      {
+        "first_published": "2026-09-06T21:30:19-04:00",
+        "content": "&lt;p&gt;At Graviton, every strategy, model and edge begins not with instinct, but with someone asking a better question than everyone else.&lt;/p&gt;\n&lt;p&gt;As a Quantitative Research Intern, you&#39;ll spend 10-12 weeks working on research that directly shapes how we understand markets and build trading strategies. You&#39;ll collaborate with researchers and technologists to investigate market behaviour, test hypotheses, build predictive models and solve problems where the answers aren&#39;t obvious.&lt;/p&gt;\n&lt;p&gt;This isn&#39;t an internship where you observe from the sidelines. Outstanding work has the potential to shape production strategies and generate real, measurable returns.&lt;/p&gt;\n&lt;p&gt;Ideal candidates are quantitatively sharp, practically minded problem solvers, programmers, mathematicians and scientists who are excited to solve the hardest problems in our field, across our offices in the US, Singapore, Amsterdam and London.&lt;/p&gt;\n&lt;p&gt;&lt;strong&gt;What You&#39;ll Work On&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;You&#39;ll work on real research problems, not simulated exercises, discovering predictive patterns from billions of market events, designing statistical models, and applying machine learning to open research problems. Your work would include:&lt;/p&gt;\n&lt;ul&gt;\n&lt;li&gt;Discovering predictive patterns from billions of market events&lt;/li&gt;\n&lt;li&gt;Designing statistical models that identify trading opportunities&lt;/li&gt;\n&lt;li&gt;Applying probability, optimization and machine learning to open research problems&lt;/li&gt;\n&lt;li&gt;Building AI-powered research agents that accelerate experimentation&lt;/li&gt;\n&lt;li&gt;Developing infrastructure for rapid, large-scale research&lt;/li&gt;\n&lt;li&gt;Designing experiments and backtests to evaluate hypotheses&lt;/li&gt;\n&lt;li&gt;Translating research into production-ready trading signals&lt;/li&gt;\n&lt;li&gt;Exploring new ML, AI and quant finance techniques to find the next source of alpha&lt;/li&gt;\n&lt;/ul&gt;\n&lt;p&gt;&lt;strong&gt;What You&#39;ll Learn&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;Beyond the technical exposure, you&#39;ll learn how experienced researchers approach hard problems: breaking them down, questioning assumptions, and deciding based on evidence rather than intuition. You&#39;ll be paired with a mentor, reporting manager and buddy, with regular code reviews and feedback throughout the internship.&lt;/p&gt;\n&lt;p&gt;&lt;strong&gt;What Success Looks Like&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;Successful interns leave having delivered a complete research project from hypothesis to evaluation, built statistically rigorous models, and demonstrated curiosity, ownership and the ability to solve open-ended problems.&lt;/p&gt;\n&lt;p&gt;&lt;strong&gt;Who We&#39;re Looking For&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;We&#39;re looking for exceptional students who genuinely enjoy solving hard problems.&lt;/p&gt;\n&lt;ul&gt;\n&lt;li&gt;Full-time undergraduate, Master&#39;s or PhD student in a quantitative discipline (math, physics, computer science, statistics, or a related field), graduating 2028&lt;/li&gt;\n&lt;li&gt;Strong programming skills in Python and/or C++&lt;/li&gt;\n&lt;li&gt;Grounded in probability, statistics, linear algebra and optimization, with experience in machine learning, statistical modelling or data analysis, whether through coursework, research or personal projects&lt;/li&gt;\n&lt;li&gt;Comfortable working with large, complex datasets, with strong analytical thinking&lt;/li&gt;\n&lt;li&gt;A passion for applying quantitative thinking and rigorous research to solve open-ended problems in markets&lt;/li&gt;\n&lt;li&gt;Strong communication skills, with the ability to explain complex ideas clearly&lt;/li&gt;\n&lt;/ul&gt;\n&lt;p&gt;&lt;strong&gt;Our Culture&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;More than specific technologies, we care how you think. We look for people who are curious enough to question assumptions, analytical enough to separate signal from noise, persistent enough to keep searching past the first answer, humble enough to keep learning, and excited by problems without textbook solutions.&lt;/p&gt;\n&lt;p&gt;At Graviton, researchers sit alongside engineers to solve problems where milliseconds matter and better models create real competitive advantage. You&#39;ll get meaningful ownership from day one, in a culture built on intellectual honesty and continuous improvement. Your contribution won&#39;t be measured by hours spent, but by the quality of your thinking.&lt;/p&gt;\n&lt;p&gt;Markets are among the most complex systems humans have ever created. Every day, someone discovers a better answer. This summer, that someone could be you.&lt;/p&gt;",
+        "title": "2027 Summer Internship - Quantitative Researcher",
+        "updated_at": "2026-10-23T03:47:44-04:00",
+        "offices": [
+          {
+            "id": 4130949002,
+            "name": "Amsterdam",
+            "location": "Amsterdam, North Holland, Netherlands",
+            "child_ids": [],
+            "parent_id": null
+          },
+          {
+            "id": 4140295002,
+            "name": "London",
+            "location": "London, England, United Kingdom",
+            "child_ids": [],
+            "parent_id": null
+          },
+          {
+            "id": 4139396002,
+            "name": "New York",
+            "location": null,
+            "child_ids": [],
+            "parent_id": null
+          },
+          {
+            "id": 4006084002,
+            "name": "Singapore",
+            "location": "Singapore",
+            "child_ids": [],
+            "parent_id": null
+          }
+        ],
+        "id": 8780785002,
+        "location": {
+          "name": "Singapore, London, Amsterdam, US"
+        },
+        "absolute_url": "https://job-boards.greenhouse.io/globalcampus/jobs/8780785002"
+      }
+    ]
+  }
+}

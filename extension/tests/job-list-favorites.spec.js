@@ -53,11 +53,11 @@ test('favorite load failure is visible and retry restores the saved state', asyn
     return route.fulfill({status: 404, json: {detail: 'No fixture for this request'}});
   });
   await page.goto(`${base}/jobs`);
-  await expect(page.getByRole('alert')).toContainText('Could not load saved jobs');
+  await expect(page.getByRole('alert').filter({hasText: 'Could not load saved jobs'})).toBeVisible();
   await expect(page.getByRole('button', {name: 'Save job'})).toBeDisabled();
   await page.getByRole('button', {name: 'Reload saved jobs'}).click();
   await expect(page.getByRole('button', {name: 'Remove from saved'})).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('alert').filter({hasText: 'Could not load saved jobs'})).toHaveCount(0);
 });
 
 test('job-list checks later favorite pages before marking a saved job', async ({page}) => {

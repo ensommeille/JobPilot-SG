@@ -1,0 +1,24 @@
+.email-application { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-4); margin-block: var(--s-5); padding-block: var(--s-5); border-top: 1px solid var(--border); color: var(--text); }
+.email-application > p, .email-application blockquote { max-width: 72ch; }
+.email-application details { width: 100%; }
+.email-application summary { cursor: pointer; color: var(--primary); }
+.email-application a { color: var(--primary); text-underline-offset: 3px; }
+.email-application .field { width: 100%; }
+.email-application textarea { width: 100%; padding: var(--s-3); resize: vertical; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); font: inherit; }
+.email-application textarea:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
+.email-application input[type="file"] { max-width: 100%; }
+.email-application blockquote { margin: var(--s-3) 0; white-space: pre-wrap; }
+.email-channel { display: grid; gap: var(--s-3); width: 100%; margin: 0; }
+.email-channel div { display: grid; grid-template-columns: minmax(140px, 1fr) 2fr; gap: var(--s-3); }
+.email-channel dt { color: var(--text-muted); }
+.email-channel dd { margin: 0; overflow-wrap: anywhere; }
+.email-note, .email-review { background: var(--warning-soft); padding: var(--s-4); color: var(--text); }
+.email-review { display: flex; flex-direction: column; gap: var(--s-4); width: 100%; }
+.email-message { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 72ch; }
+.email-confirm { display: flex; align-items: flex-start; gap: var(--s-2); cursor: pointer; }
+.email-confirm input { flex: 0 0 auto; margin-top: var(--s-1); }
+.email-reference { overflow-wrap: anywhere; max-width: 100%; }
+.email-history { width: 100%; padding: 0; margin: 0; list-style: none; }
+.email-history li { border-top: 1px solid var(--border); padding-block: var(--s-3); overflow-wrap: anywhere; }
+.email-application [role="alert"] { color: var(--danger); }
+@media (max-width: 600px) { .email-channel div { grid-template-columns: 1fr; gap: var(--s-1); } .email-application .btn { white-space: normal; height: auto; min-height: 40px; padding-block: var(--s-2); } }

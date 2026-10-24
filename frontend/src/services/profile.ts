@@ -5,10 +5,4 @@ export const fetchProfile = (config?: AxiosRequestConfig) => api.get('/profile',
 
 export const updateProfile = (data: object, config?: AxiosRequestConfig) => api.put('/profile', data, config)
 
-export const uploadResume = (file: File) => {
-  const form = new FormData()
-  form.append('file', file)
-  return api.post('/profile/resumes', form, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
-}
+export { uploadResumeFile as uploadResume } from './resumes'

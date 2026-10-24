@@ -1,0 +1,62 @@
+{
+  "retrieved_at": "2026-10-23T08:21:34.189915+00:00",
+  "provider": "greenhouse",
+  "employer": "StraitsX",
+  "api_url": "https://boards-api.greenhouse.io/v1/boards/straitsx",
+  "api_documentation": "https://docs.greenhouse.io/job-board.html",
+  "selection": "Up to two published Singapore early-career examples, software/ML first; not a full board snapshot.",
+  "redaction": "Allowlisted public posting fields only. Public email addresses redacted; no candidate, credential or form-answer data was requested.",
+  "board_posts_observed": 25,
+  "scope_candidates_observed": 2,
+  "payload": {
+    "jobs": [
+      {
+        "first_published": "2026-08-03T10:38:40-04:00",
+        "content": "&lt;p&gt;&lt;strong&gt;About the Role&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;Card Issuing Team provides APIs for businesses to launch their card program without having to go through the long PCI DSS process.&lt;/p&gt;\n&lt;p&gt;&lt;strong&gt;What You Will Do&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;Our goal is to build a Card Issuing platform for South East Asia enabling Merchants to easily create their own debit/credit card products. We are building a zero-to-one product therefore there are a lot of gaps, but also opportunities for contributions&lt;/p&gt;\n&lt;p&gt;Responsibilities:&lt;/p&gt;\n&lt;ul&gt;\n&lt;li&gt;-Working with third party APIs to enable local and global payments for the cards&lt;/li&gt;\n&lt;li&gt;Building reliable and scalable systems. Managing downtimes and migrations&lt;/li&gt;\n&lt;li&gt;Build and maintain APIs exposed externally for businesses to issue visa cards&lt;/li&gt;\n&lt;li&gt;Design and develop internal tools for business operations, including day to day platform management and transactions reporting&lt;/li&gt;\n&lt;/ul&gt;\n&lt;p&gt;&lt;strong&gt;What We Are Looking For&lt;/strong&gt;&lt;/p&gt;\n&lt;ul&gt;\n&lt;li&gt;Interested in bringing to life a zero-to-one product that is first to market in the region&lt;/li&gt;\n&lt;li&gt;Knowledge of iterative, sprint based product development style&lt;/li&gt;\n&lt;li&gt;Knowledge in Golang&lt;/li&gt;\n&lt;li&gt;Knowledge of Git and GitHub&lt;/li&gt;\n&lt;li&gt;Knowledge of RESTful APIs&lt;/li&gt;\n&lt;li&gt;Knowledge of microservices&lt;/li&gt;\n&lt;li&gt;Knowledge of SQL, database design and tuning of database performance&lt;/li&gt;\n&lt;/ul&gt;\n&lt;p&gt;&lt;br&gt;Nice to have&lt;/p&gt;\n&lt;ul&gt;\n&lt;li&gt;Knowledge of GraphQL&lt;/li&gt;\n&lt;li&gt;Knowledge of queue systems&lt;/li&gt;\n&lt;/ul&gt;\n&lt;p&gt;Learning Outcomes&lt;/p&gt;\n&lt;ul&gt;\n&lt;li&gt;&amp;nbsp;Working knowledge in Golang, and MySQL&lt;/li&gt;\n&lt;li&gt;Learn to manage small to mid sized engineering projects, prioritization and choosing the highest leverage projects to work on&lt;/li&gt;\n&lt;/ul&gt;",
+        "title": "Software Engineer Intern - Card Issuing Team",
+        "updated_at": "2026-08-03T10:38:40-04:00",
+        "offices": [
+          {
+            "id": 4009098101,
+            "name": "Singapore",
+            "location": "Singapore",
+            "child_ids": [],
+            "parent_id": null
+          },
+          {
+            "id": 4009125101,
+            "name": "Taiwan",
+            "location": "Taipei, Taiwan",
+            "child_ids": [],
+            "parent_id": null
+          }
+        ],
+        "id": 4942133101,
+        "location": {
+          "name": "Singapore; Taipei, Taiwan"
+        },
+        "absolute_url": "https://job-boards.eu.greenhouse.io/straitsx/jobs/4942133101"
+      },
+      {
+        "first_published": "2026-09-23T05:37:34-04:00",
+        "content": "&lt;p&gt;&lt;strong&gt;About the Role&lt;/strong&gt;&lt;/p&gt;\n&lt;p class=&quot;isSelectedEnd&quot;&gt;As a Commercial Intern, you will support the Commercial team in building and developing our sales pipeline. Your main focus will be identifying potential leads, conducting initial research and qualification, and reaching out to prospective clients or partners.&lt;/p&gt;\n&lt;p class=&quot;isSelectedEnd&quot;&gt;You will help understand their business needs, assess whether there is a potential fit with StraitsX’s solutions, and arrange meetings for qualified prospects with our Commercial team. You will also support the team in tracking leads, maintaining accurate pipeline information, and following up on potential opportunities.&lt;/p&gt;\n&lt;p&gt;&lt;strong&gt;What You Will Do&lt;/strong&gt;&lt;/p&gt;\n&lt;ul&gt;\n&lt;li&gt;&amp;nbsp;Lead Generation: Work with the broader commercial team, event participation and social media outreach to generate leads and identify potential customers interested in our products.&lt;/li&gt;\n&lt;li&gt;Qualification: Engage with leads through the Deal Qualification Criteria process to understand their needs, pain points, and budget constraints to qualify them as potential prospects for our solutions.&lt;/li&gt;\n&lt;li&gt;Appointment Setting: Proactively reach out to qualified leads to schedule appointments with our sales team for product demonstrations and further discussions.&lt;/li&gt;\n&lt;li&gt;Database Management: Maintain accurate and organized records of all leads and interactions in our CRM system, ensuring data integrity and completeness.&lt;/li&gt;\n&lt;li&gt;Product Knowledge: To work closely with the product team to understand level one of product differentiation, features and functionalities as well as able to do basic demo if required.&lt;/li&gt;\n&lt;li&gt;Collaboration: Work closely with the commercial teams to align lead generation efforts, provide feedback on lead quality, and contribute ideas for improving lead generation campaigns. Where necessary, to participate in physical marketing events and campaigns to drive demand.&lt;/li&gt;\n&lt;/ul&gt;\n&lt;p&gt;&lt;strong&gt;What We Are Looking For&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;Skills And Abilities&lt;/p&gt;\n&lt;ul&gt;\n&lt;li&gt;Strong organisation skills to support the end to end sales process, including generation of leads and fixing appointments for our Sales&lt;/li&gt;\n&lt;li&gt;Excellent communication skills, both verbal and written&lt;/li&gt;\n&lt;li&gt;Strong interpersonal skills with the ability to build rapport and establish relationships with prospects.&lt;/li&gt;\n&lt;li&gt;Self-motivated with a strong desire to learn and succeed in a sales environment.&lt;/li&gt;\n&lt;li&gt;Familiarity with CRM software (e.g., Salesforce) is a plus.&lt;/li&gt;\n&lt;/ul&gt;\n&lt;p&gt;Knowledge&lt;/p&gt;\n&lt;ul&gt;\n&lt;li&gt;Diploma holder / Degree in any discipline&lt;/li&gt;\n&lt;li&gt;Experience from Tech, SaaS and experience in selling software will be a plus&lt;/li&gt;\n&lt;/ul&gt;",
+        "title": "Sales Intern",
+        "updated_at": "2026-10-19T03:26:06-04:00",
+        "offices": [
+          {
+            "id": 4009098101,
+            "name": "Singapore",
+            "location": "Singapore",
+            "child_ids": [],
+            "parent_id": null
+          }
+        ],
+        "id": 4977270101,
+        "location": {
+          "name": "Singapore"
+        },
+        "absolute_url": "https://job-boards.eu.greenhouse.io/straitsx/jobs/4977270101"
+      }
+    ]
+  }
+}

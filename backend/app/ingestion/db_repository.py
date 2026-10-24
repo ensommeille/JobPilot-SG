@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -16,8 +18,9 @@ class SqlAlchemyJobRepository:
         self.db = db
         self.source = source
 
-    def upsert(self, records: list[JobRecord]) -> UpsertStats:
+    def upsert(self, records: list[JobRecord], *, seen_at: datetime | None = None) -> UpsertStats:
         items_new = items_updated = items_unchanged = 0
+        seen_at = seen_at or datetime.now(UTC)
         seen_dedup: set[str] = set()
         seen_key: set[tuple] = set()
 
@@ -45,6 +48,7 @@ class SqlAlchemyJobRepository:
             if job is None:
                 job = JobPosting(source_id=self.source.id, external_id=record.external_id)
                 self._copy_record(job, record)
+                job.last_seen_at = seen_at
                 self.db.add(job)
                 items_new += 1
                 # SessionLocal has autoflush=False. Flush within the transaction so
@@ -54,26 +58,20 @@ class SqlAlchemyJobRepository:
                 # A matching hash never authorizes replacing another posting's
                 # canonical source/external ID, even within the same source.
                 items_unchanged += 1
-            elif job.raw_hash == record.raw_hash and job.status == record.status.value:
-                # Backfill provenance for legacy rows even when page content is unchanged.
-                job.source_url = record.source_url
-                if job.dedup_hash != record.dedup_hash and self._hash_available(
-                    job, record.dedup_hash
-                ):
-                    job.dedup_hash = record.dedup_hash
-                    self.db.flush()
-                    items_updated += 1
-                else:
-                    items_unchanged += 1
             else:
+                before = self._snapshot(job)
                 previous_hash = job.dedup_hash
                 hash_available = self._hash_available(job, record.dedup_hash)
                 self._copy_record(job, record)
+                job.last_seen_at = seen_at
                 if not hash_available:
                     # Existing legacy duplicates may already claim the v2 key.
                     # Update content but never violate the unique identity index.
                     job.dedup_hash = previous_hash
-                items_updated += 1
+                if self._snapshot(job) == before:
+                    items_unchanged += 1
+                else:
+                    items_updated += 1
                 self.db.flush()
 
         self.db.flush()
@@ -140,6 +138,35 @@ class SqlAlchemyJobRepository:
             category="general",
         )
         job.tags = [*employment_tags, *general_tags]
+
+    @staticmethod
+    def _snapshot(job: JobPosting) -> tuple:
+        # Description hashes deliberately do not cover location, URLs or other metadata.
+        fields = (
+            "external_id",
+            "title",
+            "company",
+            "city",
+            "salary_min",
+            "salary_max",
+            "salary_currency",
+            "salary_period",
+            "education",
+            "experience",
+            "job_type",
+            "description",
+            "apply_url",
+            "source_url",
+            "posted_at",
+            "deadline",
+            "dedup_hash",
+            "raw_hash",
+            "status",
+        )
+        return (
+            *(getattr(job, field) for field in fields),
+            frozenset((tag.name.casefold(), tag.category) for tag in job.tags),
+        )
 
     def _resolve_tags(self, names: list[str], *, category: str) -> list[JobTag]:
         unique_names: list[str] = []

@@ -203,21 +203,21 @@ def test_only_admin_can_change_existing_source_schedule_and_enabled_state(
     assert created.status_code == 201
     source_id = created.json()["id"]
 
-    assert client.patch(f"/sources/{source_id}", json={"schedule": "daily"}).status_code == 401
-    assert client.patch(f"/sources/{source_id}", headers=seeker, json={"schedule": "daily"}).status_code == 403
-    assert client.patch(f"/sources/{source_id}", headers=admin, json={"schedule": "every 5m"}).status_code == 422
+    assert client.patch(f"/sources/{source_id}", json={"schedule": "every:24h"}).status_code == 401
+    assert client.patch(f"/sources/{source_id}", headers=seeker, json={"schedule": "every:24h"}).status_code == 403
+    assert client.patch(f"/sources/{source_id}", headers=admin, json={"schedule": "every:5m"}).status_code == 422
     assert client.patch(f"/sources/{source_id}", headers=admin, json={}).status_code == 422
     changed = client.patch(f"/sources/{source_id}", headers=admin, json={
-        "schedule": "every 6h", "enabled": False,
+        "schedule": "every:6h", "enabled": False,
     })
     assert changed.status_code == 200
-    assert changed.json()["schedule"] == "every 6h"
+    assert changed.json()["schedule"] == "every:6h"
     assert changed.json()["enabled"] is False
 
     cleared = client.patch(f"/sources/{source_id}", headers=admin, json={"schedule": None})
     assert cleared.status_code == 200
     assert cleared.json()["schedule"] is None
-    assert db.scalar(select(func.count()).select_from(AuditLog).where(AuditLog.action == "source.update")) == 2
+    assert db.scalar(select(func.count()).select_from(AuditLog).where(AuditLog.action == "source.configure")) == 2
 
 
 def test_crawl_run_persists_jobs_updates_and_audit(

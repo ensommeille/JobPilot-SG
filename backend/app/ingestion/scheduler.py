@@ -1,74 +1,171 @@
-"""Explicitly invoked, single-worker due-source selection and dispatch."""
+"""Explicit standalone ingestion runner: never started by FastAPI workers.
+
+Example: python -m app.ingestion.scheduler --once --actor-id ADMIN_UUID
+Catalog registration is opt-in: append --catalog greenhouse-stripe (repeatable).
+This runner only collects public postings; it never extracts or ranks with an LLM.
+"""
 
 from __future__ import annotations
 
-import logging
-from datetime import UTC, datetime
+import argparse
+import json
+from collections.abc import Sequence
+from threading import Event
+from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.db.models import CrawlRun, CrawlRunStatus, JobSource
-from app.ingestion.schedule_policy import schedule_interval
-from app.ingestion.service import SourceAdapterFactory, SourceRunError, list_sources, run_source
+from app.db.models import JobSource, SourceCrawlLease, User, UserRole
+from app.ingestion.locks import SourceBusyError, SourceLeaseLostError, database_now
+from app.ingestion.schedule import INTERVAL_HOURS
+from app.ingestion.schemas import SourceCreate, SourceScheduleUpdate
+from app.ingestion.service import (
+    SourceAdapterFactory,
+    SourceNotDueError,
+    build_source_adapter,
+    create_source,
+    run_source,
+    update_source_schedule,
+)
+from app.ingestion.source_catalog import catalog_source
 
-LOGGER = logging.getLogger(__name__)
+
+def require_runner_admin(db: Session, actor_id: UUID) -> User:
+    actor = db.get(User, actor_id, populate_existing=True)
+    if actor is None or not actor.is_active or actor.role != UserRole.ADMIN:
+        raise ValueError("Runner requires the ID of an active administrator")
+    return actor
 
 
-def _aware(value: datetime) -> datetime:
-    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
-
-
-def due_sources(db: Session, *, now: datetime, max_sources: int) -> list[JobSource]:
-    """Never treat unknown schedule text or a running crawl as permission to crawl."""
-    if max_sources < 1:
-        raise ValueError("max_sources must be positive")
-    due: list[JobSource] = []
-    for source in list_sources(db):
-        if not source.enabled:
-            continue
-        try:
-            interval = schedule_interval(source.schedule)
-        except ValueError:
-            continue  # Historical free-text schedules are fail-closed.
-        if interval is None:
-            continue
-        last = db.scalar(
-            select(CrawlRun)
-            .where(CrawlRun.source_id == source.id)
-            .order_by(
-                func.coalesce(CrawlRun.started_at, CrawlRun.created_at).desc(),
-                CrawlRun.id.desc(),
+def register_catalog_sources(db: Session, *, actor: User, keys: Sequence[str]) -> list[JobSource]:
+    require_runner_admin(db, actor.id)
+    entries = [catalog_source(key) for key in dict.fromkeys(keys)]
+    sources = []
+    for entry in entries:
+        source = db.scalar(select(JobSource).where(JobSource.base_url == entry.base_url))
+        if source is None:
+            source = create_source(
+                db,
+                actor=actor,
+                payload=SourceCreate(
+                    name=entry.name,
+                    source_type=entry.source_type,
+                    base_url=entry.base_url,
+                    schedule=f"every:{entry.interval_hours}h",
+                    enabled=True,
+                    max_links=entry.max_links,
+                    max_details=entry.max_details,
+                ),
             )
-            .limit(1)
-        )
-        if last is not None:
-            if last.status in {CrawlRunStatus.PENDING, CrawlRunStatus.RUNNING}:
-                continue
-            reference = last.finished_at or last.started_at or last.created_at
-            if _aware(reference) + interval > now:
-                continue
-        due.append(source)
-        if len(due) >= max_sources:
-            break
-    return due
+        else:
+            if source.source_type != entry.source_type.value:
+                raise ValueError(f"Existing source type conflicts with catalog: {entry.key}")
+            source = update_source_schedule(
+                db,
+                actor=actor,
+                source=source,
+                payload=SourceScheduleUpdate(
+                    schedule=f"every:{entry.interval_hours}h",
+                    enabled=True,
+                    max_links=entry.max_links,
+                    max_details=entry.max_details,
+                ),
+            )
+        sources.append(source)
+    return sources
 
 
 def run_due_sources(
-    db: Session, *, adapter_factory: SourceAdapterFactory,
-    max_sources: int, max_jobs: int, now: datetime | None = None,
-) -> list[CrawlRun]:
-    """Run one bounded cycle. A single process must own this scheduler instance."""
-    if not 1 <= max_jobs <= 100:
-        raise ValueError("max_jobs must be between 1 and 100")
-    selected = due_sources(db, now=now or datetime.now(UTC), max_sources=max_sources)
-    runs: list[CrawlRun] = []
-    for source in selected:
+    db: Session,
+    *,
+    actor: User,
+    adapter_factory: SourceAdapterFactory = build_source_adapter,
+    limit: int = 20,
+) -> list[dict[str, str]]:
+    require_runner_admin(db, actor.id)
+    if not 1 <= limit <= 100:
+        raise ValueError("Runner source limit must be between 1 and 100")
+    now = database_now(db)
+    source_ids = list(
+        db.scalars(
+            select(JobSource.id)
+            .outerjoin(SourceCrawlLease, SourceCrawlLease.source_id == JobSource.id)
+            .where(
+                JobSource.enabled.is_(True),
+                JobSource.schedule.in_(INTERVAL_HOURS),
+                or_(
+                    JobSource.next_run_at.is_(None),
+                    JobSource.next_run_at <= now,
+                    (JobSource.status == "running")
+                    & SourceCrawlLease.owner_token.is_not(None)
+                    & (SourceCrawlLease.expires_at <= now),
+                ),
+            )
+            .order_by(JobSource.next_run_at, JobSource.id)
+            .limit(limit)
+        )
+    )
+    reports = []
+    for source_id in source_ids:
+        source = db.get(JobSource, source_id)
+        if source is None:
+            continue
         try:
-            runs.append(run_source(
-                db, source=source, actor=None, trigger="scheduled",
-                adapter_factory=adapter_factory, max_links=max_jobs, max_details=max_jobs,
-            ))
-        except SourceRunError as exc:
-            LOGGER.error("Scheduled source %s is not runnable: %s", source.name, exc)
-    return runs
+            run = run_source(
+                db,
+                source=source,
+                actor=actor,
+                adapter_factory=adapter_factory,
+                max_links=source.max_links,
+                max_details=source.max_details,
+                trigger="scheduled",
+            )
+            reports.append(
+                {"source_id": str(source_id), "run_id": str(run.id), "status": run.status.value}
+            )
+        except (SourceBusyError, SourceNotDueError):
+            reports.append({"source_id": str(source_id), "status": "skipped"})
+        except SourceLeaseLostError:
+            reports.append({"source_id": str(source_id), "status": "lease_lost"})
+        except Exception as exc:
+            db.rollback()
+            reports.append({"source_id": str(source_id), "status": "error", "error": str(exc)})
+    return reports
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--once", action="store_true")
+    mode.add_argument("--loop", action="store_true")
+    parser.add_argument("--actor-id", required=True, type=UUID)
+    parser.add_argument("--catalog", action="append", default=[], metavar="KEY")
+    parser.add_argument("--poll-seconds", type=int, default=60)
+    args = parser.parse_args(argv)
+    if not 5 <= args.poll_seconds <= 3600:
+        parser.error("--poll-seconds must be between 5 and 3600")
+    # Importing the runner itself does not initialize a database engine or start work.
+    from app.db.session import SessionLocal
+
+    try:
+        with SessionLocal() as db:
+            actor = require_runner_admin(db, args.actor_id)
+            register_catalog_sources(db, actor=actor, keys=args.catalog)
+        stop = Event()
+        while True:
+            with SessionLocal() as db:
+                actor = require_runner_admin(db, args.actor_id)
+                print(json.dumps(run_due_sources(db, actor=actor), ensure_ascii=False), flush=True)
+            if args.once:
+                return 0
+            stop.wait(args.poll_seconds)
+    except KeyboardInterrupt:
+        return 0
+    except ValueError as exc:
+        parser.error(str(exc))
+    return 2  # pragma: no cover
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

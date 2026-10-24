@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import JobMatchAnalysis from '../components/JobMatchAnalysis'
 import JobApplicationActions from '../components/JobApplicationActions'
+import { sourceTime } from '../services/sourceStatus'
 import { fetchJobById, addFavorite, removeFavorite, formatSalary } from '../services/jobs'
 import { getToken, watchSession } from '../services/auth'
 
@@ -24,7 +25,8 @@ interface Job {
   source_url: string | null
   assistant_form_available: boolean
   is_favorited: boolean
-  source: { name: string }
+  source: { name: string; last_success_at?: string | null }
+  last_seen_at?: string | null
   tags: { id: string; name: string }[]
 }
 
@@ -191,7 +193,7 @@ const SessionJobDetail = ({ id, token }: { id: string; token: string | null }) =
           {/* Source */}
           {job.source && (
             <p style={{ fontSize: '12px', color: '#999', marginBottom: '16px' }}>
-              Source: {job.source.name}
+              Source: {job.source.name} · Last successful source check: {sourceTime(job.source.last_success_at)}
             </p>
           )}
 

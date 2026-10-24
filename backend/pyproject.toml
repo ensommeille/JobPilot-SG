@@ -16,6 +16,8 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pwdlib[argon2]>=0.2",
     "PyJWT>=2.9",
+    "pypdf>=6.21.2,<7",
+    "python-multipart>=0.0.32,<1",
 ]
 
 [project.optional-dependencies]
