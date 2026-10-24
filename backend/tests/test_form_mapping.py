@@ -141,6 +141,23 @@ def test_semantic_question_calls_provider_with_only_relevant_evidence() -> None:
     assert draft.mapping[0].needs_review is True
 
 
+def test_semantic_prompt_describes_evidence_as_is_and_never_inflates() -> None:
+    # Locks the over-claiming fix: the job-context wording must not invite the LLM
+    # to reframe evidence into unrelated infrastructure work (Cantina regression).
+    provider = MockProvider([response("why", "I labeled data and ran quality checks.")])
+    draft = run(
+        [field("why", "Relevant experience", "textarea")],
+        {"experience": "Labeled images and ran quality checks on model outputs"},
+        provider,
+    )
+    assert len(provider.requests) == 1
+    system = provider.requests[0].messages[0].content
+    assert "describe the evidence as it is" in system
+    assert "Do not inflate, reframe, or extrapolate" in system
+    assert "tailor the answer to" not in system
+    assert draft.mapping[0].field_id == "why"
+
+
 @pytest.mark.parametrize(
     "bad_data",
     [
