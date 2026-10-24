@@ -60,7 +60,7 @@ test('failure, retry and filter edits invalidate previous result', async ({page}
   fail = false;
   await page.getByRole('button', {name: 'Find jobs for me'}).click();
   await expect(page.locator('.recommendation-list')).toBeVisible();
-  await page.getByLabel('Role or company (optional)').fill('Engineer');
+  await page.getByLabel('Role or company (optional)').first().fill('Engineer');
   await expect(page.locator('.recommendation-list')).toHaveCount(0);
   await page.getByRole('button', {name: 'Find jobs for me'}).click();
   await expect(page.locator('.recommendation-list')).toBeVisible();

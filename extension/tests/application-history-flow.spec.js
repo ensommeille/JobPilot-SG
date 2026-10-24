@@ -9,7 +9,7 @@ const record = (id, method = 'assistant', status = 'submitted') => {
     ? (status === 'draft' ? 'Preparation draft' : `${cap(status)} (self-reported)`)
     : (status === 'submitted' ? 'Application record saved' : `${cap(status)} (recorded)`);
   return {
-    id: `doc:${id}`, record_id: `rec:${id}`, kind: 'application',
+    id: `doc:${id}`, record_id: id, kind: 'application',
     job: {id: `job-${id}`, title: `Fictional ${id} role`, company: 'Test employer'},
     channel: manual ? 'manual' : 'assistant', method, status, display_status,
     next_action: manual

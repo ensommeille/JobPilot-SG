@@ -53,6 +53,6 @@ test('failed save preserves entered introduction', async ({page}) => {
   await profilePage(page, {failSave: true});
   await page.getByLabel('Personal introduction (written by you)').fill('Keep my unsaved introduction');
   await page.getByRole('button', {name: 'Save Profile'}).click();
-  await expect(page.getByRole('alert')).toContainText('Failed to save');
+  await expect(page.getByRole('alert').filter({hasText: 'Failed to save'})).toBeVisible();
   await expect(page.getByLabel('Personal introduction (written by you)')).toHaveValue('Keep my unsaved introduction');
 });

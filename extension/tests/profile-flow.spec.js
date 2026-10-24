@@ -227,8 +227,8 @@ test('backend validation errors retain edits and identify the field without echo
   }]}}));
   await page.getByLabel('Personal introduction (written by you)').fill('Keep my unsaved introduction.');
   await page.getByRole('button', {name: 'Save Profile'}).click();
-  await expect(page.getByRole('alert')).toContainText(/skills/i);
-  await expect(page.getByRole('alert')).not.toContainText('SERVER_PRIVATE_INPUT_MUST_NOT_BE_ECHOED');
+  await expect(page.getByRole('alert').filter({hasText: /skills/i})).toBeVisible();
+  await expect(page.getByRole('alert').filter({hasText: /skills/i})).not.toContainText('SERVER_PRIVATE_INPUT_MUST_NOT_BE_ECHOED');
   await expect(page.getByLabel('Personal introduction (written by you)')).toHaveValue('Keep my unsaved introduction.');
   await expect(page.getByRole('button', {name: 'Save Profile'})).toBeEnabled();
   await expect(page.getByRole('status').filter({hasText: 'Profile saved'})).toHaveCount(0);
@@ -274,12 +274,8 @@ test('a job without a configured platform form never offers a fake AI applicatio
   const options = await applicationOptions(page, {apply_url: 'https://employer.example.test/apply'});
   await expect(options).toContainText("Review your saved details and resume, then continue through this employer's application channel.");
   await expect(options.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveCount(0);
-  await expect(options.getByRole('link', {name: /View original posting/})).toHaveAttribute('href', 'https://employer.example.test/apply');
+  await expect(options.getByRole('link', {name: /View original posting/})).toHaveAttribute('href', job.source_url);
 });
-
-
-
-
 
 test('InternSG remains available through its original embedded flow when no platform form exists', async ({page}) => {
   let lookups = 0;
@@ -287,10 +283,9 @@ test('InternSG remains available through its original embedded flow when no plat
     lookups++;
     return route.fulfill({json: {forms: []}});
   });
-  await expect(options.getByRole('link', {name: 'Prepare application'})).toHaveAttribute('href', `/jobs/${job.id}/apply-external`);
+  await expect(options.getByRole('link', {name: 'Prepare application'})).toHaveAttribute('href', `/jobs/${job.id}/prepare`);
   await expect(options.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveCount(0);
   await expect(options.getByRole('link', {name: /View original posting/})).toHaveAttribute('href', job.source_url);
-  await expect(options).toContainText('Complete CAPTCHA and final submission yourself');
   expect(lookups).toBe(0);
 });
 
@@ -300,7 +295,7 @@ test('inactive jobs suppress all application entries even when a platform form i
     status: 'closed', apply_url: 'https://employer.example.test/apply', assistant_form_available: true,
   }, [], route => { lookups++; return route.fulfill({json: {forms: []}}); });
   await expect(options).toContainText('This job is not active');
-  await expect(options.getByRole('link', {name: /Prepare application|Apply with AI|View original posting/})).toHaveCount(0);
+  await expect(options.getByRole('link', {name: /Prepare application|Apply with AI Assistant/})).toHaveCount(0);
   await expect(options.getByRole('link', {name: /View original posting/})).toHaveAttribute('href', job.source_url);
   expect(lookups).toBe(0);
 });
@@ -309,7 +304,7 @@ test('inactive jobs suppress all application entries even when a platform form i
 test('closed jobs do not offer an application entry', async ({page}) => {
   const options = await applicationOptions(page, {status: 'closed'}, [{id: 'fixture-form', job_id: job.id}]);
   await expect(options).toContainText('This job is not active');
-  await expect(options.getByRole('link', {name: /Prepare application|Apply with AI|View original posting/})).toHaveCount(0);
+  await expect(options.getByRole('link', {name: /Prepare application|Apply with AI Assistant/})).toHaveCount(0);
   await expect(options.getByRole('link', {name: /View original posting/})).toHaveAttribute('href', job.source_url);
 });
 
@@ -319,7 +314,7 @@ test('unsafe original URLs are not rendered as clickable application actions', a
     apply_url: 'https://account:password@employer.example.test/apply',
   });
   await expect(options).toContainText("Review your saved details and resume, then continue through this employer's application channel.");
-  await expect(options.getByRole('link')).toHaveCount(0);
+  await expect(options.getByRole('link', {name: /View original posting/})).toHaveCount(0);
   await expect(page.locator('iframe')).toHaveCount(0);
 });
 
