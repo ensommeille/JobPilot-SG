@@ -87,6 +87,20 @@ async function editSavedProfile() {
   if (!await details.evaluate(element => element.open)) await summary.click();
   await expect(page.getByLabel('Full Name', {exact: true})).toBeVisible();
 }
+async function publicBrowseSnapshot(catalog, fixtureJobIds) {
+  await expect(page.locator('.job-card')).toHaveCount(catalog.total);
+  const links = page.locator('.job-card h3 a');
+  await expect(links).toHaveCount(catalog.total);
+  const shown = await links.evaluateAll(nodes => nodes.map(node => ({
+    id: new URL(node.href).pathname.split('/').at(-1), title: node.textContent.trim(),
+  })));
+  expect(shown.map(item => item.id).sort()).toEqual(catalog.items.map(item => item.id).sort());
+  for (const item of shown) {
+    expect(item.title).toBe(catalog.items.find(job => job.id === item.id).title);
+    expect(fixtureJobIds).not.toContain(item.id);
+  }
+  return shown;
+}
 try {
   const job = await (await request('GET', `/jobs/${seed.job_id}`)).json();
   expect(job.company).toBe('Stripe');
@@ -141,10 +155,33 @@ try {
   expect(item.unknown.length).toBeGreaterThan(0);
   checks.push('Free saved-source comparison retains exact JD/project evidence and pending human review');
 
+  // Public browsing excludes sandbox provenance. Its result set must not be
+  // inferred from the total number of database rows seeded for this journey.
+  const catalog = await (await request('GET', '/jobs?page=1&page_size=100')).json();
+  expect(catalog.page).toBe(1);
+  expect(catalog.pages).toBe(1);
+  expect(catalog.total).toBe(catalog.items.length);
+  expect(catalog.items.map(item => item.id)).toEqual([seed.job_id]);
+  expect(catalog.items[0]).toMatchObject({title: job.title, company: 'Stripe', source: {
+    id: seed.source_id, name: 'Stripe - isolated source review', source_type: job.source.source_type,
+  }});
+  for (const item of catalog.items) expect(['mock', 'sandbox']).not.toContain(item.source.source_type);
+  const bootstrap = await (await request('GET', '/assistant/bootstrap')).json();
+  const fixtures = bootstrap.forms.filter(value => value.is_fixture);
+  expect(fixtures.length).toBeGreaterThan(0);
+  const fixtureJobIds = fixtures.map(value => value.job_id);
+  for (const id of fixtureJobIds) expect(catalog.items.map(item => item.id)).not.toContain(id);
+  const fixture = fixtures[0];
+  const form = await (await request('GET', `/assistant/forms/${fixture.id}`)).json();
+  const fixtureJob = await (await request('GET', `/jobs/${fixture.job_id}`)).json();
+  expect(fixtureJob.company).toBe('JobPilot Sandbox Labs');
+  expect(fixtureJob.source.source_type).toBe('sandbox');
+  checks.push('Public catalog contains the saved Stripe source only; configured sandbox forms remain separate');
+
   // This workspace deliberately disables live models. Exercise the real current
   // button and its safe failure instead of fabricating a successful AI ranking.
   await page.goto(web + '/jobs');
-  await expect(page.locator('.job-card')).toHaveCount(3);
+  const browseBefore = await publicBrowseSnapshot(catalog, fixtureJobIds);
   expect(aiRequests).toEqual([]);
   expectedResourceFailures.add(api + '/jobs/ai-recommendations');
   const unavailable = page.waitForResponse(response => response.url() === api + '/jobs/ai-recommendations'
@@ -158,11 +195,10 @@ try {
   await expect(page).not.toHaveURL(/ai_run=/);
   expect(aiRequests).toEqual([{confirmed: true}]);
   await page.getByRole('button', {name: 'Show all jobs', exact: true}).click();
-  await expect(page.locator('.job-card')).toHaveCount(3);
-  await expect(page.locator('.job-card').filter({hasText: job.title})).toHaveCount(1);
+  expect(await publicBrowseSnapshot(catalog, fixtureJobIds)).toEqual(browseBefore);
   expect(aiRequests).toHaveLength(1);
   await page.screenshot({path: path.join(output, 'real-job-browse-after-disabled-ai.png'), fullPage: true});
-  checks.push('Current Recommend to me UI safely reports disabled AI; Show all restores real snapshot browse without retry');
+  checks.push('Current Recommend to me UI safely reports disabled AI; Show all restores the same public IDs and titles without retry or sandbox leakage');
 
   // Negative controls must not manufacture suggestions from unrelated or learning-only profiles.
   await request('PUT', '/profile', {full_name: profile.full_name, skills: ['AutoCAD']});
@@ -197,12 +233,6 @@ try {
   checks.push('Real-job draft displayed in history with no submitted timestamp; duplicate refused');
 
   // The in-platform form is explicitly a separate sandbox use case, not a Stripe form.
-  const bootstrap = await (await request('GET', '/assistant/bootstrap')).json();
-  const fixture = bootstrap.forms.find(value => value.is_fixture);
-  expect(fixture).toBeTruthy();
-  const form = await (await request('GET', `/assistant/forms/${fixture.id}`)).json();
-  const fixtureJob = await (await request('GET', `/jobs/${fixture.job_id}`)).json();
-  expect(fixtureJob.company).toBe('JobPilot Sandbox Labs');
   await page.goto(web + `/jobs/${fixture.job_id}/apply`);
   await expect(page.getByLabel('Full name', {exact: false})).toHaveValue(profile.full_name);
   await expect(page.getByLabel('Contact email', {exact: false})).toHaveValue(profile.contact_email);
@@ -271,6 +301,7 @@ try {
     real_job: {title: job.title, company: job.company, source_url: job.source_url},
     source: 'Saved actual live artifact plus explicit source-bound agent correction; final human review pending',
     recommendation_scope: 'Free saved-source comparison and current AI-disabled UI; not live AI recommendation acceptance',
+    public_catalog: {total: catalog.total, jobs: browseBefore, sandbox_form_job_ids: fixtureJobIds, show_all_restored_same_ids_and_titles: true},
     ai_disabled_requests: aiRequests.length,
     new_model_calls: 0, employer_submissions: 0, test_accounts: 2,
     optional_font_stylesheet_blocked: optionalFonts.size > 0,
