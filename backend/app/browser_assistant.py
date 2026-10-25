@@ -1,6 +1,5 @@
 """Read-only profile suggestions for user-reviewed original-site form filling."""
 
-import re
 from typing import Annotated
 from urllib.parse import urlsplit
 
@@ -10,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import BrowserUser
 from app.db.session import get_db
+from app.jobs.application_channels import supported_application_type
 from app.profiles.service import get_profile
 
 router = APIRouter(prefix="/browser-assistant", tags=["browser-assistant"])
@@ -22,7 +22,13 @@ SUPPORTED = {
     "applicant_summary",
 }
 ATS_EVIDENCE_KEYS = {
-    "education", "experience", "skills", "availability", "summary", "linkedin", "github"
+    "education",
+    "experience",
+    "skills",
+    "availability",
+    "summary",
+    "linkedin",
+    "github",
 }
 
 
@@ -34,24 +40,7 @@ class DraftRequest(BaseModel):
     @field_validator("page_url")
     @classmethod
     def allowed_page(cls, value: str) -> str:
-        parsed = urlsplit(value)
-        internsg = (
-            parsed.netloc in {"www.internsg.com", "internsg.com"}
-            and bool(re.fullmatch(r"/job-apply/[0-9]+/?", parsed.path))
-            and not parsed.query
-        )
-        greenhouse_path = re.fullmatch(r"/[A-Za-z0-9_-]+/jobs/([0-9]+)/?", parsed.path)
-        greenhouse = (
-            parsed.netloc in {"job-boards.greenhouse.io", "boards.greenhouse.io"}
-            and bool(greenhouse_path)
-            and (not parsed.query or parsed.query == f"gh_jid={greenhouse_path.group(1)}")
-        )
-        lever = (
-            parsed.netloc in {"jobs.lever.co", "jobs.eu.lever.co"}
-            and bool(re.fullmatch(r"/[A-Za-z0-9_-]+/[A-Za-z0-9-]+/apply/?", parsed.path))
-            and not parsed.query
-        )
-        if parsed.scheme != "https" or parsed.fragment or not (internsg or greenhouse or lever):
+        if supported_application_type(value) is None:
             raise ValueError(
                 "Only canonical InternSG, Greenhouse or Lever application pages are supported"
             )
@@ -65,9 +54,15 @@ class DraftRequest(BaseModel):
         return value
 
 
+class NameParts(BaseModel):
+    given_name: str | None = None
+    family_name: str | None = None
+
+
 class DraftResponse(BaseModel):
     values: dict[str, str]
     countries: dict[str, str | None] = Field(default_factory=dict)
+    name_parts: NameParts = Field(default_factory=NameParts)
     profile_source: str = "jobpilot"
     summary_status: str
     requires_review: bool = True
@@ -84,7 +79,12 @@ class ATSEvidenceRequest(BaseModel):
     def allowed_ats_page(cls, value: str) -> str:
         DraftRequest.allowed_page(value)
         if urlsplit(value).netloc not in {
-            "job-boards.greenhouse.io", "boards.greenhouse.io", "jobs.lever.co", "jobs.eu.lever.co"
+            "job-boards.greenhouse.io",
+            "job-boards.eu.greenhouse.io",
+            "boards.greenhouse.io",
+            "jobs.lever.co",
+            "jobs.eu.lever.co",
+            "jobs.ashbyhq.com",
         }:
             raise ValueError("Only hosted Greenhouse and Lever forms are supported")
         return value
@@ -110,8 +110,11 @@ def _profile_link(links: dict[str, str], kind: str) -> str | None:
     for value in links.values():
         parsed = urlsplit(value)
         host = (parsed.hostname or "").lower()
-        known_host = host in ({"linkedin.com", "www.linkedin.com"} if kind == "linkedin"
-                              else {"github.com", "www.github.com"})
+        known_host = host in (
+            {"linkedin.com", "www.linkedin.com"}
+            if kind == "linkedin"
+            else {"github.com", "www.github.com"}
+        )
         if parsed.scheme == "https" and known_host and not parsed.username and not parsed.password:
             matches.add(value)
     return next(iter(matches)) if len(matches) == 1 else None
@@ -130,7 +133,10 @@ async def ats_evidence(
         "skills": (", ".join(profile.skills or []), "JobPilot profile · Skills"),
         "availability": (profile.availability_period, "JobPilot profile · Availability period"),
         "summary": (profile.resume_summary, "JobPilot profile · Reusable summary"),
-        "linkedin": (_profile_link(profile.links or {}, "linkedin"), "JobPilot profile · LinkedIn link"),
+        "linkedin": (
+            _profile_link(profile.links or {}, "linkedin"),
+            "JobPilot profile · LinkedIn link",
+        ),
         "github": (_profile_link(profile.links or {}, "github"), "JobPilot profile · GitHub link"),
     }
     values = {key: value for key in payload.evidence_keys if (value := source[key][0])}
@@ -157,5 +163,8 @@ async def draft(
     return DraftResponse(
         values=values,
         countries={"nationality": profile.nationality, "campus": profile.study_country},
+        name_parts=NameParts(given_name=profile.given_name, family_name=profile.family_name)
+        if "applicant_name" in payload.field_ids
+        else NameParts(),
         summary_status="manual_only",
     )

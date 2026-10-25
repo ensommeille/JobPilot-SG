@@ -29,7 +29,7 @@ class StructuredGenerationRequest(ContractModel):
     schema_name: str = Field(min_length=1, pattern=r"^[a-zA-Z0-9_]+$")
     output_schema: dict[str, Any]
     temperature: float = Field(default=0.0, ge=0, le=2)
-    max_output_tokens: int = Field(default=2500, ge=1, le=16000)
+    max_output_tokens: int = Field(default=2500, ge=1, le=20000)
     contract_version: Literal["0.1.0"] = CONTRACT_VERSION
 
     @field_validator("output_schema")

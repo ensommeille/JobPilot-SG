@@ -25,7 +25,8 @@ const validApplication = value => {
 const validParent = (value, origin, jobId) => {
   try {
     const url = new URL(value);
-    return url.href === value && url.origin === origin && !url.username && !url.password && !url.search && !url.hash
+    const queryAllowed = url.search ? /^\?resume=[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(url.search) : !value.includes('?');
+    return url.href === value && url.origin === origin && !url.username && !url.password && queryAllowed && !url.hash
       && new RegExp(`^/jobs/${jobId}/apply-external/?$`).test(url.pathname);
   } catch { return false; }
 };
@@ -36,7 +37,8 @@ const sameApplication = (actual, expected) => validApplication(actual) && validA
 // Serialized into the trusted platform's ISOLATED world. The platform JWT never
 // leaves this function except as Authorization to its fixed, paired API origin.
 export async function verifyPlatformApplication(expectedOrigin, expectedPageUrl, jobId, deadline = Date.now() + 15000) {
-  const deployments = {'http://127.0.0.1:5173': 'http://127.0.0.1:8001', 'http://localhost:5173': 'http://localhost:8000'};
+  const deployments = {'http://127.0.0.1:5173': 'http://127.0.0.1:8001', 'http://localhost:5173': 'http://localhost:8000',
+    'http://127.0.0.1:15523': 'http://127.0.0.1:18523'};
   const api = deployments[location.origin];
   // Sender URL metadata can retain the initial document URL after SPA navigation.
   // Read the current route only inside the sender's exact isolated document.
@@ -44,8 +46,9 @@ export async function verifyPlatformApplication(expectedOrigin, expectedPageUrl,
   const checkPage = () => {
     const frames = [...document.querySelectorAll('iframe[data-jobpilot-internsg]')];
     const current = new URL(location.href);
+    const queryAllowed = current.search ? /^\?resume=[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(current.search) : !location.href.includes('?');
     if (Date.now() >= deadline || !api || window !== window.top || location.href !== parentUrl
-        || current.origin !== expectedOrigin || current.username || current.password || current.search || current.hash
+        || current.origin !== expectedOrigin || current.username || current.password || !queryAllowed || current.hash
         || !new RegExp(`^/jobs/${jobId}/apply-external/?$`).test(location.pathname)
         || frames.length !== 1 || frames[0].src !== expectedPageUrl) throw new Error('Application page changed. Load the original form and inspect again.');
   };

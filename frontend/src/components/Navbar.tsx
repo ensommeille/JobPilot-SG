@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useId, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getToken, logoutPlatform, watchSession } from '../services/auth'
 import api from '../services/api'
+import HowToUseGuide from './HowToUseGuide'
+import './Navbar.css'
 
 interface NavbarProps {
   backTo?: string
@@ -21,6 +23,15 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
   const [adminToken, setAdminToken] = useState<string | null>(null)
   const [logoutError, setLogoutError] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
+  const guideId = useId()
+  const guideButton = useRef<HTMLButtonElement>(null)
+  const showGuide = location.pathname === '/jobs'
+
+  const closeGuide = () => {
+    setGuideOpen(false)
+    guideButton.current?.focus()
+  }
 
   useEffect(() => {
     let pending: AbortController | null = null
@@ -52,7 +63,8 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
   }
 
   return (
-    <header className="navbar">
+    <>
+    <header className={`navbar${showGuide ? ' navbar-with-guide' : ''}`}>
       <div className="navbar-inner">
         {/* 左侧：Logo + 可选返回按钮 */}
         <div className="row" style={{ gap: 'var(--s-4)' }}>
@@ -68,7 +80,7 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
         </div>
 
         {/* 右侧：导航 + 用户 + Logout */}
-        <nav className="nav-links">
+        <nav className="nav-links" aria-label="Main navigation">
           {NAV_ITEMS.map(item => (
             <button
               key={item.path}
@@ -86,6 +98,16 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
             onClick={() => navigate('/admin')}
           >Admin</button>}
 
+          {showGuide && <button
+            ref={guideButton}
+            type="button"
+            className="btn btn-ghost navbar-guide-button"
+            aria-expanded={guideOpen}
+            aria-controls={guideId}
+            onClick={() => setGuideOpen(open => !open)}
+            onKeyDown={event => { if (event.key === 'Escape' && guideOpen) { event.preventDefault(); closeGuide() } }}
+          >How to use</button>}
+
           <div className="nav-divider" />
 
           <button className="user-chip" aria-label={userName ? `Your profile: ${userName}` : 'Your profile'} onClick={() => navigate('/profile')}>
@@ -100,6 +122,8 @@ const Navbar = ({ backTo, backLabel = '← Back' }: NavbarProps) => {
       </div>
       {logoutError && <p role="alert" className="alert alert-error">{logoutError}</p>}
     </header>
+    {showGuide && guideOpen && <HowToUseGuide id={guideId} onClose={closeGuide} />}
+    </>
   )
 }
 

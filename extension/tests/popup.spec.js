@@ -5,11 +5,11 @@ import path from 'node:path';
 const root = path.resolve(import.meta.dirname, '..');
 async function setup(page, {expired = false, unsupported = false, skipped = false, widgetsReady = false, embeddedAccess = true} = {}) {
   await page.addInitScript(({expired, unsupported, skipped, widgetsReady, embeddedAccess}) => {
-    window.operations = []; window.drafts = []; window.stored = {}; window.atsCalls = [];
+    window.operations = []; window.drafts = []; window.stored = {}; window.atsCalls = []; window.grant = 0;
     window.embeddedAccess = embeddedAccess; window.permissionAllowed = true; window.permissionRequests = [];
     window.applicationUrl = 'https://www.internsg.com/job-apply/123';
     window.connect = email => {
-      window.stored = {jobpilotSession: {api: 'http://localhost:8000', site: 'http://localhost:5173', token: 'jpx_fixture', userId: email, email}};
+      window.stored = {jobpilotSession: {api: 'http://localhost:8000', site: 'http://localhost:5173', token: 'jpx_fixture_' + (++window.grant), userId: email, email}};
       window.storageListener({jobpilotSession: {newValue: window.stored.jobpilotSession}}, 'session');
     };
     window.chrome = {
@@ -24,17 +24,20 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
         }},
       storage: {onChanged: {addListener: listener => { window.storageListener = listener; }}, local: {setAccessLevel: async () => {}, get: async () => window.localSaved || {}, set: async value => { window.localSaved = {...window.localSaved, ...value}; }, remove: async key => { delete window.localSaved?.[key]; }}, session: {setAccessLevel: async () => {}, get: async () => window.stored,
         set: async value => { window.stored = value; }, remove: async () => { window.stored = {}; }}},
-      tabs: {query: async () => [{id: 7}]},
+      tabs: {query: async () => [{id: 7, url: window.activeUrl}]},
       scripting: {executeScript: async request => {
+        if (request.func.name === 'popupDocumentBinding') return [{documentId: request.target.documentIds[0], result: {url: request.args[0]}}];
         if (request.func.name === 'interactWithATSPage') {
           window.atsCalls.push(request.args[0]);
           if (request.args[0].action === 'inspect') return [{documentId: 'ats-document', result: {
-            provider: 'Lever', url: 'https://jobs.lever.co/acme/abc-123/apply',
-            fields: [{id: 'full_name', available: true, occupied: false, maxLength: 200},
-              {id: 'email', available: true, occupied: false, maxLength: 200},
-              {id: 'phone', available: false, occupied: false, maxLength: 200},
-              {id: 'custom:0', label: 'LinkedIn Profile', key: 'name:urls[LinkedIn]', evidenceKey: 'linkedin', available: true, occupied: false, maxLength: 2000}],
-            manualQuestions: ['Why this company?']}}];
+            provider: window.activeUrl?.includes('greenhouse.io') ? 'Greenhouse' : 'Lever',
+            url: window.activeUrl || 'https://jobs.lever.co/acme/abc-123/apply',
+            fields: window.atsFields || [{id: 'full_name', key: 'name:name', label: 'Full name', kind: 'text', evidenceKey: 'full_name', available: true, occupied: false, maxLength: 200},
+              {id: 'email', key: 'name:email', label: 'Email', kind: 'text', evidenceKey: 'contact_email', available: true, occupied: false, maxLength: 200},
+              {id: 'phone', key: 'name:phone', label: 'Phone', kind: 'text', evidenceKey: 'phone', available: false, occupied: false, maxLength: 200},
+              {id: 'custom:0', kind: 'text', label: 'LinkedIn Profile', key: 'name:urls[LinkedIn]', evidenceKey: 'linkedin', available: true, occupied: false, maxLength: 2000}],
+            manualQuestions: ['Why this company?'], resumeTarget: window.atsResumeTarget || null}}];
+          if (request.args[0].action === 'attach') return [{documentId: 'ats-document', result: {submitted: false, selected: true, upload_status: 'selected_on_form', filename: request.args[0].file.name, sha256: request.args[0].file.sha256}}];
           return [{documentId: 'ats-document', result: {filled: request.args[0].approved.map(item => item.id), skipped: [], submitted: false}}];
         }
         if (request.func.name === 'discoverApplication') {
@@ -69,7 +72,25 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
       if (window.offline) throw new Error('Network unavailable');
       if (window.expired) return new Response('', {status: 401});
       if (url.endsWith('/auth/extension/session')) return new Response(JSON.stringify({user_id: window.stored.jobpilotSession.userId}));
-      window.drafts.push({url, payload});
+      window.drafts.push({url, payload, method: options.method});
+      const facts = () => {
+        const values = {full_name: 'Fictional Applicant', linkedin: 'https://www.linkedin.com/in/fictional', ...(window.platformValues || {})};
+        for (const key of Object.keys(values)) if (typeof values[key] !== 'string' || !values[key]) delete values[key];
+        return window.autofillProfile || {values, sources: Object.fromEntries(Object.keys(values).map(key => [key, {source: 'profile', quote: null, resume_id: null}])),
+          missing_fields: [], resume: null, resumes: [], requires_resume_selection: false, extraction_status: 'no_resume', fingerprint: JSON.stringify(values)};
+      };
+      if (url.endsWith('/browser-assistant/autofill-profile')) return new Response(JSON.stringify(facts()));
+      if (url.endsWith('/browser-assistant/prepare-answers')) {
+        if (window.prepareGate) await window.prepareGate;
+        return new Response(JSON.stringify(window.prepareResponse || {status: 'partial', profile_fingerprint: facts().fingerprint, answers: [], omitted: payload.fields.map(field => ({field_id: field.id, reason: 'No saved fact'})), reused: false, execution_mode: 'not_needed', elapsed_ms: 1, error_code: null}));
+      }
+      if (url.endsWith('/browser-assistant/form-plan')) return new Response(JSON.stringify({mappings: window.planMappings || [], execution_mode: 'not_needed', reused: false, profile_fingerprint: facts().fingerprint}));
+      if (url.endsWith('/browser-assistant/resume-content')) {
+        const resume = facts().resume, bytes = '%PDF-1.4\nfictional UI fixture';
+        return new Response(JSON.stringify({resume_id: resume.id, page_url: payload.page_url, filename: resume.filename,
+          sha256: resume.sha256, base64: btoa(bytes), size_bytes: bytes.length}));
+      }
+
       if (url.endsWith('/auth/login')) return new Response(JSON.stringify({access_token: 'fixture-token', user: {id: payload.email, email: payload.email}}));
       if (expired) return new Response('', {status: 401});
       if (url.endsWith('/profile/import-local')) {
@@ -82,101 +103,354 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
         }
         return new Response(JSON.stringify({imported, skipped}));
       }
-      if (url.endsWith('/browser-assistant/ats-evidence')) return new Response(JSON.stringify({
-        profile_source: 'jobpilot', values: {linkedin: 'https://www.linkedin.com/in/fictional'},
-        source_labels: {linkedin: 'JobPilot profile · LinkedIn link'}, submission_supported: false,
-      }));
-      const profile = window.platformValues || {};
-      return new Response(JSON.stringify({profile_source: 'jobpilot', countries: {nationality: profile.nationality, campus: profile.study_country}, values: {applicant_name: 'Fictional Applicant', applicant_summary: profile.resume_summary || '', applicant_period: profile.availability_period || ''}, summary_status: 'manual_only'}));
+      throw new Error('Unexpected popup fixture API: ' + url);
     };
   }, {expired, unsupported, skipped, widgetsReady, embeddedAccess});
   await page.route('https://popup.test/**', async route => {
     const name = new URL(route.request().url()).pathname.slice(1);
-    if (!['popup.html', 'popup.css', 'popup.js', 'ats-page.js', 'page.js', 'widgets.js', 'submission.js', 'frames.js', 'connection.js'].includes(name)) return route.abort();
+    if (!['popup.html', 'popup.css', 'popup.js', 'popup-autoload.js', 'popup-preparation.js', 'popup-review.js', 'ats-page.js', 'page.js', 'widgets.js', 'submission.js', 'frames.js', 'connection.js'].includes(name)) return route.abort();
     await route.fulfill({body: await readFile(path.join(root, name)), contentType: name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : 'text/html'});
   });
   await page.goto('https://popup.test/popup.html');
 }
 async function login(page, email = 'fictional@example.test', {expand = true} = {}) {
   await page.getByRole('button', {name: 'Connect through JobPilot', exact: true}).click();
-  await page.evaluate(email => window.connect(email), email);
+  await page.evaluate(email => {
+    // Connection itself explicitly requests platform access. From the completed
+    // grant onward, automatic previewing must request no new permissions.
+    window.permissionRequests = [];
+    window.connect(email);
+  }, email);
   await expect(page.getByRole('link', {name: 'Open JobPilot'})).toBeVisible();
+  await expect(page.locator('#open-jobpilot')).toHaveAttribute('href', 'http://localhost:5173/jobs');
   if (expand) {
-    await page.locator('#original-tools > summary').click();
-    await page.locator('#advanced-submission > summary').click();
-    await page.locator('#settings > summary').click();
+    await openDetails(page, '#original-tools');
+    await openDetails(page, '#settings');
+    await expect(page.locator('#inspect')).toBeEnabled();
+    await expandReadyAnswers(page);
   }
 }
 
-test('sign in, inspect, approve and fill without automatic model call', async ({page}) => {
-  await setup(page); await login(page);
+async function openDetails(page, selector) {
+  if (!await page.locator(selector).evaluate(node => node.open)) await page.locator(selector + ' > summary').click();
+}
+async function expandReadyAnswers(page) {
+  for (const details of await page.locator('.prepared-fields').all()) {
+    if (!await details.evaluate(node => node.open)) await details.locator('summary').first().click();
+  }
+}
+async function expectUnfinishedIntroduction(page, previous = []) {
+  const introduction = page.getByLabel('Resume summary', {exact: true});
+  await expect(introduction).toHaveValue('Your brief introduction');
+  await expect(page.locator('#reason-applicant_summary')).toContainText('AI did not return a verified answer');
+  for (const value of previous) await expect(introduction).not.toHaveValue(value);
+}
+// A new mock connection grant exercises the real restore/automatic-load entrypoint.
+// Do not dispatch a hidden Refresh click: these cases also cover current-tab changes.
+async function connectApplication(page, tool = 'internsg', {waitForPreview = true} = {}) {
+  const keepSettingsOpen = await page.locator('#settings').evaluate(node => node.open);
+  const keepDeviceDetailsOpen = await page.locator('#local-profile').evaluate(node => node.open);
+  const expired = await page.evaluate(tool => {
+    window.activeUrl = tool === 'ats' ? 'https://jobs.lever.co/acme/abc-123/apply' : window.applicationUrl;
+    window.connect(window.stored.jobpilotSession.email);
+    return !!window.expired;
+  }, tool);
+  if (!expired) {
+    await expect(page.locator(tool === 'ats' ? '#ats-tools' : '#original-tools')).toHaveAttribute('open');
+    if (waitForPreview) {
+      await expect(page.locator(tool === 'ats' ? '#ats-inspect' : '#inspect')).toBeEnabled();
+      await expandReadyAnswers(page);
+    }
+    if (keepSettingsOpen) await openDetails(page, '#settings');
+    if (keepDeviceDetailsOpen) await openDetails(page, '#local-profile');
+  }
+}
+
+test('opening a supported InternSG application loads saved answers and needs only a Fill click', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => { window.activeUrl = window.applicationUrl; });
+  await login(page);
   await expect(page.locator('#password, #email')).toHaveCount(0);
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await expect(page.locator('#inspect')).toBeHidden();
   const fill = page.getByRole('button', {name: 'Fill application form', exact: true});
   await expect(fill).toBeEnabled();
+  expect(await page.evaluate(() => window.operations.map(call => call[0]))).toEqual(['inspect']);
+  expect(await page.evaluate(() => window.permissionRequests)).toEqual([]);
+  expect(await page.evaluate(() => window.drafts.every(call => call.url.endsWith('/autofill-profile') || call.url.endsWith('/prepare-answers')))).toBe(true);
+  await expectUnfinishedIntroduction(page);
   await fill.click();
   await expect(page.locator('#status')).toContainText('Nothing was submitted');
   const calls = await page.evaluate(() => window.drafts);
   expect(calls.some(c => c.payload.generate_summary)).toBe(false);
   const operations = await page.evaluate(() => window.operations);
-  expect(operations[1][2]).toEqual([{id: 'applicant_name', value: 'Fictional Applicant', confirmed: true}]);
+  expect(operations[1][2]).toEqual([{id: 'applicant_name', value: 'Fictional Applicant', confirmed: true},
+    {id: 'applicant_summary', value: 'Your brief introduction', confirmed: true}]);
 });
 
-test('public ATS popup reviews profile before one fill and never submits', async ({page}) => {
-  await setup(page); await login(page, 'fictional@example.test', {expand: false});
-  await page.locator('#ats-tools > summary').click();
-  await page.getByRole('button', {name: 'Read form & load saved details'}).click();
+test('public ATS popup authorizes the edited preview in one click without per-answer checkboxes', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => { window.activeUrl = 'https://jobs.lever.co/acme/abc-123/apply'; });
+  await login(page, 'fictional@example.test', {expand: false});
   await expect(page.locator('#ats-full_name')).toHaveValue('Fictional Applicant');
-  await expect(page.locator('#ats-custom\\:0')).toHaveValue('https://www.linkedin.com/in/fictional');
-  await expect(page.locator('#ats-manual > summary')).toContainText('1 scanned field needs manual review (not all unanswered fields)');
+  await expect(page.locator('#ats-inspect')).toBeHidden();
+  expect(await page.evaluate(() => window.permissionRequests)).toEqual([]);
+  expect(await page.evaluate(() => window.drafts.every(call => call.url.endsWith('/autofill-profile') || call.url.endsWith('/prepare-answers')))).toBe(true);
+  await expect(page.locator('[id="ats-custom:0"]')).toHaveValue('https://www.linkedin.com/in/fictional');
+  await expect(page.locator('#ats-fields input[type=checkbox]')).toHaveCount(0);
+  await expect(page.locator('#ats-manual > summary')).toContainText('Other fields to check (2)');
   await expect(page.locator('#ats-manual')).not.toHaveAttribute('open');
   await page.locator('#ats-manual > summary').click();
   await expect(page.locator('#ats-manual')).toContainText('Why this company?');
-  await expect(page.locator('#ats-manual')).toContainText('Dropdowns, checkboxes and uploads may not appear here. Check the complete original form.');
-  const fill = page.getByRole('button', {name: 'Fill reviewed fields only'});
-  await expect(fill).toBeDisabled();
-  await page.locator('#ats-fields .check input').first().check();
-  await page.locator('#ats-custom\\:0').fill('https://www.linkedin.com/in/edited');
-  await expect(page.locator('#ats-fields .check input').last()).not.toBeChecked();
-  await page.locator('#ats-fields .check input').last().check();
-  await expect(fill).toBeEnabled();
-  await fill.click();
+  await expect(page.locator('#ats-manual')).toContainText('This scan is partial.');
+  await expandReadyAnswers(page);
+  await expect(page.locator('#ats-email')).toHaveValue('To be confirmed');
+  await expect(page.locator('#source-ats-email')).toContainText('AI did not return a verified answer');
+  await page.locator('[id="ats-custom:0"]').fill('https://www.linkedin.com/in/edited');
+  await expect(page.locator('#ats-fill')).toBeEnabled();
+  await page.locator('#ats-fill').click();
   await expect(page.locator('#ats-result')).toContainText('Nothing was submitted');
+  await expect(page.locator('#ats-fill')).toBeDisabled();
   expect(await page.evaluate(() => window.atsCalls.map(call => call.action))).toEqual(['inspect', 'fill']);
   expect(await page.evaluate(() => window.atsCalls[1].approved)).toEqual([
-    {id: 'full_name', value: 'Fictional Applicant', confirmed: true},
-    {id: 'custom:0', value: 'https://www.linkedin.com/in/edited', confirmed: true,
-      key: 'name:urls[LinkedIn]', label: 'LinkedIn Profile', evidenceKey: 'linkedin'},
+    {id: 'full_name', value: 'Fictional Applicant', confirmed: true, kind: 'text', key: 'name:name', label: 'Full name', evidenceKey: 'full_name', factKey: 'full_name'},
+    {id: 'email', value: 'To be confirmed', confirmed: true, kind: 'text', key: 'name:email', label: 'Email', evidenceKey: 'contact_email'},
+    {id: 'custom:0', value: 'https://www.linkedin.com/in/edited', confirmed: true, kind: 'text',
+      key: 'name:urls[LinkedIn]', label: 'LinkedIn Profile', evidenceKey: 'linkedin', factKey: 'linkedin'},
   ]);
+  expect(await page.evaluate(() => window.drafts.some(call => call.url.includes('generate')))).toBe(false);
   expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
 });
+
+test('only a model-confirmed missing professional link becomes editable pending text', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => {
+    window.activeUrl = 'https://jobs.lever.co/acme/abc-123/apply';
+    window.platformValues = {linkedin: ''};
+    window.prepareResponse = {status: 'partial', profile_fingerprint: JSON.stringify({full_name: 'Fictional Applicant'}), answers: [
+      {field_id: 'custom:0', value: 'To be confirmed', source: 'pending_confirmation', fact_key: null, citations: []}],
+      analyzed_field_ids: ['custom:0'], omitted: [], reused: false, execution_mode: 'mock', error_code: null};
+  });
+  await login(page, undefined, {expand: false});
+  const input = page.locator('[id="ats-custom:0"]');
+  await expect(input).toHaveValue('Your LinkedIn URL');
+  await expect(page.locator('[id="source-ats-custom:0"]')).toContainText('AI found no supporting information');
+  await expect(page.locator('#ats-counts')).toContainText('1 ready');
+  await page.locator('#ats-fill').click();
+  await expect.poll(() => page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill').length)).toBe(1);
+  const approved = await page.evaluate(() => window.atsCalls.find(call => call.action === 'fill').approved.find(item => item.id === 'custom:0'));
+  expect(approved.value).toBe('Your LinkedIn URL'); expect(approved).not.toHaveProperty('factKey');
+  expect(await page.evaluate(() => window.drafts.filter(call => call.method !== 'GET').every(call => call.url.endsWith('/prepare-answers')))).toBe(true);
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+});
+
+test('AI prepares current ordinary Lever questions before missing-evidence fallback, preserving saved and edited values', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => {
+    window.activeUrl = 'https://jobs.lever.co/acme/abc-123/apply';
+    window.autofillProfile = {fingerprint: 'ordinary-text-fixture', values: {full_name: 'Fictional Applicant', current_city: 'Singapore', school: 'Northern Institute'}, sources: {}, resume: null, resumes: []};
+    const field = (id, label, evidenceKey, extra = {}) => ({id, label, evidenceKey, key: 'id:' + id, kind: 'text', available: true, occupied: false, maxLength: 1000, ...extra});
+    window.atsFields = [field('full_name', 'Full name', 'full_name'), field('location', 'Current location', 'current_city', {requiresWebsiteChoice: true}),
+      field('company', 'Current company', 'current_company'), field('combined', 'Github / Portfolio URL', null, {needsMapping: true}),
+      field('school', 'Institution attended', null, {needsMapping: true}), field('cover', 'Cover letter', null, {needsMapping: true, draftable: true})];
+    window.prepareGate = new Promise(resolve => { window.releasePreparation = resolve; });
+    window.prepareResponse = {status: 'partial', profile_fingerprint: 'ordinary-text-fixture', execution_mode: 'mock', reused: false, omitted: [], answers: [
+      {field_id: 'company', value: 'To be confirmed', source: 'pending_confirmation', fact_key: null, citations: []},
+      {field_id: 'combined', value: 'To be confirmed', source: 'pending_confirmation', fact_key: null, citations: []},
+      {field_id: 'cover', value: 'I built a small Python service.', source: 'ai_draft', fact_key: null,
+        citations: [{source: 'profile', source_id: 'profile:experience', quote: 'Built a small Python service.'}]}]};
+  });
+  await login(page, undefined, {expand: false});
+  await expect(page.locator('#ats-location')).toHaveValue('Singapore');
+  await expect(page.locator('#source-ats-location')).toContainText('Choose the suggested location on the website');
+  await expect(page.locator('#ats-company')).toHaveValue('');
+  await expect(page.locator('#ats-combined')).toHaveValue('');
+  await expect(page.locator('#ats-cover')).toHaveValue('');
+  await expect(page.locator('#ats-school')).toHaveValue('Northern Institute');
+  await expect(page.locator('#ats-counts')).toContainText('3 ready · 3 preparing');
+  await page.locator('#ats-company').fill('My own company entry');
+  await page.evaluate(() => window.releasePreparation());
+  await expect(page.locator('#ats-school')).toHaveValue('Northern Institute');
+  await expect(page.locator('#ats-cover')).toHaveValue('I built a small Python service.');
+  await expect(page.locator('#ats-company')).toHaveValue('My own company entry');
+  await expect(page.locator('#ats-counts')).toContainText('5 ready · 1 templates to replace');
+  const requested = await page.evaluate(() => window.drafts.find(call => call.url.endsWith('/prepare-answers')).payload.fields.map(field => field.id));
+  expect(requested).toEqual(['company', 'combined', 'cover']);
+  await page.locator('#ats-fill').click();
+  await expect.poll(() => page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill').length)).toBe(1);
+  const approved = await page.evaluate(() => window.atsCalls.find(call => call.action === 'fill').approved);
+  expect(approved.find(field => field.id === 'combined').value).toBe('Your GitHub or portfolio URL');
+  expect(approved.find(field => field.id === 'school')).toMatchObject({evidenceKey: null, factKey: 'school'});
+  expect(await page.evaluate(() => window.drafts.filter(call => call.method !== 'GET').every(call => call.url.endsWith('/prepare-answers')))).toBe(true);
+});
+
+test('saved facts are immediately ready while one background batch prepares an editable narrative draft', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => {
+    window.activeUrl = 'https://jobs.lever.co/acme/abc-123/apply';
+    window.platformValues = {experience: 'Built a Python service.'};
+    window.atsFields = [{id: 'full_name', key: 'name:name', label: 'Full name', kind: 'text', evidenceKey: 'full_name', available: true, occupied: false},
+      {id: 'question:cover', key: 'id:cover', label: 'Cover letter', kind: 'text', evidenceKey: null, draftable: true, needsMapping: true, maxLength: 3000, available: true, occupied: false}];
+    window.prepareGate = new Promise(resolve => { window.releasePreparation = resolve; });
+    window.prepareResponse = {status: 'ready', profile_fingerprint: JSON.stringify({full_name: 'Fictional Applicant', linkedin: 'https://www.linkedin.com/in/fictional', experience: 'Built a Python service.'}),
+      preparation_id: 'fixture-preparation', answers: [{field_id: 'question:cover', value: 'I built a Python service and would like to contribute those skills.', source: 'ai_draft', fact_key: null,
+        citations: [{source: 'profile', source_id: 'profile:experience', quote: 'Built a Python service.'}]}], omitted: [], reused: true, execution_mode: 'live', elapsed_ms: 1};
+  });
+  await login(page, undefined, {expand: false});
+  await expect(page.locator('#ats-full_name')).toHaveValue('Fictional Applicant');
+  await expect(page.locator('.prepared-fields')).toHaveAttribute('open');
+  await expect(page.locator('#ats-fill')).toBeEnabled();
+  await expect(page.locator('#preparation-status')).toContainText('preparing');
+  await expect(page.locator('[id="ats-question:cover"]')).toHaveValue('');
+  expect(await page.evaluate(() => window.atsCalls.map(call => call.action))).toEqual(['inspect']);
+  const batches = await page.evaluate(() => window.drafts.filter(call => call.url.endsWith('/prepare-answers')));
+  expect(batches).toHaveLength(1); expect(batches[0].payload.fields).toEqual([{id: 'question:cover', label: 'Cover letter', kind: 'text', maxLength: 3000, manualOnly: false, draftable: true, searchable: false, optionsPending: false}]);
+  await page.evaluate(() => window.releasePreparation());
+  await expect(page.locator('[id="ats-question:cover"]')).toHaveJSProperty('tagName', 'TEXTAREA');
+  await expect(page.locator('[id="ats-question:cover"]')).toHaveValue('I built a Python service and would like to contribute those skills.');
+  await expect(page.locator('[id="source-ats-question:cover"]')).toContainText('AI answer');
+  await page.locator('[id="ats-question:cover"]').fill('My edited draft.');
+  await page.locator('#ats-fill').click();
+  await expect(page.locator('#ats-result')).toHaveText('Filled 2; skipped 0. Nothing was submitted.');
+  expect(await page.evaluate(() => window.atsCalls.find(call => call.action === 'fill').approved[1].value)).toBe('My edited draft.');
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+  expect(await page.evaluate(() => window.drafts.filter(call => call.url.endsWith('/resume-content')))).toHaveLength(0);
+});
+
+test('one early Fill click waits for the existing AI batch and writes its actual grounded answer once', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => {
+    window.activeUrl = 'https://jobs.lever.co/acme/abc-123/apply';
+    window.autofillProfile = {fingerprint: 'early-fill-fixture', values: {full_name: 'Fictional Applicant'}, sources: {}, resume: null, resumes: []};
+    window.atsFields = [{id: 'full_name', key: 'name:name', label: 'Full name', kind: 'text', evidenceKey: 'full_name', available: true, occupied: false},
+      {id: 'strengths', key: 'id:strengths', label: 'Relevant technical strengths', kind: 'text', evidenceKey: null, draftable: false, needsMapping: true, available: true, occupied: false, maxLength: 1000}];
+    window.prepareGate = new Promise(resolve => { window.releasePreparation = resolve; });
+    window.prepareResponse = {status: 'ready', profile_fingerprint: 'early-fill-fixture', execution_mode: 'mock', reused: true, omitted: [], analyzed_field_ids: ['strengths'], answers: [
+      {field_id: 'strengths', value: 'Built a small Python service.', source: 'ai_draft', fact_key: null,
+        citations: [{source: 'resume', source_id: 'resume:project', quote: 'Built a small Python service.'}]}]};
+  });
+  await login(page, undefined, {expand: false});
+  await expect(page.locator('#ats-strengths')).toHaveValue('');
+  await page.locator('#ats-fill').click();
+  await expect(page.locator('#ats-fill')).toHaveText('Preparing…');
+  await expect(page.locator('#ats-strengths')).toBeDisabled();
+  expect(await page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill'))).toHaveLength(0);
+  await page.evaluate(() => window.releasePreparation());
+  await expect(page.locator('#ats-result')).toHaveText('Filled 2; skipped 0. Nothing was submitted.');
+  const calls = await page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill'));
+  expect(calls).toHaveLength(1);
+  expect(calls[0].approved.find(answer => answer.id === 'strengths').value).toBe('Built a small Python service.');
+  expect(await page.evaluate(() => window.drafts.filter(call => call.url.endsWith('/prepare-answers')))).toHaveLength(1);
+});
+
+test('a failed automatic facts read offers one free Refresh action without filling or attaching', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => {
+    window.activeUrl = 'https://jobs.lever.co/acme/abc-123/apply';
+    window.failFacts = true;
+    const fetcher = window.fetch;
+    window.fetch = (url, options) => {
+      if (url.endsWith('/browser-assistant/autofill-profile') && window.failFacts) throw new Error('Saved answers unavailable');
+      return fetcher(url, options);
+    };
+  });
+  await login(page, undefined, {expand: false});
+  const refresh = page.getByRole('button', {name: 'Refresh form', exact: true});
+  await expect(page.locator('#status')).toContainText('Saved answers unavailable');
+  await expect(page.locator('#ats-inspect')).toBeVisible();
+  await expect(page.locator('#ats-fill')).toBeDisabled();
+  expect(await page.evaluate(() => window.atsCalls.map(call => call.action))).toEqual(['inspect']);
+  await page.evaluate(() => { window.failFacts = false; });
+  await refresh.click();
+  await expect(page.locator('#ats-full_name')).toHaveValue('Fictional Applicant');
+  await expect(page.locator('#ats-inspect')).toBeHidden();
+  await expect(page.locator('#ats-fill')).toBeEnabled();
+  expect(await page.evaluate(() => window.atsCalls.map(call => call.action))).toEqual(['inspect', 'inspect']);
+  expect(await page.evaluate(() => window.drafts.every(call => call.url.endsWith('/autofill-profile') || call.url.endsWith('/prepare-answers')))).toBe(true);
+  expect(await page.evaluate(() => window.permissionRequests)).toEqual([]);
+});
+
+test('saved async search candidates load for free while personal questions never enter a plan or Fill', async ({page}) => {
+  await setup(page); await login(page, undefined, {expand: false});
+  await page.evaluate(() => {
+    window.platformValues = {school: 'National University of Singapore'};
+    window.atsFields = [
+      {id: 'school', key: 'id:school', label: 'School', kind: 'combobox', evidenceKey: null, available: true, occupied: false,
+        searchable: true, needsMapping: true, maxLength: 3000, options: [{value: 'Other initial school', label: 'Other initial school'}]},
+      {id: 'personal', key: 'id:personal', label: 'Work authorization', kind: 'text', evidenceKey: null,
+        available: false, occupied: false, manualOnly: true, needsMapping: true, manualReason: 'This declaration or sensitive question must be answered on the original website.'},
+    ];
+  });
+  await connectApplication(page, 'ats');
+  await expect(page.locator('#ats-school')).toHaveJSProperty('tagName', 'INPUT');
+  await expect(page.locator('#ats-school')).toHaveValue('National University of Singapore');
+  await expect(page.locator('#ats-personal')).toHaveCount(0);
+  const plans = await page.evaluate(() => window.drafts.filter(call => call.url.endsWith('/form-plan')));
+  expect(plans).toHaveLength(0);
+  await page.locator('#ats-fill').click();
+  await expect(page.locator('#ats-result')).toContainText('Filled 1');
+  await expect(page.locator('#ats-counts')).toContainText('0 ready');
+  await expect(page.locator('#ats-counts')).toContainText('1 already filled');
+  expect(await page.evaluate(() => window.atsCalls.find(call => call.action === 'fill').approved)).toEqual([
+    {id: 'school', key: 'id:school', label: 'School', kind: 'combobox', evidenceKey: null, value: 'National University of Singapore',
+      optionLabel: 'National University of Singapore', factKey: 'school', confirmed: true},
+  ]);
+  expect(await page.evaluate(() => window.drafts.filter(call => call.url.endsWith('/form-plan')))).toHaveLength(0);
+});
+
+test('saved PDF selection requires its own Attach click and remains available after a Fill', async ({page}) => {
+  await setup(page); await login(page, undefined, {expand: false});
+  await page.evaluate(() => {
+    const resume = {id: '11111111-2222-4333-8444-555555555555', filename: 'Fictional test resume.pdf', sha256: 'b'.repeat(64), has_file: true};
+    window.autofillProfile = {values: {full_name: 'Fictional PDF Applicant'}, sources: {full_name: {source: 'resume', quote: 'Fictional PDF Applicant', resume_id: resume.id}},
+      missing_fields: [], resume, resumes: [resume], extraction_status: 'ready', requires_resume_selection: false, fingerprint: 'fixture-selected-pdf'};
+    window.atsFields = [{id: 'full_name', key: 'name:name', label: 'Full name', kind: 'text', evidenceKey: 'full_name', available: true, occupied: false, maxLength: 200}];
+    window.atsResumeTarget = {key: 'id:resume', label: 'Resume', multiple: false, occupied: false, accept: '.pdf'};
+  });
+  await connectApplication(page, 'ats');
+  await expect(page.locator('#ats-attach')).toBeEnabled();
+  expect(await page.evaluate(() => window.atsCalls.map(call => call.action))).toEqual(['inspect']);
+  await page.locator('#ats-fill').click();
+  await expect(page.locator('#ats-result')).toContainText('Filled 1');
+  await expect(page.locator('#ats-attach')).toBeEnabled();
+  expect(await page.evaluate(() => window.drafts.filter(call => call.url.endsWith('/resume-content')))).toHaveLength(0);
+  await page.locator('#ats-attach').click();
+  await expect(page.locator('#ats-attach-result')).toContainText('PDF selected on the form');
+  await expect(page.locator('#ats-attach')).toBeDisabled();
+  expect(await page.evaluate(() => window.atsCalls.map(call => call.action))).toEqual(['inspect', 'fill', 'attach']);
+  const [content] = await page.evaluate(() => window.drafts.filter(call => call.url.endsWith('/resume-content')));
+  expect(content.payload).toEqual({page_url: 'https://jobs.lever.co/acme/abc-123/apply', resume_id: '11111111-2222-4333-8444-555555555555', sha256: 'b'.repeat(64), confirmed: true});
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+});
+
 test('the fill click approves the current edited answer without individual checkboxes or generation controls', async ({page}) => {
   await setup(page); await login(page);
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await page.getByLabel('Full name', {exact: true}).fill('Edited Applicant');
+  await expectUnfinishedIntroduction(page);
   await expect(page.locator('#fields input[type=checkbox]')).toHaveCount(0);
   await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
   await expect.poll(() => page.evaluate(() => window.operations.filter(x => x[0] === 'fill').length)).toBe(1);
-  expect(await page.evaluate(() => window.operations.find(x => x[0] === 'fill')[2])).toEqual([{id: 'applicant_name', value: 'Edited Applicant', confirmed: true}]);
+  expect(await page.evaluate(() => window.operations.find(x => x[0] === 'fill')[2])).toEqual([{id: 'applicant_name', value: 'Edited Applicant', confirmed: true},
+    {id: 'applicant_summary', value: 'Your brief introduction', confirmed: true}]);
   await expect(page.locator('#generate, #ai-consent')).toHaveCount(0);
 });
 test('expired login clears session and form', async ({page}) => {
   await setup(page); await login(page);
   await page.evaluate(() => { window.expired = true; });
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await expect(page.locator('#status')).toContainText('Session expired');
   await expect(page.getByRole('button', {name: 'Connect through JobPilot', exact: true})).toBeVisible();
   expect(await page.evaluate(() => window.stored)).toEqual({});
 });
 test('unsupported page never requests profile draft', async ({page}) => {
   await setup(page, {unsupported: true}); await login(page);
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await expect(page.locator('#status')).toContainText('Open an InternSG');
   expect((await page.evaluate(() => window.drafts)).length).toBe(0);
 });
 test('logout clears session and private draft', async ({page}) => {
   await setup(page); await login(page);
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await page.getByRole('button', {name: 'Disconnect'}).click();
   await expect(page.locator('#fields')).toBeEmpty();
   expect(await page.evaluate(() => window.stored)).toEqual({});
@@ -184,7 +458,7 @@ test('logout clears session and private draft', async ({page}) => {
 
 test('revocation between review and fill prevents page writes', async ({page}) => {
   await setup(page); await login(page);
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await expect(page.locator('#fill')).toBeEnabled();
   await page.evaluate(() => { window.expired = true; });
   await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
@@ -192,18 +466,20 @@ test('revocation between review and fill prevents page writes', async ({page}) =
   expect(await page.evaluate(() => window.operations.some(x => x[0] === 'fill'))).toBe(false);
 });
 
-test('offline validation blocks sending an already reviewed application', async ({page}) => {
-  await setup(page); await login(page);
-  await page.getByRole('button', {name: 'Review website answers before sending'}).click();
-  await page.getByLabel('I reviewed this recipient', {exact: false}).check();
+test('offline validation blocks an already previewed ATS fill without page writes', async ({page}) => {
+  await setup(page); await login(page, undefined, {expand: false});
+  await connectApplication(page, 'ats');
+  await expect(page.locator('#ats-fill')).toBeEnabled();
   await page.evaluate(() => { window.offline = true; });
-  await page.getByRole('button', {name: 'Confirm & send this application'}).click();
+  await page.locator('#ats-fill').click();
   await expect(page.locator('#status')).toContainText('Network unavailable');
-  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+  await expect(page.locator('#status')).toBeVisible();
+  expect(await page.evaluate(() => window.atsCalls.filter(x => x.action === 'fill'))).toHaveLength(0);
 });
+
 test('partial fill preserves the skipped draft and marks successful fields without automatic retry', async ({page}) => {
   await setup(page); await login(page);
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await page.getByLabel('Resume summary', {exact: true}).fill('My skipped draft');
   await page.evaluate(() => { window.skippedIds = ['applicant_summary']; });
   await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
@@ -215,7 +491,7 @@ test('partial fill preserves the skipped draft and marks successful fields witho
 });
 test('skipped fields preserve drafts and require review again', async ({page}) => {
   await setup(page, {skipped: true}); await login(page);
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
   await expect(page.locator('#status')).toContainText('Skipped Full name');
   await expect(page.getByLabel('Full name', {exact: true})).toHaveValue('Fictional Applicant');
@@ -223,23 +499,23 @@ test('skipped fields preserve drafts and require review again', async ({page}) =
 });
 test('manual summary editing and filling remain available', async ({page}) => {
   await setup(page); await login(page);
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await page.getByLabel('Resume summary', {exact: true}).fill('My reviewed manual summary.');
   await expect(page.getByRole('button', {name: 'Fill application form', exact: true})).toBeEnabled();
 });
 test('capture disconnected, ready, permission and fallback states at the shipped popup width', async ({page}) => {
-  await page.setViewportSize({width: 420, height: 700});
+  await page.setViewportSize({width: 440, height: 700});
   await setup(page, {widgetsReady: true});
   await page.screenshot({path: '../output/popup-disconnected.png', fullPage: true});
   await login(page, undefined, {expand: false});
   await page.screenshot({path: '../output/popup-ready.png', fullPage: true});
+  await openDetails(page, '#original-tools');
   await page.evaluate(() => { window.embeddedAccess = false; window.permissionsRemoved({origins: ['https://www.internsg.com/*']}); });
   await expect(page.locator('#enable-embedded')).toBeVisible();
   await page.screenshot({path: '../output/popup-permission.png', fullPage: true});
   await page.locator('#enable-embedded').click();
   await expect(page.locator('#enable-embedded')).toBeHidden();
-  await page.locator('#original-tools > summary').click();
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await expect(page.getByLabel('Full name', {exact: true})).toHaveValue('Fictional Applicant');
   await page.screenshot({path: '../output/popup-fallback.png', fullPage: true});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -262,12 +538,12 @@ test('supplementary details are isolated by API and account and can be deleted',
   await login(page);
   await expect(page.getByLabel('Reusable summary (plain text)')).toHaveValue('My local summary');
   await page.locator('#local-profile summary').click();
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
-  await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('');
+  await connectApplication(page);
+  await expectUnfinishedIntroduction(page, ['My local summary']);
   await page.getByLabel('I confirm importing', {exact: false}).check();
   await page.getByRole('button', {name: 'Import reviewed details to JobPilot'}).click();
   await expect(page.locator('#status')).toContainText('Imported:');
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('My local summary');
   await page.getByRole('button', {name: 'Delete saved details'}).click();
   await expect(page.locator('#fields')).toBeEmpty();
@@ -277,7 +553,7 @@ test('supplementary details are isolated by API and account and can be deleted',
 test('platform values refresh across applications and cleared values never fall back to device', async ({page}) => {
   await setup(page, {widgetsReady: true}); await login(page);
   await page.evaluate(() => { window.platformValues = {resume_summary: 'Platform introduction', nationality: 'cn', study_country: 'sg'}; });
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('Platform introduction');
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('cn');
   await expect(page.getByLabel('Country of study / graduation')).toHaveValue('sg');
@@ -289,57 +565,70 @@ test('platform values refresh across applications and cleared values never fall 
   await page.getByRole('button', {name: 'Import reviewed details to JobPilot'}).click();
   await expect(page.locator('#status')).toContainText('Preserved existing platform values: resume_summary');
   await page.evaluate(() => { window.platformValues = {}; });
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
-  await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('');
+  await connectApplication(page);
+  await expectUnfinishedIntroduction(page, ['Old device introduction', 'Platform introduction']);
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('');
 });
 
 test('country defaults are not assumed and the fill click explicitly approves both selected countries', async ({page}) => {
   await setup(page, {widgetsReady: true}); await login(page);
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('');
   await page.getByLabel('Nationality', {exact: true}).selectOption('cn');
   await page.getByLabel('Country of study / graduation').selectOption('sg');
   await expect(page.locator('#fields')).toContainText('will replace both website country selections');
+  await expectUnfinishedIntroduction(page);
   await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
-  await expect(page.locator('#status')).toContainText('Filled 2.');
+  await expect(page.locator('#status')).toContainText('Filled 3.');
+  expect(await page.evaluate(() => window.operations.find(call => call[0] === 'fill')[2])).toEqual([
+    {id: 'applicant_name', value: 'Fictional Applicant', confirmed: true},
+  ]);
   await expect(page.getByLabel('Nationality', {exact: true})).toBeDisabled();
   const operation = await page.evaluate(() => window.widgetFill);
-  expect(operation[2][0].expectedState.nationality).toBe('sg');
-  expect(JSON.parse(operation[2][0].value)).toEqual({nationality: 'cn', campus: 'sg'});
+  expect(operation[2].map(item => item.id)).toEqual(['applicant_summary', 'applicant_countries']);
+  expect(operation[2].find(item => item.id === 'applicant_summary')).toEqual({id: 'applicant_summary', value: 'Your brief introduction', confirmed: true});
+  const country = operation[2].find(item => item.id === 'applicant_countries');
+  expect(country.expectedState).toEqual({nationality: 'sg', campus: 'sg', same: true, nationalityText: 'Singapore', campusText: 'Singapore'});
+  expect(JSON.parse(country.value)).toEqual({nationality: 'cn', campus: 'sg'});
   await expect(page.getByLabel('Nationality', {exact: true})).toBeDisabled();
 });
 
-test('submission requires separate confirmation and blocks a second attempt', async ({page}) => {
+test('fill-only popup hides sending controls and rejects programmatic legacy send events', async ({page}) => {
   await setup(page); await login(page);
-  await page.getByRole('button', {name: 'Review website answers before sending'}).click();
-  await expect(page.locator('#submission-values')).toContainText('Fictional employer');
-  const send = page.getByRole('button', {name: 'Confirm & send this application'});
-  await expect(send).toBeDisabled();
-  await page.getByLabel('I reviewed this recipient', {exact: false}).check();
-  await send.click();
-  await expect(page.locator('#submission-status')).toContainText('delivery is unverified');
-  expect(await page.evaluate(() => window.submitCalls)).toBe(1);
-  const stored = await page.evaluate(() => window.localSaved);
-  expect(JSON.stringify(Object.values(stored))).not.toContain('fictional@example.test');
-  await page.getByRole('button', {name: 'Review website answers before sending'}).click();
-  await expect(page.locator('#submission-status')).toContainText('retry is blocked');
-  expect(await page.evaluate(() => window.submitCalls)).toBe(1);
+  await expect(page.locator('#advanced-submission')).toBeHidden();
+  for (const id of ['prepare-submit', 'send-application', 'check-result']) {
+    await expect(page.locator('#' + id)).toBeDisabled();
+    await page.locator('#' + id).dispatchEvent('click');
+  }
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+  await expect(page.locator('#submission-preview')).toBeHidden();
+  await expect(page.locator('#submission-values')).toBeEmpty();
 });
-test('known no-click releases reservation, unknown interruption retains it', async ({page}) => {
-  await setup(page); await login(page);
-  await page.evaluate(() => { window.submissionOutcome = 'not_clicked'; });
-  const prepare = page.getByRole('button', {name: 'Review website answers before sending'});
-  await prepare.click(); await page.getByLabel('I reviewed this recipient', {exact: false}).check();
-  await page.getByRole('button', {name: 'Confirm & send this application'}).click();
-  await expect(page.locator('#submission-status')).toContainText('Nothing was clicked');
-  expect(await page.evaluate(() => Object.keys(window.localSaved))).toHaveLength(0);
-  await page.evaluate(() => { window.submissionOutcome = 'throw'; });
-  await prepare.click(); await page.getByLabel('I reviewed this recipient', {exact: false}).check();
-  await page.getByRole('button', {name: 'Confirm & send this application'}).click();
-  await expect(page.locator('#submission-status')).toContainText('outcome is unknown');
-  expect(await page.evaluate(() => Object.keys(window.localSaved))).toHaveLength(1);
-  await prepare.click(); await expect(page.locator('#submission-status')).toContainText('retry is blocked');
+
+test('ATS preview never guesses given and family names from a full name', async ({page}) => {
+  await setup(page); await login(page, undefined, {expand: false});
+  await page.evaluate(() => { window.atsFields = ['first_name', 'last_name'].map(id => ({id, key: 'id:' + id, label: id === 'first_name' ? 'First name' : 'Last name', kind: 'text', evidenceKey: id === 'first_name' ? 'given_name' : 'family_name', available: true, occupied: false, maxLength: 100})); });
+  await connectApplication(page, 'ats');
+  await expect(page.getByLabel('First name', {exact: true})).toHaveValue('Your first name');
+  await expect(page.getByLabel('Last name', {exact: true})).toHaveValue('Your last name');
+  await expect(page.locator('#ats-fields')).toContainText('AI did not return a verified answer');
+  await expect(page.locator('#ats-counts')).toContainText('0 ready · 2 templates to replace');
+  await expect(page.locator('#ats-fill')).toBeEnabled();
+  await page.evaluate(() => { window.platformValues = {given_name: 'MING', family_name: 'LI'}; });
+  await connectApplication(page, 'ats');
+  await expect(page.getByLabel('First name', {exact: true})).toHaveValue('MING');
+  await expect(page.getByLabel('Last name', {exact: true})).toHaveValue('LI');
+  expect(await page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill'))).toHaveLength(0);
+  await page.locator('#ats-fill').click();
+  // Fill first revalidates the grant, saved-facts fingerprint and document.
+  // A completed click event does not mean its asynchronous page command ran.
+  await expect(page.locator('#ats-result')).toHaveText('Filled 2; skipped 0. Nothing was submitted.');
+  expect(await page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill'))).toHaveLength(1);
+  expect(await page.evaluate(() => window.atsCalls.find(x => x.action === 'fill').approved)).toEqual([
+    {id: 'first_name', value: 'MING', confirmed: true, kind: 'text', key: 'id:first_name', label: 'First name', evidenceKey: 'given_name', factKey: 'given_name'},
+    {id: 'last_name', value: 'LI', confirmed: true, kind: 'text', key: 'id:last_name', label: 'Last name', evidenceKey: 'family_name', factKey: 'family_name'},
+  ]);
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
 });
 
 test('a delayed draft body cannot expose the previous account after reconnecting', async ({page}) => {
@@ -349,15 +638,17 @@ test('a delayed draft body cannot expose the previous account after reconnecting
     const fetcher = window.fetch;
     window.fetch = async (url, options) => {
       const response = await fetcher(url, options);
-      if (!url.endsWith('/browser-assistant/draft')) return response;
+      if (!url.endsWith('/browser-assistant/autofill-profile')) return response;
       const value = await response.json();
       return {ok: true, status: 200, json: () => new Promise(resolve => { window.releaseOldDraft = () => resolve(value); })};
     };
   });
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page, 'internsg', {waitForPreview: false});
   await expect.poll(() => page.evaluate(() => typeof window.releaseOldDraft)).toBe('function');
-  await page.evaluate(() => window.connect('account-b@example.test'));
-  await expect(page.locator('#account')).toContainText('account-b@example.test');
+  await page.evaluate(() => { window.activeUrl = 'http://localhost:5173/jobs'; window.connect('account-b@example.test'); });
+  await expect(page.locator('#account')).toBeEmpty();
+  await expect(page.locator('#fields')).toBeEmpty();
+  expect(await page.evaluate(() => window.stored.jobpilotSession.userId)).toBe('account-b@example.test');
   await page.evaluate(() => window.releaseOldDraft());
   await expect(page.locator('#inspect')).toBeEnabled();
   await expect(page.locator('#fields')).toBeEmpty();
@@ -368,7 +659,7 @@ test('a delayed draft body cannot expose the previous account after reconnecting
 test('account switch stops later widget writes after a normal fill was already dispatched', async ({page}) => {
   await setup(page, {widgetsReady: true}); await login(page);
   await page.evaluate(() => { window.platformValues = {resume_summary: 'Account A introduction'}; });
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('Account A introduction');
   await page.evaluate(() => {
     const execute = window.chrome.scripting.executeScript;
@@ -382,9 +673,11 @@ test('account switch stops later widget writes after a normal fill was already d
   });
   await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
   await expect.poll(() => page.evaluate(() => typeof window.releaseNormalFill)).toBe('function');
-  await page.evaluate(() => window.connect('account-b@example.test'));
-  await expect(page.locator('#account')).toContainText('account-b@example.test');
+  await page.evaluate(() => { window.activeUrl = 'http://localhost:5173/jobs'; window.connect('account-b@example.test'); });
+  await expect(page.locator('#account')).toBeEmpty();
+  await expect(page.locator('#fields')).toBeEmpty();
   await page.evaluate(() => window.releaseNormalFill());
+  await expect(page.locator('#account')).toContainText('account-b@example.test');
   await expect(page.locator('#inspect')).toBeEnabled();
   expect(await page.evaluate(() => window.operations.filter(x => x[0] === 'fill'))).toHaveLength(1);
   expect(await page.evaluate(() => window.widgetFill)).toBeUndefined();
@@ -392,69 +685,147 @@ test('account switch stops later widget writes after a normal fill was already d
   expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
 });
 
-test('a late website review cannot restore submission confirmation after sign-out', async ({page}) => {
-  await setup(page); await login(page);
+test('a late ATS profile check cannot fill or expose answers after sign-out', async ({page}) => {
+  await setup(page); await login(page, undefined, {expand: false});
+  await connectApplication(page, 'ats');
   await page.evaluate(() => {
-    const execute = window.chrome.scripting.executeScript;
-    window.chrome.scripting.executeScript = async request => {
-      const result = await execute(request);
-      if (request.func.name === 'submissionPage' && request.args[0] === 'review') {
-        await new Promise(resolve => { window.releaseReview = resolve; });
-      }
-      return result;
+    const fetcher = window.fetch;
+    window.fetch = async (url, options) => {
+      const response = await fetcher(url, options);
+      if (!url.endsWith('/browser-assistant/autofill-profile')) return response;
+      const value = await response.json();
+      return {ok: true, status: 200, json: () => new Promise(resolve => { window.releaseATSProfile = () => resolve(value); })};
     };
   });
-  await page.getByRole('button', {name: 'Review website answers before sending'}).click();
-  await expect.poll(() => page.evaluate(() => typeof window.releaseReview)).toBe('function');
+  await page.locator('#ats-fill').click();
+  await expect.poll(() => page.evaluate(() => typeof window.releaseATSProfile)).toBe('function');
+  await page.evaluate(() => { window.stored = {}; window.storageListener({jobpilotSession: {newValue: undefined}}, 'session'); window.releaseATSProfile(); });
+  await expect(page.locator('#ats-fields')).toBeEmpty();
+  await expect(page.locator('#ats-fill')).toBeDisabled();
+  expect(await page.evaluate(() => window.atsCalls.filter(x => x.action === 'fill'))).toHaveLength(0);
+});
+
+test('changed or cleared saved ATS facts require a fresh preview and never dispatch stale answers', async ({page}) => {
+  await setup(page); await login(page, undefined, {expand: false});
+  await connectApplication(page, 'ats');
+  await page.evaluate(() => { window.platformValues = {given_name: 'New explicit name'}; });
+  await page.locator('#ats-fill').click();
+  await expect(page.locator('#status')).toContainText('Your saved answers changed');
+  await expect(page.locator('#ats-fields')).toBeEmpty();
+  await expect(page.locator('#ats-inspect')).toBeVisible();
+  expect(await page.evaluate(() => window.atsCalls.filter(x => x.action === 'fill'))).toHaveLength(0);
+  await page.locator('#ats-inspect').click();
+  await expect(page.locator('#ats-full_name')).toHaveValue('Fictional Applicant');
+  await expect(page.locator('#ats-inspect')).toBeHidden();
+  expect(await page.evaluate(() => window.atsCalls.filter(x => x.action === 'fill'))).toHaveLength(0);
+  expect(await page.evaluate(() => window.drafts.filter(call => call.url.endsWith('/form-plan')))).toHaveLength(0);
+});
+
+test('ATS Fill binds the clicked preview while asynchronous checks disable editing', async ({page}) => {
+  await setup(page); await login(page, undefined, {expand: false});
+  await connectApplication(page, 'ats');
+  await page.locator('#ats-full_name').fill('Clicked preview');
   await page.evaluate(() => {
-    window.stored = {};
-    window.storageListener({jobpilotSession: {newValue: undefined}}, 'session');
-    window.releaseReview();
+    const fetcher = window.fetch;
+    window.fetch = async (url, options) => {
+      if (url.endsWith('/auth/extension/session')) await new Promise(resolve => { window.releaseATSValidation = resolve; });
+      return fetcher(url, options);
+    };
   });
-  await expect(page.getByRole('button', {name: 'Connect through JobPilot', exact: true})).toBeEnabled();
-  await expect(page.locator('#submission-preview')).toBeHidden();
-  await expect(page.locator('#submission-values')).toBeEmpty();
-  await expect(page.locator('#send-application')).toBeDisabled();
+  await page.locator('#ats-fill').click();
+  await expect.poll(() => page.evaluate(() => typeof window.releaseATSValidation)).toBe('function');
+  await expect(page.locator('#ats-full_name')).toBeDisabled();
+  await page.evaluate(() => { document.getElementById('ats-full_name').value = 'Later unapproved edit'; window.releaseATSValidation(); });
+  await expect(page.locator('#ats-result')).toContainText('Nothing was submitted');
+  expect(await page.evaluate(() => window.atsCalls.find(x => x.action === 'fill').approved[0].value)).toBe('Clicked preview');
+});
+
+test('ATS country selects use explicit saved facts and telephone country remains manual', async ({page}) => {
+  await setup(page); await login(page, undefined, {expand: false});
+  await page.evaluate(() => {
+    window.platformValues = {nationality: 'cn'};
+    window.atsFields = [
+      {id: 'country:0', kind: 'select', key: 'id:nationality', label: 'Nationality', evidenceKey: 'nationality_country', available: true, occupied: false,
+        options: [{value: 'cn', label: 'China'}, {value: 'sg', label: 'Singapore'}]},
+      {id: 'country:1', kind: 'select', key: 'id:phone-country', label: 'Phone country code', evidenceKey: 'phone_country_code', available: true, occupied: false,
+        options: [{value: '86', label: 'China (+86)'}, {value: '65', label: 'Singapore (+65)'}]},
+    ];
+  });
+  await connectApplication(page, 'ats');
+  await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('cn');
+  await expect(page.getByLabel('Phone country code', {exact: true})).toHaveValue('');
+  expect(await page.evaluate(() => window.drafts.filter(x => x.url.endsWith('/ats-evidence')))).toHaveLength(0);
+  await page.getByLabel('Phone country code', {exact: true}).selectOption('65');
+  expect(await page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill'))).toHaveLength(0);
+  await page.locator('#ats-fill').click();
+  await expect(page.locator('#ats-result')).toHaveText('Filled 2; skipped 0. Nothing was submitted.');
+  expect(await page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill'))).toHaveLength(1);
+  expect(await page.evaluate(() => window.atsCalls.find(x => x.action === 'fill').approved)).toEqual([
+    {id: 'country:0', value: 'cn', confirmed: true, kind: 'select', optionLabel: 'China', key: 'id:nationality', label: 'Nationality', evidenceKey: 'nationality_country', factKey: 'nationality'},
+    {id: 'country:1', value: '65', confirmed: true, kind: 'select', optionLabel: 'Singapore (+65)', key: 'id:phone-country', label: 'Phone country code', evidenceKey: 'phone_country_code', factKey: 'phone_country_code'},
+  ]);
   expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
 });
 
-test('sign-out while reserving an attempt stops before dispatch and releases the unused reservation', async ({page}) => {
-  await setup(page); await login(page);
-  await page.getByRole('button', {name: 'Review website answers before sending'}).click();
-  await page.getByLabel('I reviewed this recipient', {exact: false}).check();
-  await page.evaluate(() => {
-    const save = window.chrome.storage.local.set;
-    window.chrome.storage.local.set = async value => {
-      await save(value);
-      if (Object.keys(value).some(key => key.startsWith('jobpilotAttempt:'))) {
-        await new Promise(resolve => { window.releaseReservation = resolve; });
-      }
-    };
-  });
-  await page.getByRole('button', {name: 'Confirm & send this application'}).click();
-  await expect.poll(() => page.evaluate(() => typeof window.releaseReservation)).toBe('function');
-  await page.evaluate(() => {
-    window.stored = {};
-    window.storageListener({jobpilotSession: {newValue: undefined}}, 'session');
-    window.releaseReservation();
-  });
-  await expect(page.getByRole('button', {name: 'Connect through JobPilot', exact: true})).toBeEnabled();
+test('the current ATS provider opens with a saved-answer preview and no read or permission action', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => { window.activeUrl = 'https://job-boards.eu.greenhouse.io/straitsx/jobs/4942133101'; });
+  await login(page, undefined, {expand: false});
+  await expect(page.locator('#ats-tools')).toHaveAttribute('open');
+  await expect(page.locator('#original-tools')).not.toHaveAttribute('open');
+  await expect(page.locator('#settings')).not.toHaveAttribute('open');
+  await expect(page.locator('#ats-full_name')).toHaveValue('Fictional Applicant');
+  await expect(page.locator('#ats-inspect')).toBeHidden();
+  await expect(page.locator('#ats-fill')).toBeEnabled();
+  expect(await page.evaluate(() => window.atsCalls.map(call => call.action))).toEqual(['inspect']);
+  expect(await page.evaluate(() => window.drafts.every(call => call.url.endsWith('/autofill-profile') || call.url.endsWith('/prepare-answers')))).toBe(true);
+  expect(await page.evaluate(() => window.permissionRequests)).toEqual([]);
   expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
-  expect(await page.evaluate(() => Object.keys(window.localSaved))).toHaveLength(0);
-  await expect(page.locator('#submission-preview')).toBeHidden();
+});
+
+test('long ATS previews scroll once while the Fill action remains visible at popup size', async ({page}) => {
+  await page.setViewportSize({width: 440, height: 580});
+  await setup(page); await login(page, undefined, {expand: false});
+  await page.evaluate(() => {
+    window.platformValues = {given_name: 'Fictional', family_name: 'Applicant'};
+    window.atsFields = [
+      ...['first_name', 'last_name', 'email', 'phone'].map(id => ({id, key: 'id:' + id, label: id.replaceAll('_', ' '), kind: 'text', evidenceKey: ({first_name: 'given_name', last_name: 'family_name', email: 'contact_email', phone: 'phone'})[id], available: true, occupied: false, maxLength: 200})),
+      ...['education', 'experience'].map((evidenceKey, index) => ({id: 'custom:' + index, label: 'Describe your ' + evidenceKey,
+        key: 'id:custom-' + index, kind: 'text', evidenceKey, available: true, occupied: false, maxLength: 3000})),
+    ];
+  });
+  await connectApplication(page, 'ats');
+  await expect(page.locator('#ats-profile-note')).toBeVisible();
+  await expect(page.locator('#ats-intro')).toBeHidden();
+  await expect(page.locator('#ats-consent')).toBeHidden();
+  await expect(page.locator('#ats-target')).toHaveText('jobs.lever.co');
+  await expect(page.locator('#ats-target')).toHaveAttribute('title', 'https://jobs.lever.co/acme/abc-123/apply');
+  await expect(page.locator('#ats-fields')).not.toContainText('Saved in JobPilot Profile');
+  const preview = await page.locator('#workspace-content').boundingBox();
+  for (const id of ['ats-first_name', 'ats-last_name', 'ats-email']) {
+    const field = await page.locator('#' + id).boundingBox();
+    expect(field.y).toBeGreaterThanOrEqual(preview.y);
+    expect(field.y + field.height).toBeLessThanOrEqual(preview.y + preview.height);
+  }
+  const before = await page.locator('#ats-fill').boundingBox();
+  expect(before.y + before.height).toBeLessThanOrEqual(580);
+  await page.locator('#workspace-content').evaluate(node => { node.scrollTop = node.scrollHeight; });
+  const after = await page.locator('#ats-fill').boundingBox();
+  expect(after.y).toBe(before.y);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(await page.locator('#workspace-content').evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
 });
 
 test('profile updates and explicit clearing are reloaded for a different job without local fallback', async ({page}) => {
   await setup(page, {widgetsReady: true}); await login(page);
   await page.evaluate(() => { window.platformValues = {resume_summary: 'First introduction', nationality: 'cn', study_country: 'sg'}; });
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('First introduction');
-  await expect(page.locator('#status')).toContainText('After changing your platform profile');
   await page.evaluate(() => {
     window.applicationUrl = 'https://www.internsg.com/job-apply/456';
     window.platformValues = {resume_summary: 'Updated introduction', nationality: 'sg', study_country: 'sg'};
   });
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
+  await connectApplication(page);
   await expect(page.locator('#target')).toContainText('/456');
   await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('Updated introduction');
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('sg');
@@ -464,22 +835,24 @@ test('profile updates and explicit clearing are reloaded for a different job wit
     window.platformValues = {resume_summary: '', nationality: null, study_country: null};
     window.localSaved = {'jobpilotProfile:["http://localhost:8000","fictional@example.test"]': {summary: 'Old device introduction', countries: {nationality: 'cn', campus: 'sg'}}};
   });
-  await page.getByRole('button', {name: 'Read page & load profile'}).click();
-  await expect(page.getByLabel('Resume summary', {exact: true})).toHaveValue('');
+  await connectApplication(page);
+  await expectUnfinishedIntroduction(page, ['First introduction', 'Updated introduction', 'Old device introduction']);
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('');
-  const drafts = await page.evaluate(() => window.drafts.filter(x => x.url.endsWith('/browser-assistant/draft')));
-  expect(drafts.map(x => x.payload.page_url)).toEqual(['123', '456', '789'].map(id => `https://www.internsg.com/job-apply/${id}`));
+  const drafts = await page.evaluate(() => window.drafts.filter(x => x.url.endsWith('/browser-assistant/autofill-profile')));
+  expect(drafts).toHaveLength(3);
+  expect(await page.evaluate(() => window.operations.filter(x => x[0] === 'inspect').map(() => true))).toHaveLength(3);
   expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
 });
 
-test('default popup exposes only connection or platform navigation and never reads or fills a form', async ({page}) => {
+test('an unsupported current tab exposes platform navigation without reading saved facts or a form', async ({page}) => {
   await setup(page);
+  await page.evaluate(() => { window.activeUrl = 'http://localhost:5173/jobs'; });
   await expect(page.locator('button:visible')).toHaveCount(1);
   await expect(page.locator('#platform')).toBeHidden();
   await expect(page.locator('#extension-id')).toBeHidden();
   await login(page, undefined, {expand: false});
   await expect(page.locator('button:visible')).toHaveCount(0);
-  await expect(page.locator('a.primary-action:visible')).toHaveCount(1);
+  await expect(page.locator('#open-jobpilot')).toBeVisible();
   await expect(page.locator('#open-jobpilot')).toHaveAttribute('href', 'http://localhost:5173/jobs');
   await expect(page.locator('#original-tools')).not.toHaveAttribute('open');
   await expect(page.locator('#settings')).not.toHaveAttribute('open');
@@ -492,6 +865,7 @@ test('default popup exposes only connection or platform navigation and never rea
 test('missing permission can be denied, granted and revoked without automatic page actions', async ({page}) => {
   await setup(page, {embeddedAccess: false});
   await login(page, undefined, {expand: false});
+  await openDetails(page, '#original-tools');
   await expect(page.locator('button:visible')).toHaveCount(1);
   const enable = page.getByRole('button', {name: 'Enable embedded InternSG access'});
   await page.evaluate(() => { window.permissionAllowed = false; });
@@ -514,7 +888,7 @@ test('missing permission can be denied, granted and revoked without automatic pa
 
 test('permission revocation invalidates an open fallback review instead of retaining a fill action', async ({page}) => {
   await setup(page); await login(page);
-  await page.locator('#inspect').click();
+  await connectApplication(page);
   await expect(page.locator('#fill')).toBeEnabled();
   await page.evaluate(() => { window.embeddedAccess = false; window.permissionsRemoved({origins: ['https://www.internsg.com/*']}); });
   await expect(page.locator('#fields')).toBeEmpty();
@@ -525,7 +899,7 @@ test('permission revocation invalidates an open fallback review instead of retai
 test('one click captures text and countries before asynchronous validation and never approves later edits', async ({page}) => {
   await setup(page, {widgetsReady: true}); await login(page);
   await page.evaluate(() => { window.platformValues = {resume_summary: 'Reviewed summary', nationality: 'cn', study_country: 'sg'}; });
-  await page.locator('#inspect').click();
+  await connectApplication(page);
   await expect(page.getByLabel('Nationality', {exact: true})).toHaveValue('cn');
   await page.evaluate(() => {
     const fetcher = window.fetch;
@@ -565,7 +939,7 @@ test('missing country selections stay skipped and original occupied fields have 
     };
     window.platformValues = {resume_summary: 'My introduction'};
   });
-  await page.locator('#inspect').click();
+  await connectApplication(page);
   await expect(page.locator('#edit-applicant_name')).toHaveCount(0);
   await expect(page.locator('#fields')).toContainText('Already filled on the website');
   await page.getByLabel('Nationality', {exact: true}).selectOption('cn');
@@ -579,7 +953,7 @@ test('missing country selections stay skipped and original occupied fields have 
 
 test('interrupted dispatched fills keep the draft, warn about partial changes and cannot retry the same review', async ({page}) => {
   await setup(page); await login(page);
-  await page.locator('#inspect').click();
+  await connectApplication(page);
   await expect(page.locator('#fill')).toBeEnabled();
   await page.evaluate(() => {
     const execute = window.chrome.scripting.executeScript;
@@ -616,7 +990,7 @@ test('malformed fill reports never claim success or trigger a second fill', asyn
     {filled: ['applicant_name'], skipped: []},
     {filled: ['applicant_name'], skipped: [], submitted: 'false'},
   ]) {
-    await page.locator('#inspect').click();
+    await connectApplication(page);
     await expect(page.locator('#fill')).toBeEnabled();
     await page.evaluate(report => { window.invalidReport = report; }, invalidReport);
     await page.locator('#fill').click();

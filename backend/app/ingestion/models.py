@@ -92,6 +92,7 @@ class JobRecord(ContractModel):
     experience: str | None = None
     tags: list[str] = Field(default_factory=list)
     description: str = Field(min_length=1)
+    description_blocks: list[dict[str, Any]] | None = None
     apply_url: str | None = None
     raw_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     dedup_hash: str = Field(pattern=r"^[0-9a-f]{64}$")

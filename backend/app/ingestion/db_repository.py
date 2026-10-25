@@ -123,7 +123,12 @@ class SqlAlchemyJobRepository:
         job.education = record.education
         job.experience = record.experience
         job.job_type = record.job_type[0] if record.job_type else None
+        previous_description = job.description
         job.description = record.description
+        if record.description_blocks is not None:
+            job.description_blocks = record.description_blocks
+        elif previous_description != record.description:
+            job.description_blocks = None
         job.apply_url = record.apply_url or record.source_url
         job.source_url = record.source_url
         job.posted_at = record.posted_at
@@ -155,6 +160,7 @@ class SqlAlchemyJobRepository:
             "experience",
             "job_type",
             "description",
+            "description_blocks",
             "apply_url",
             "source_url",
             "posted_at",

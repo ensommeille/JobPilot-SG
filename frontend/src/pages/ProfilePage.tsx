@@ -6,7 +6,7 @@ import { fetchProfile, updateProfile } from '../services/profile'
 import ApplicationProfileFields, { type ApplicationDetails } from '../components/ApplicationProfileFields'
 import { getToken, watchSession } from '../services/auth'
 import ResumeLibrary from '../components/ResumeLibrary'
-import type { ResumeSuggestions } from '../services/resumes'
+import AutofillFactsPanel from '../components/AutofillFactsPanel'
 
 const SKILL_CATEGORIES: Record<string, string[]> = {
   'Programming Languages': ['Python', 'Java', 'JavaScript', 'TypeScript', 'C++', 'C#', 'R', 'SQL', 'MATLAB', 'Go', 'Swift', 'Kotlin', 'PHP', 'Ruby', 'Scala', 'HTML/CSS', 'Bash/Shell'],
@@ -79,7 +79,7 @@ interface LinkItem { label: string; url: string }
 const ProfilePage = () => {
   const [searchParams] = useSearchParams()
   const requestedReturn = searchParams.get('returnTo') || ''
-  const returnTo = /^\/jobs\/[A-Za-z0-9-]{1,80}\/(apply-external|prepare|apply)(\?resume=[A-Fa-f0-9-]{36})?$/.test(requestedReturn) ? requestedReturn : null
+  const returnTo = /^\/jobs\/[A-Za-z0-9-]{1,80}\/(apply-external|prepare|apply)(\?resume=(?:[A-Fa-f0-9-]{36})?)?$/.test(requestedReturn) ? requestedReturn : null
   const loadedToken = useRef<string | null>(null)
   const pending = useRef<AbortController | null>(null)
   const savingRef = useRef(false)
@@ -87,6 +87,21 @@ const ProfilePage = () => {
   const [loading, setLoading] = useState(() => !!getToken())
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [autofillRevision, setAutofillRevision] = useState(0)
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const pdfLocked = useRef(false), pdfGeneration = useRef(0)
+  const pdfGate = {
+    busy: pdfBusy,
+    acquire: () => {
+      if (pdfLocked.current) return null
+      pdfLocked.current = true; setPdfBusy(true)
+      return ++pdfGeneration.current
+    },
+    release: (lease: number) => {
+      if (pdfGeneration.current !== lease) return
+      pdfLocked.current = false; setPdfBusy(false)
+    },
+  }
   const [error, setError] = useState(() => getToken() ? '' : 'Sign in to JobPilot, then reload your profile.')
   const [loadFailed, setLoadFailed] = useState(() => !getToken())
   const [applicationDetails, setApplicationDetails] = useState<ApplicationDetails>({
@@ -94,6 +109,8 @@ const ProfilePage = () => {
   })
 
   const [fullName, setFullName] = useState('')
+  const [givenName, setGivenName] = useState('')
+  const [familyName, setFamilyName] = useState('')
   const [phone, setPhone] = useState('')
   const [contactEmail, setContactEmail] = useState('')
   const [education, setEducation] = useState('')
@@ -101,25 +118,15 @@ const ProfilePage = () => {
   const [skills, setSkills] = useState<string[]>([])
   const [links, setLinks] = useState<LinkItem[]>([])
 
-  const useResumeSuggestions = (suggestions: ResumeSuggestions) => {
-    if (loadFailed || loading || saving || getToken() !== loadedToken.current) return
-    if (suggestions.full_name != null) setFullName(suggestions.full_name)
-    if (suggestions.contact_email != null) setContactEmail(suggestions.contact_email)
-    if (suggestions.phone != null) setPhone(suggestions.phone)
-    if (suggestions.education != null) setEducation(suggestions.education)
-    if (suggestions.experience != null) setExperience(suggestions.experience)
-    if (suggestions.skills) setSkills(previous => [...new Set([...previous, ...suggestions.skills!])].slice(0, 100))
-    setSaved(false)
-  }
-
   useEffect(() => {
     const token = getToken()
     const request = new AbortController()
     pending.current = request
     loadedToken.current = token
     const invalidate = () => {
+      pdfGeneration.current++; pdfLocked.current = false; setPdfBusy(false)
       pending.current?.abort(); loadedToken.current = null; savingRef.current = false
-      setFullName(''); setPhone(''); setContactEmail(''); setEducation(''); setExperience('')
+      setFullName(''); setGivenName(''); setFamilyName(''); setPhone(''); setContactEmail(''); setEducation(''); setExperience('')
       setSkills([]); setLinks([])
       setApplicationDetails({resume_summary: '', availability_period: '', nationality: '', study_country: ''})
       setSaved(false); setSaving(false); setLoading(false); setLoadFailed(true)
@@ -134,10 +141,12 @@ const ProfilePage = () => {
         if (request.signal.aborted) return
         if (getToken() !== token) { invalidate(); return }
         const d = res.data
-        if (!['resume_summary', 'availability_period', 'nationality', 'study_country'].every(key => key in d)) {
+        if (!['resume_summary', 'availability_period', 'nationality', 'study_country', 'given_name', 'family_name'].every(key => key in d)) {
           throw new Error('Profile backend upgrade required')
         }
         setFullName(d.full_name ?? '')
+        setGivenName(d.given_name ?? '')
+        setFamilyName(d.family_name ?? '')
         setPhone(d.phone ?? '')
         setContactEmail(d.contact_email ?? '')
         setEducation(d.education ?? '')
@@ -172,6 +181,8 @@ const ProfilePage = () => {
       await updateProfile({
         ...Object.fromEntries(Object.entries(applicationDetails).map(([key, value]) => [key, value.trim() || null])),
         full_name: fullName.trim() || null,
+        given_name: givenName.trim() || null,
+        family_name: familyName.trim() || null,
         phone: phone.trim() || null,
         contact_email: contactEmail.trim() || null,
         education: education.trim() || null,
@@ -181,6 +192,7 @@ const ProfilePage = () => {
       }, {signal: request.signal, headers: {Authorization: `Bearer ${token}`}, timeout: 15000})
       if (request.signal.aborted || getToken() !== token) return
       setSaved(true)
+      setAutofillRevision(value => value + 1)
     } catch (error) {
       if (request.signal.aborted || getToken() !== token) return
       if (axios.isAxiosError(error) && error.response?.status === 422) {
@@ -212,7 +224,10 @@ const ProfilePage = () => {
 
         {returnTo && <p><Link to={returnTo}>Back to application</Link>. Save your changes before returning to reuse them.</p>}
         {loadFailed && <p role="alert">{error} <button onClick={() => window.location.reload()}>Reload profile</button></p>}
-        {!loadFailed && <ResumeLibrary onUseSuggestions={useResumeSuggestions} />}
+        {!loadFailed && <><ResumeLibrary pdfGate={pdfGate} onFilesChanged={() => setAutofillRevision(value => value + 1)} /><AutofillFactsPanel pdfGate={pdfGate} revision={autofillRevision} /></>}
+        <details id="saved-profile-details" className="profile-saved-details">
+        <summary>Edit saved Profile (optional)</summary>
+        <p>These saved answers take priority over PDF facts. You can keep using your PDF without completing every field here.</p>
         <form ref={form} onSubmit={event => { event.preventDefault(); void save() }}>
         <fieldset disabled={loading || saving || loadFailed} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} onChange={() => setSaved(false)}>
 
@@ -220,6 +235,11 @@ const ProfilePage = () => {
         <div style={sectionStyle}>
           <h2 style={{ margin: '0 0 16px 0' }}>Personal Information</h2>
           <div><label htmlFor="full-name" style={labelStyle}>Full Name</label><input id="full-name" maxLength={200} style={inputStyle} value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your name" /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '12px' }}>
+            <div><label htmlFor="given-name" style={labelStyle}>First / given name</label><input id="given-name" autoComplete="given-name" maxLength={100} style={inputStyle} value={givenName} onChange={e => setGivenName(e.target.value)} /></div>
+            <div><label htmlFor="family-name" style={labelStyle}>Last / family name</label><input id="family-name" autoComplete="family-name" maxLength={100} style={inputStyle} value={familyName} onChange={e => setFamilyName(e.target.value)} /></div>
+          </div>
+          <p style={{ fontSize: '13px', color: '#5d6863', marginBottom: '12px' }}>Save these once for forms that ask for separate names. JobPilot does not guess their order from your full name.</p>
           <div><label htmlFor="contact-email" style={labelStyle}>Contact Email</label><input id="contact-email" type="email" maxLength={320} style={inputStyle} value={contactEmail} onChange={e => setContactEmail(e.target.value)} /></div>
           <div><label htmlFor="phone" style={labelStyle}>Phone</label><input id="phone" type="tel" maxLength={40} style={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} placeholder="+65 ..." /></div>
         </div>
@@ -270,12 +290,13 @@ const ProfilePage = () => {
               backgroundColor: saving ? '#ccc' : '#1a73e8', cursor: saving ? 'not-allowed' : 'pointer' }}>
             {saving ? 'Saving...' : 'Save Profile'}
           </button>
-          {saved && <p role="status" style={{ color: '#26713c', margin: '8px 0 0 0' }}>Profile saved. Your application details will be reused when you read the next application form. <Link to={returnTo || '/jobs'}>{returnTo ? 'Return to application' : 'Find jobs for me'}</Link></p>}
+          {saved && <p role="status" style={{ color: '#26713c', margin: '8px 0 0 0' }}>Profile saved. Your application details will be reused when you read the next application form. <Link to={returnTo || '/jobs'}>{returnTo ? 'Return to application' : 'View jobs'}</Link></p>}
           {error && !loadFailed && <p role="alert" style={{ color: '#dc2626', margin: '8px 0 0 0' }}>{error}</p>}
         </div>
 
         </fieldset>
         </form>
+        </details>
 
       </div>
     </div>

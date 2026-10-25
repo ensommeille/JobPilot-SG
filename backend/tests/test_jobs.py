@@ -16,7 +16,8 @@ PASSWORD = "CorrectHorseBatteryStaple!"
 def seeded_jobs(db: Session) -> list[JobPosting]:
     source = JobSource(
         name="Sandbox Jobs",
-        source_type="mock",
+        # Offline stand-ins for public records; typed mock/sandbox sources are hidden.
+        source_type="html",
         base_url="https://jobs.example.test",
     )
     engineering = JobTag(name="Engineering", category="function")

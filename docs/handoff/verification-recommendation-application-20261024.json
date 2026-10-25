@@ -1,0 +1,213 @@
+{
+  "run_id": "de97a91b-de22-4438-87d8-144cbb313bb5",
+  "status": "succeeded",
+  "is_current": true,
+  "execution_mode": "live",
+  "prompt_version": "ai-recommendation-v9-evidence-scope",
+  "input_hash": "583026371e64d229d46653cfa9a1bab5804c9629eb9e3d71a7336eccb0d48aea",
+  "requires_review": true,
+  "usage": {
+    "input_tokens": 33976,
+    "output_tokens": 11792
+  },
+  "candidates": [
+    {
+      "id": "27861cf9-5b0c-416f-a386-c148a2c306b3",
+      "title": "Full Stack Developer (Graduate)",
+      "company": "SimplifyNext",
+      "city": "Singapore",
+      "job_type": "graduate"
+    },
+    {
+      "id": "ff105a49-7db6-4bef-bf3c-7a1fe154b452",
+      "title": "AI Software Engineer Intern",
+      "company": "Pensees Pte. Ltd.",
+      "city": "Singapore",
+      "job_type": "internship"
+    },
+    {
+      "id": "338251e0-90c6-4335-b1aa-69ec7cc9e3e6",
+      "title": "AI Engineer (Graduate)",
+      "company": "SimplifyNext",
+      "city": "Singapore",
+      "job_type": "graduate"
+    },
+    {
+      "id": "df46ae4f-2eef-4e1f-9acf-22ceb2326f7b",
+      "title": "Machine Learning Intern",
+      "company": "Cantina",
+      "city": "Singapore",
+      "job_type": "internship"
+    },
+    {
+      "id": "e0bc6d90-bb77-4e1a-b4c7-7cb93604e3d0",
+      "title": "Product Builder Intern  (Product Engineering)",
+      "company": "ShopBack",
+      "city": "Singapore",
+      "job_type": "internship"
+    }
+  ],
+  "display_order": [
+    "27861cf9-5b0c-416f-a386-c148a2c306b3",
+    "338251e0-90c6-4335-b1aa-69ec7cc9e3e6",
+    "ff105a49-7db6-4bef-bf3c-7a1fe154b452",
+    "e0bc6d90-bb77-4e1a-b4c7-7cb93604e3d0",
+    "df46ae4f-2eef-4e1f-9acf-22ceb2326f7b"
+  ],
+  "advice": {
+    "338251e0-90c6-4335-b1aa-69ec7cc9e3e6": {
+      "version": "action-advice-v3",
+      "status": "consider",
+      "headline": "Worth considering",
+      "counts": {
+        "supported": 3,
+        "gap": 0,
+        "unknown": 8
+      }
+    },
+    "27861cf9-5b0c-416f-a386-c148a2c306b3": {
+      "version": "action-advice-v3",
+      "status": "consider",
+      "headline": "Worth considering",
+      "counts": {
+        "supported": 4,
+        "gap": 0,
+        "unknown": 6
+      }
+    },
+    "ff105a49-7db6-4bef-bf3c-7a1fe154b452": {
+      "version": "action-advice-v3",
+      "status": "check_first",
+      "headline": "Confirm eligibility before applying",
+      "counts": {
+        "supported": 4,
+        "gap": 0,
+        "unknown": 7
+      }
+    },
+    "e0bc6d90-bb77-4e1a-b4c7-7cb93604e3d0": {
+      "version": "action-advice-v3",
+      "status": "check_first",
+      "headline": "Confirm eligibility before applying",
+      "counts": {
+        "supported": 2,
+        "gap": 0,
+        "unknown": 7
+      }
+    },
+    "df46ae4f-2eef-4e1f-9acf-22ceb2326f7b": {
+      "version": "action-advice-v3",
+      "status": "check_first",
+      "headline": "Confirm eligibility before applying",
+      "counts": {
+        "supported": 1,
+        "gap": 0,
+        "unknown": 8
+      }
+    }
+  },
+  "source_quotes_verified_in_own_original_field": {
+    "jd": 50,
+    "profile": 40
+  },
+  "requirement_outcomes": {
+    "supported": 14,
+    "unknown": 36,
+    "gap": 0
+  },
+  "server_conservative_reason_corrections": 2,
+  "saved_availability_in_minimized_input": true,
+  "input_profile_field_names": [
+    "availability",
+    "education",
+    "experience",
+    "skills"
+  ],
+  "free_detail_reads_reuse_same_batch_and_advice": [
+    {
+      "job_id": "338251e0-90c6-4335-b1aa-69ec7cc9e3e6",
+      "status": "available",
+      "source_run_id": "de97a91b-de22-4438-87d8-144cbb313bb5"
+    },
+    {
+      "job_id": "27861cf9-5b0c-416f-a386-c148a2c306b3",
+      "status": "available",
+      "source_run_id": "de97a91b-de22-4438-87d8-144cbb313bb5"
+    },
+    {
+      "job_id": "ff105a49-7db6-4bef-bf3c-7a1fe154b452",
+      "status": "available",
+      "source_run_id": "de97a91b-de22-4438-87d8-144cbb313bb5"
+    },
+    {
+      "job_id": "e0bc6d90-bb77-4e1a-b4c7-7cb93604e3d0",
+      "status": "available",
+      "source_run_id": "de97a91b-de22-4438-87d8-144cbb313bb5"
+    },
+    {
+      "job_id": "df46ae4f-2eef-4e1f-9acf-22ceb2326f7b",
+      "status": "available",
+      "source_run_id": "de97a91b-de22-4438-87d8-144cbb313bb5"
+    }
+  ],
+  "database_opened_read_only": true,
+  "stored_run_columns_unchanged_by_read_only_correction": true,
+  "backend_validation": {
+    "shared_contract_target": 47,
+    "helper_target": 19,
+    "full_before_final_bounded_fixes": 1531,
+    "budget_target": 71,
+    "reason_correction_target": 179,
+    "target_counts_overlap": true,
+    "external_attempts": 0
+  },
+  "frontend_validation": {
+    "css_bundle": "index-BnQzWNQy.css",
+    "js_bundle": "index-C3j_g8tt.js",
+    "browse_state_assertions": 9,
+    "build": "passed",
+    "typescript": "passed",
+    "playwright_suite_run": false,
+    "lint": "passed"
+  },
+  "chrome_extension": {
+    "runtime_hashes_verified": 12,
+    "previous_version": "0.8.0",
+    "chrome_available_to_agent": false,
+    "manual_real_form_fill": "pending",
+    "server_confirmed_same_account": true,
+    "installed_version": "0.8.3",
+    "user_confirmed_reload_connection": true,
+    "user_confirmed_original_form_load_enables_fill": true
+  },
+  "catalog": {
+    "internsg": 92,
+    "separate_programme_overviews": 1,
+    "official_ats": 88,
+    "concrete_vacancies": 180
+  },
+  "side_effects": {
+    "deployment_changed": false,
+    "real_employer_emails_sent": 0,
+    "real_employer_applications_submitted": 0,
+    "pr_merged": false
+  },
+  "application_page_simplification": {
+    "new_model_calls_by_agent": 0,
+    "internsg_before_explicit_load_iframes": 0,
+    "internsg_after_explicit_load_iframes": 1,
+    "external_employer_submissions": 0,
+    "desktop": "1280x900",
+    "greenhouse_real_form_opened": true,
+    "internsg_after_explicit_load_fill_controls": 1,
+    "internsg_before_explicit_load_fill_controls": 0,
+    "pdf_selection_preserved_on_return": true,
+    "local_record_status": "draft",
+    "external_form_applicant_inputs_filled": 0,
+    "details_collapsed_by_default": true,
+    "mobile": "390x844",
+    "profile_reused": true,
+    "full_playwright_suite_run": false,
+    "actual_chrome_fill_verified": false
+  }
+}

@@ -1,0 +1,16 @@
+.job-advice { min-width: 0; overflow-wrap: anywhere; margin-top: var(--s-4); }
+.job-advice h4, .job-advice h5 { margin: 0; font-weight: 600; }
+.job-advice h4.job-advice-status { display: inline-block; font-size: 1.125rem; line-height: 1.4; padding: var(--s-2) var(--s-3); border-radius: var(--radius-sm); }
+.job-advice-priority_apply { color: var(--primary); background: var(--primary-soft); }
+.job-advice-consider { color: #714700; background: var(--warning-soft); }
+.job-advice-not_priority, .job-advice-insufficient_information { color: var(--text); background: var(--bg); }
+.job-advice-summary { max-width: 74ch; margin: var(--s-3) 0 0; line-height: 1.6; }
+.job-advice-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-5); margin-top: var(--s-4); }
+.job-advice-groups:empty { display: none; }
+.job-advice-groups > section:only-child { grid-column: 1 / -1; }
+.job-advice-groups h5 { font-size: 0.9375rem; }
+.job-advice-groups ul { padding-inline-start: var(--s-5); margin: var(--s-2) 0 0; }
+.job-advice-groups li { margin-top: var(--s-2); line-height: 1.5; }
+.job-advice-pending { color: var(--text-muted); max-width: 74ch; }
+.job-advice ::selection { background: var(--primary-soft); color: var(--text); }
+@media (max-width: 700px) { .job-advice-groups { grid-template-columns: 1fr; gap: var(--s-4); } }

@@ -19,9 +19,9 @@ test('explicit load embeds the allowlisted original and offers an independent fa
   await expect(page.locator('.page-header')).toContainText('Fictional Intern');
   await expect(page.locator('iframe')).toHaveCount(0);
   await expect(page.getByRole('link', {name:'Open original application'})).toHaveAttribute('href','https://www.internsg.com/job-apply/123/');
-  await page.getByRole('button', {name:'Load InternSG application here'}).click();
+  await page.getByRole('button', {name:'Load application form'}).click();
   await expect(page.frameLocator('iframe').locator('#applicant_name')).toBeVisible();
-  await expect(page.getByRole('status').filter({hasText:'does not mean an application was sent'})).toBeVisible();
+  await expect(page.getByRole('status').filter({hasText:'Loading does not submit an application'})).toBeVisible();
   await expect(page.locator('iframe')).toHaveAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-popups');
   await page.screenshot({path:'../output/jobpilot-embedded-desktop.png',fullPage:true});
   await page.setViewportSize({width:390,height:844});

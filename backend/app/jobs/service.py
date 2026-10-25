@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.db.models import Favorite, JobPosting, JobTag, User, job_posting_tags
+from app.db.models import Favorite, JobPosting, JobSource, JobTag, User, job_posting_tags
 
 
 def _normalized_values(values: list[str] | None) -> list[str]:
@@ -61,7 +61,11 @@ def list_jobs(
     page: int,
     page_size: int,
 ) -> tuple[list[JobPosting], int, int]:
-    conditions = [JobPosting.status.in_(("active", "incomplete"))]
+    conditions = [
+        JobPosting.status.in_(("active", "incomplete")),
+        JobPosting.source.has(JobSource.enabled.is_(True)),
+        JobPosting.source.has(JobSource.source_type.not_in(("mock", "sandbox"))),
+    ]
     if query and (term := query.strip().casefold()):
         pattern = f"%{term}%"
         conditions.append(

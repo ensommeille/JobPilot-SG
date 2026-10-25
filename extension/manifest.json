@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "JobPilot SG — Review & Fill",
-  "version": "0.8.2",
-  "description": "Review and fill InternSG, Greenhouse and Lever forms; final submission stays manual.",
+  "version": "0.10.10",
+  "description": "Prepare saved facts and editable AI drafts for supported application forms. Fill once, attach files separately and submit manually.",
   "minimum_chrome_version": "106",
   "permissions": ["activeTab", "scripting", "storage"],
   "background": {"service_worker": "background.js", "type": "module"},

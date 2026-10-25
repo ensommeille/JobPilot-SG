@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-24",
+  "scope": "local_extension_and_demo_selection",
+  "extension_version_on_disk": "0.8.4",
+  "chrome_reload_required": true,
+  "chrome_reload_verified": false,
+  "backend_targeted_tests_passed": 66,
+  "extension_node_tests_passed": 29,
+  "frontend_lint": "passed",
+  "frontend_typescript_build": "passed",
+  "targeted_ruff": "passed",
+  "changed_js_syntax": "passed",
+  "browser_playwright_suite": "not_run",
+  "local_profile_browser_checks": ["explicit_name_parts_loaded", "desktop_no_overflow", "mobile_names_stacked_no_overflow"],
+  "popup_ui_fixture_checks": ["440x580", "360x580", "no_per_answer_checkboxes", "name_and_email_visible", "fill_visible", "fixture_fill_5_skipped_0"],
+  "database_migration": "20261024_0009_to_20261024_0010",
+  "database_integrity": "ok",
+  "protected_existing_data_preserved": true,
+  "installed_runtime_files_hash_verified": 13,
+  "extension_permissions_unchanged": true,
+  "paid_model_calls": 0,
+  "employer_submissions": 0,
+  "real_application_emails": 0,
+  "deployment_changed": false,
+  "pr_merged": false,
+  "demo_jobs": [
+    {"source": "InternSG", "job_id": "342839f6-ba60-4119-9e32-f81d5c3477c7", "form_opened_live": true, "previous_user_reported_chrome_fill": true, "version_084_chrome_fill_verified": false},
+    {"source": "Greenhouse", "job_id": "602f07bb-e07b-44ec-9878-29dd13cc5a16", "form_opened_live": true, "version_084_chrome_fill_verified": false},
+    {"source": "Lever", "job_id": "05ed8aab-8abf-4e1f-b6bd-182443074fa6", "form_opened_live": true, "version_084_chrome_fill_verified": false}
+  ],
+  "remaining": ["user_chrome_reload", "new_real_chrome_fill_and_blur_persistence", "custom_comboboxes", "manual_employer_specific_questions_and_attachments"]
+}

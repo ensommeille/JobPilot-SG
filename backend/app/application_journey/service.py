@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import re
 from datetime import datetime, timedelta, timezone
 from math import ceil
-from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -21,36 +19,10 @@ from app.application_journey.schemas import (
     JourneyJob,
     JourneyProfile,
 )
-from app.browser_assistant import DraftRequest
 from app.db.models import Application, ApplicationMethod, JobPosting, User, UserProfile
 from app.email_applications.models import EmailApplication
 from app.email_applications.router import email_option
-
-
-def safe_https_url(value: str | None) -> str | None:
-    """Return a navigable HTTPS URL, never a script, credential URL or browser ambiguity."""
-    if not value or any(ord(char) <= 32 or ord(char) == 127 for char in value) or "\\" in value:
-        return None
-    try:
-        parsed = urlsplit(value)
-        if (
-            parsed.scheme != "https"
-            or not parsed.hostname
-            or parsed.username
-            or parsed.password
-            or parsed.port not in {None, 443}
-            or "." not in parsed.hostname
-        ):
-            return None
-        hostname = parsed.hostname.encode("idna").decode("ascii")
-        if len(hostname) > 253 or any(
-            not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
-            for label in hostname.split(".")
-        ):
-            return None
-    except (ValueError, UnicodeError):
-        return None
-    return value
+from app.jobs.application_channels import safe_https_url, supported_application_type
 
 
 def _profile(db: Session, user: User) -> JourneyProfile:
@@ -98,17 +70,7 @@ def application_context(db: Session, *, user: User, job_id: UUID) -> Application
                 "The current pilot sends only to the displayed test mailbox; it does not deliver to the employer.",
             ]
         else:
-            supported = None
-            if apply_url is not None:
-                try:
-                    DraftRequest.allowed_page(apply_url)
-                    supported = (
-                        "internsg"
-                        if urlsplit(apply_url).hostname in {"internsg.com", "www.internsg.com"}
-                        else "ats"
-                    )
-                except ValueError:
-                    pass
+            supported = supported_application_type(apply_url) if apply_url is not None else None
             if supported == "internsg":
                 channel, label = "internsg", "Prepare InternSG application"
                 preparation_url = f"/jobs/{job.id}/apply-external"

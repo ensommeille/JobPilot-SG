@@ -1,0 +1,101 @@
+{
+  "date": "2026-10-24",
+  "scope": "Local unified Jobs recommendation acceptance",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "prompt_version": "ai-recommendation-v4-role-recall-evidence",
+  "execution_mode": "live",
+  "status": "succeeded",
+  "requires_review": true,
+  "automatic_candidates": 5,
+  "provider_calls": 1,
+  "usage": {
+    "input_tokens": 5497,
+    "output_tokens": 5683
+  },
+  "quote_checks": {
+    "jd_present": 51,
+    "jd_total": 51,
+    "profile_present": 12,
+    "profile_total": 12
+  },
+  "outcomes": {
+    "unknown": 47,
+    "supported": 4
+  },
+  "ranking": [
+    {
+      "rank": 1,
+      "job": "Software Engineer | Internship | Summer '27",
+      "company": "BlockTech",
+      "outcomes": {
+        "unknown": 8
+      }
+    },
+    {
+      "rank": 2,
+      "job": "Software Engineer Intern - Card Issuing Team",
+      "company": "StraitsX",
+      "outcomes": {
+        "unknown": 9,
+        "supported": 1
+      }
+    },
+    {
+      "rank": 3,
+      "job": "Machine Learning Intern",
+      "company": "Cantina",
+      "outcomes": {
+        "supported": 1,
+        "unknown": 10
+      }
+    },
+    {
+      "rank": 4,
+      "job": "Research Intern",
+      "company": "Cantina",
+      "outcomes": {
+        "unknown": 10,
+        "supported": 1
+      }
+    },
+    {
+      "rank": 5,
+      "job": "2027 Summer Internship - Software Developer",
+      "company": "Graviton Research Capital - Campus",
+      "outcomes": {
+        "unknown": 10,
+        "supported": 1
+      }
+    }
+  ],
+  "browser": {
+    "single_recommend_action": true,
+    "recommendations_replace_browse": true,
+    "show_all_restores_filters_sort_page_and_titles": true,
+    "restored_location": "Singapore",
+    "restored_sort": "newest",
+    "restored_page": 2,
+    "same_input_repeat_reused_run": true,
+    "saved_url_reload_no_provider_call": true,
+    "desktop_width": 1280,
+    "mobile_width": 390,
+    "horizontal_overflow": false
+  },
+  "validation": {
+    "targeted_backend_tests_passed": 196,
+    "external_network_attempts_in_tests": 0,
+    "frontend_lint": "passed",
+    "typescript_and_build": "passed",
+    "browser_regression_specs": "updated and syntax checked, not executed locally"
+  },
+  "limitations": [
+    "Relative relevance ordering, not verified eligibility or calibrated ranking accuracy.",
+    "Some preferred conditions omitted.",
+    "Some compound conditions have incomplete quotation coverage within an individual row.",
+    "One contiguous profile quote per assessment can leave distributed evidence unknown."
+  ],
+  "deployment_changes": 0,
+  "real_employer_emails": 0,
+  "real_employer_submissions": 0
+}

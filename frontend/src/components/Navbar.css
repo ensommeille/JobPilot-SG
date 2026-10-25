@@ -1,0 +1,7 @@
+.navbar-guide-button { min-height: 44px; color: var(--primary); }
+.navbar-guide-button[aria-expanded="true"] { background: var(--primary-soft); }
+
+@media (max-width: 1080px) {
+  .navbar-with-guide .navbar-inner { height: auto; min-height: 64px; flex-wrap: wrap; padding-block: var(--s-3); }
+  .navbar-with-guide .nav-links { flex-wrap: wrap; min-width: 0; }
+}

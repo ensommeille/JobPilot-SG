@@ -119,21 +119,29 @@ def list_sources(db: Session) -> list[JobSource]:
     return list(db.scalars(statement).all())
 
 
-def update_source(db: Session, *, source: JobSource, payload: SourceUpdate, actor: User) -> JobSource:
+def update_source(
+    db: Session, *, source: JobSource, payload: SourceUpdate, actor: User
+) -> JobSource:
     before = {"schedule": source.schedule, "enabled": source.enabled}
     if "schedule" in payload.model_fields_set:
         source.schedule = payload.schedule
     if "enabled" in payload.model_fields_set:
         source.enabled = bool(payload.enabled)
-    db.add(AuditLog(
-        actor_id=actor.id,
-        action="source.update",
-        entity_type="job_source",
-        entity_id=str(source.id),
-        metadata_json={"before": before, "after": {
-            "schedule": source.schedule, "enabled": source.enabled,
-        }},
-    ))
+    db.add(
+        AuditLog(
+            actor_id=actor.id,
+            action="source.update",
+            entity_type="job_source",
+            entity_id=str(source.id),
+            metadata_json={
+                "before": before,
+                "after": {
+                    "schedule": source.schedule,
+                    "enabled": source.enabled,
+                },
+            },
+        )
+    )
     db.commit()
     db.refresh(source)
     return source
@@ -167,8 +175,12 @@ def list_audit_events(db: Session, *, page: int, page_size: int) -> tuple[list[d
     total = db.scalar(select(func.count()).select_from(AuditLog)) or 0
     statement = (
         select(
-            AuditLog.id, AuditLog.actor_id, AuditLog.action,
-            AuditLog.entity_type, AuditLog.entity_id, AuditLog.created_at,
+            AuditLog.id,
+            AuditLog.actor_id,
+            AuditLog.action,
+            AuditLog.entity_type,
+            AuditLog.entity_id,
+            AuditLog.created_at,
         )
         .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
         .offset((page - 1) * page_size)
@@ -223,7 +235,7 @@ def build_source_adapter(source: JobSource) -> SourceAdapter:
         robots_fail_closed=defaults.robots_fail_closed,
         enabled=source.enabled,
     )
-    return InternSGAdapter(config)
+    return InternSGAdapter(config, singapore_early_career_only=True)
 
 
 def get_source_adapter_factory() -> SourceAdapterFactory:
@@ -407,7 +419,9 @@ def _reload_run(db: Session, run_id: UUID) -> CrawlRun:
     return crawl_run
 
 
-def _add_run_audit(db: Session, *, actor: User | None, source: JobSource, crawl_run: CrawlRun) -> None:
+def _add_run_audit(
+    db: Session, *, actor: User | None, source: JobSource, crawl_run: CrawlRun
+) -> None:
     db.add(
         AuditLog(
             actor_id=actor.id if actor is not None else None,

@@ -1,4 +1,229 @@
-# JobPilot SG — Review & Fill (InternSG pilot)
+# JobPilot SG — Review & Fill
+
+## Version 0.10.8: Ashby searches and evidence-based choices
+
+Ashby school and city fields can now search their own bound listboxes and click
+one exact observed option. A query string or highlighted result is insufficient:
+the clicked option must close the menu and persist after blur. School matching
+allows a trailing acronym only when it exactly matches the full name's initials
+(for example, National University of Singapore (NUS)); campus and country suffixes
+are not discarded. Duplicate candidates remain manual.
+
+Education start/end month/year dropdowns use their labelled date containers and
+semantic month/year options, never their order in the DOM. Saved values win;
+AI may map a missing ordinary choice from cited PDF evidence to an actual option
+or prepare a literal school/city search. Missing dates and personal declarations
+are not invented. Fill stays one explicit action and never submits.
+
+Job detail pages also show the current fit assessment automatically. Saved
+results are reused, and one new analysis is started per current profile/job
+context. The result highlights alignment and supported/gap/unknown counts, with
+source evidence available in an optional fold. Failed or uncertain starts do not
+automatically trigger another paid request.
+
+## Version 0.10.7: Ashby manual option groups no longer block the form
+
+Some Ashby radio/checkbox groups use one shared HTML name for all options. These
+controls require the applicant's own choices. They are now listed as manual
+questions without duplicate writable answer records, so unique name, email,
+phone and ordinary text fields can continue through preparation and Fill.
+Duplicate ordinary answer identifiers, mixed control collisions and ambiguous
+identity containers still reject the preview. No positional answer keys or new
+automatic choices are introduced. The reported BlockTech form's school/location
+searches and unlabelled education-date dropdowns still require website input.
+
+## Version 0.10.6: AI answers the actual form questions from the selected PDF
+
+After loading existing facts, the popup sends the remaining supported questions
+as one bounded batch. Every question receives a model disposition using the
+selected PDF's exact passages and verified profile facts. Ordinary questions no
+longer need to match the three common narrative names. Extracted answers carry
+source citations; missing information is distinguished from unfinished analysis.
+Generic editable text is a fallback after this attempt, not a substitute for it.
+One batch analyzes at most 40 unanswered questions. Additional ordinary text
+questions receive explicitly unanalysed editable pending text, without a second
+model request; native choices, numbers, dates and declarations retain their own
+requirements.
+
+If Fill is clicked during preparation, it waits for that existing batch within
+the same time budget and then dispatches once. Answers and edits already present
+at click time remain frozen. No second model request or Generate/Read step is
+introduced. Platform preparation pages only read cached drafts; they do not
+start generic warm-up work before the actual questions are known.
+
+The model selects source text rather than inventing missing autobiographical
+facts. Numbers and current employment require matching explicit evidence. A
+location in the PDF's contact header may answer a broad current-location question;
+it cannot establish legal residence or citizenship. A semantically mismatched
+answer is withheld individually; malformed output and invalid source references
+still reject the batch.
+Unfinished or truncated analysis is never presented as proof the PDF lacks data.
+Files, consent and unsupported choices retain their separate manual actions.
+
+## Version 0.10.5: ordinary text drafts and actual Ashby form selection
+
+Available ordinary text questions can show editable template text when no saved
+fact exists. These are real values copied by Fill, explicitly marked for editing
+before submission. Saved facts and user edits win; untouched templates for unknown
+questions can still be replaced by an exact saved-fact mapping or cited AI draft.
+Declarations, consent, unsupported choices and missing numeric/date facts remain
+manual. Template creation itself does not call the model.
+
+Lever uses the unique question caption rather than loading/error text inside its
+wrapping label. Current-company and current-location text can therefore be
+recognized. A visible location value does not imply the site's hidden location
+entity was selected; the original site's location selection remains explicit.
+
+Ashby now anchors the application container to its unique name/email controls,
+excluding the separate resume-autofill uploader. Initial inspection waits at most
+two seconds for hydration and shows a visible loading/recovery message if the
+real form is still unavailable. It does not submit or upload a file.
+
+Fill reports copied values separately from remaining website choices and native
+format corrections. A URL template can be copied successfully while the website
+still requires a genuine URL; native validation stays active.
+
+## Version 0.10.4: unbound cover-letter answers and editable URL templates
+
+The reported `field:lflj1e/evidence_key` rejection identifies the Greenhouse cover
+letter target. Missing and explicit null now both represent no bound saved fact,
+so an omitted optional property does not reject the entire batch. Actual fact
+classifications, controls, labels, account and document checks remain strict.
+
+Missing LinkedIn, GitHub and portfolio links now get actual editable template
+text, such as **Your LinkedIn URL**, and Fill copies that text to the website.
+Templates are marked for replacement before submitting and are never saved to
+Profile or presented as genuine links. Existing answers win. A site's URL
+validator may flag this text until the applicant replaces it with a real URL.
+
+## Version 0.10.3: missing-answer hints and precise fill diagnostics
+
+Unanswered text inputs show a useful hint, such as **Your LinkedIn URL**. Hints
+are placeholders, not applicant answers, and are never included in Fill. The
+popup header shows the loaded extension version. A rejected ATS preflight now
+identifies the stable field ID and mismatch category without exposing answers.
+The original whole-batch checks remain in place. This improves diagnosis; real
+Chrome filling on the reported SimplifyNext form is still awaiting verification.
+
+## Version 0.10.2: visible saved answers and recoverable ATS failures
+
+Saved answers now open in the preview, so missing optional answers do not hide
+the facts already loaded. A failed Fill clears its loading message and exposes
+**Refresh form** beside the action footer; it never retries automatically.
+The reader distinguishes a verified no-write preflight rejection from an unknown
+Chrome response. Greenhouse React-select options are opened with their required
+control interaction, then selected and checked against exact saved facts.
+An exact internship-period question reuses saved availability without inventing
+dates. Preferred names, absent dates and declarations are not guessed.
+
+## Version 0.10.1: selected-PDF return route compatibility
+
+Embedded InternSG filling now accepts the platform's optional single
+`?resume=<UUID>` selection parameter. The exact parent URL remains bound to the
+review; changing the selected-PDF route, account, saved details or application
+document still stops filling. Unknown or duplicate query parameters, hashes and
+credentials remain rejected. No submission or model-call behavior changed.
+
+## Version 0.10.0: saved facts first, one background preparation
+
+Opening a supported InternSG, Greenhouse, Lever or Ashby application shows saved
+PDF/Profile facts immediately, folded under **Saved answers ready**. One bounded
+background batch maps unfamiliar ordinary questions and prepares short narrative
+drafts from saved evidence. **AI draft** answers stay visible and editable. Missing
+facts and pending confirmations are marked; dates, numbers, qualifications,
+personal declarations, consent and legal answers are never invented.
+
+Preparation may use the model authorized for this workflow. Persisted results are
+reused; a concurrent preparation is checked only with cache-only requests, within
+an approximately eight-second total budget. A timeout or unavailable model leaves
+saved answers usable. Choosing **Fill application form** approves that current
+snapshot, cancels late draft updates and never submits. Previously entered website
+answers and user edits in the popup are preserved. No Read or Generate step and no
+per-answer checkbox is required.
+
+InternSG introductions use the same preparation engine. On the observed Greenhouse
+cover-letter widget, inspection does not open the text editor: Fill opens the
+uniquely identified **Enter manually** control only for the approved cover-letter
+draft, provided no cover-letter file or text is already present. The résumé PDF
+still requires the separate **Attach saved PDF** action; CAPTCHA and final
+submission remain manual. Account, page, document or saved-facts changes discard
+late preparation results.
+
+## Version 0.9.2: open, preview, Fill (historical)
+
+With a connected account, opening the popup on a supported application loads the
+current form and saved PDF/Profile answers automatically. Review or edit the
+preview and choose **Fill application form** once. A **Refresh form** recovery
+action appears when loading fails or the preview becomes stale; no initial Read
+button is required.
+
+Automatic loading and normal refresh do not analyze the PDF, call a paid model,
+request new permissions, attach a file or submit an application. Unfamiliar
+questions that cannot be matched to saved facts remain for the applicant to
+answer. A PDF attachment still requires its own explicit action.
+
+Only canonical supported ATS/InternSG application pages and the connected
+platform's approved embedded InternSG route are eligible. Other sites are not
+inspected. Account, active-tab, URL and document changes invalidate old previews.
+
+## Version 0.9.1: one upload and a working Greenhouse reader
+
+Choosing a PDF in Profile now saves and analyzes it in one explicit action. The
+upload label explains that AI is used and a new analysis may be billed. Opening
+Profile or refreshing saved answers does not start a paid analysis. Selecting a
+different saved PDF prepares it once if needed; ready results are reused.
+Failed or interrupted analysis never retries automatically, and the saved file
+remains available. Existing Profile values still take priority.
+
+Fixed the Greenhouse reader crash caused by unnamed React-select helper inputs,
+and added an actual serialized-reader/Chrome-result/popup-parser regression.
+The popup now has an explicit intrinsic root width rather than allowing Chrome
+to shrink it into a narrow column. Reading failures report their actual class
+instead of claiming the job is unsupported. The exact Greenhouse Resume/CV
+caption identifies the CV field separately from transcript and cover-letter
+buttons whose visible label is also “Attach”.
+
+## Version 0.9.0: PDF-first application answers (historical)
+
+Upload the PDF once in Profile, choose **Read for autofill**, and reuse supported,
+grounded facts. Existing saved Profile values take priority. Add only missing or
+ambiguous details; no per-field approval checkboxes are required. Selecting or
+reading a PDF never uploads it to an employer.
+
+The extension reads the same saved answers for supported ATS forms and InternSG.
+**Read form & load saved details** may use a paid AI mapping for unfamiliar ordinary
+questions; it maps questions to existing facts rather than inventing answers.
+**Fill application form** authorizes the current preview and checks its saved-fact
+fingerprint again for free. Personal declarations and unsupported controls stay
+manual. First and last names are never guessed by splitting a full name.
+
+**Attach saved PDF** is a separate explicit action for the PDF currently selected
+in Profile and one recognized resume upload control. Clicking it may upload the
+file to the employer immediately, even though no application is submitted. Check
+the original website for its file name and upload status. CAPTCHA, consent and
+final submission remain manual. A form fill never silently attaches a file.
+
+## Version 0.8.4: preview once, fill once
+
+The popup opens the tools for the current supported application and keeps account
+settings folded. Review the proposed answers, edit anything needed, then choose
+**Fill application form** once. That click authorizes only the displayed snapshot;
+individual ATS confirmation checkboxes have been removed. A changed saved profile
+requires a fresh preview before ATS filling. Existing website answers stay intact.
+
+First and last names come only from explicitly saved **Given name** and **Family
+name** in Profile. Missing names stay blank; the popup never splits a full name.
+Supported country dropdowns use clearly labelled saved country facts or an explicit
+choice made in the popup. Telephone country codes stay manual. Attach the original
+PDF on the website, finish its remaining questions and submit there yourself.
+The popup's older advanced sending controls are hidden and disabled in this build.
+
+## Version 0.8.3: current local workspace connection
+
+This historical release added the
+exact `127.0.0.1:15523` → `127.0.0.1:18523` local deployment, process-local client
+registration in the workspace helpers, and a read-only connection check for the
+platform. It does not add submission authority or automatic PDF uploading.
 
 ## Version 0.8.2: reviewed common questions on hosted ATS forms
 
@@ -7,8 +232,8 @@ questions: LinkedIn, GitHub, availability, education/experience summaries,
 skills and a short self-introduction. Suggestions come only from fields already
 saved in the connected JobPilot profile; a résumé file is neither parsed nor
 uploaded. The original question, proposed answer and profile source are shown
-in the popup. Every answer requires its own checkbox before **Fill reviewed
-fields only**; edits clear that checkbox. Empty or overlong evidence is not
+in the popup. This historical version required each answer's checkbox; version
+0.8.4 replaces those checks with one explicit Fill action. Empty or overlong evidence is not
 silently invented or truncated. Unrecognized, legal, visa, demographic, pay,
 company-motivation, file, CAPTCHA and consent controls remain manual. The fill
 operation never submits an employer application. Reload the unpacked extension
@@ -35,22 +260,26 @@ study-country replacement; it does not authorize submission.
 1. Back up your database, install backend dependencies and run
    `python -m alembic upgrade head` from `backend` before starting the new backend.
    Migration `20261014_0003` adds four nullable profile columns; `20261014_0004`
-   adds authorization grants and platform-token revocations.
+   adds authorization grants and platform-token revocations. Migration
+   `20261024_0010` adds nullable given/family names without guessing existing name order;
+   `20261024_0011` adds owner-scoped PDF autofill facts and explicit review records.
 2. Sign into JobPilot, open **Profile**, maintain the **Reusable application
    details** section and choose **Save Profile**. These details are saved to
    the account in the backend database.
 3. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**
    and select this directory. Existing users should reload the extension
-   (version 0.8.0), then reopen its popup. Keep the same directory and extension
+   (version 0.10.10), then reopen its popup. Keep the same directory and extension
    ID to preserve device copies. Register its 32-letter ID in the backend
    `EXTENSION_CLIENT_IDS=["your-installed-extension-id"]` environment setting.
    The default empty list intentionally rejects connections.
-4. Choose **Connect through JobPilot** in the extension. The local demo is the
-   default; change deployment under **Connection settings** only when needed.
+4. Choose **Connect through JobPilot** in the extension. The current local
+   workspace (`127.0.0.1:15523`) is the default; change deployment under
+   **Connection settings** when using another supported pair.
    Grant platform and API access; the opened platform tab asks you to confirm the current account.
    If needed, sign in ON THE PLATFORM. There is no extension password form.
    Return to the application and reopen the popup after confirmation.
-   Local demo: `http://127.0.0.1:5173` → API `http://127.0.0.1:8001`;
+   Current local workspace: `http://127.0.0.1:15523` → API `http://127.0.0.1:18523`;
+   local demo: `http://127.0.0.1:5173` → API `http://127.0.0.1:8001`;
    normal development: `http://localhost:5173` → API `http://localhost:8000`.
    These exact pairs are allowlisted. Other deployments need coordinated configuration.
    Default Docker Compose uses the **localhost** pair; opening its frontend at
@@ -65,6 +294,23 @@ study-country replacement; it does not authorize submission.
 6. Repeat on another job: saved platform details are loaded again, not re-entered.
    CAPTCHA, attachments and consent remain manual. Test data must never be
    submitted to a real employer.
+
+For an owned local feature workspace, start or resume
+`scripts/local_feature_workspace.py` with `--extension-client-id` followed by the
+32-letter ID displayed by the installed extension. The same option is available
+on `scripts/local_ai_workspace.py`; it does not enable or call a model by itself.
+Omitting the option keeps the registered-client list empty. Registration is
+process-local and does not write the ID to the repository, workspace marker or
+browser profile. The helper retains exactly its selected platform origin. A
+restart changes the temporary platform signing key, so sign in and reconnect.
+
+The platform can request `{kind: 'connection-status', version: 1}` from its saved
+extension ID. The extension accepts only a trusted top-level deployment origin,
+checks its restricted session with that deployment's fixed API, and returns only
+`connected`, the public `extension_version`, paired origins, account ID and an expiry in Unix seconds. No token or
+profile answer is returned. The platform must compare the current account and
+both origins. A saved extension ID or a successful status check does not prove a
+particular form is ready; filling performs a fresh form and account inspection.
 
 The frontend local demo is `http://127.0.0.1:5173`.
 The development-only route `/jobs/internsg-preview/apply-external` loads a REAL

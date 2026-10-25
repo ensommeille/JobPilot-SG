@@ -244,7 +244,8 @@ def test_summary_is_regenerated_from_validated_degree_outcome_without_false_unce
         education=education,
     )
     assert assessed.items[0].requirements[0].outcome == "supported"
-    assert "1 supported, 0 explicit gaps, 0 needing confirmation" in assessed.items[0].summary
+    assert "Limited evidence of a relevant fit" in assessed.items[0].summary
+    assert "0 supported" not in assessed.items[0].summary
     assert "uncertain" not in assessed.items[0].summary
 
 
@@ -259,7 +260,7 @@ def test_new_prompt_uses_new_cache_identity_and_preserves_legacy_result(
     assert original["status"] == revised["status"] == "succeeded"
     assert original["id"] != revised["id"]
     assert original["input_hash"] != revised["input_hash"]
-    assert revised["prompt_version"] == "ai-recommendation-v3-complete-rows"
+    assert revised["prompt_version"] == current
     assert len(provider.calls) == 2
     assert db.scalar(select(func.count()).select_from(AIRecommendationRun)) == 2
     legacy = client.get(f"/ai-recommendations/{original['id']}", headers=context.headers).json()
@@ -274,12 +275,17 @@ def test_maximum_length_model_reason_remains_valid_after_a_conservative_downgrad
     fact = assessed.items[0].requirements[0]
     assert fact.outcome == "unknown"
     assert len(fact.reason) <= 2000
-    assert fact.reason.endswith("missing information remains unknown.")
+    assert fact.reason.startswith("Server evidence correction:")
+    assert "Missing information remains unknown; confirm the stated condition." in fact.reason
+    assert "x" * 100 not in fact.reason
     assert type(assessed).model_validate(assessed.model_dump(mode="json")) == assessed
 
 
 @pytest.mark.parametrize("category", ["skill", "work_constraint", "responsibility"])
-@pytest.mark.parametrize("missing", list(RequirementAssessment.model_fields))
+@pytest.mark.parametrize(
+    "missing",
+    [key for key, field in RequirementAssessment.model_fields.items() if field.is_required()],
+)
 def test_every_category_requires_every_row_key_without_defaults(category, missing):
     condition = {**ROW_EXAMPLE, "category": category}
     del condition[missing]
@@ -288,10 +294,12 @@ def test_every_category_requires_every_row_key_without_defaults(category, missin
 
 
 def test_prompt_complete_row_example_matches_the_actual_strict_schema():
-    assert set(ROW_EXAMPLE) == set(RequirementAssessment.model_fields)
+    assert set(ROW_EXAMPLE) == {
+        key for key, field in RequirementAssessment.model_fields.items() if field.is_required()
+    }
     assert RequirementAssessment.model_validate(ROW_EXAMPLE).outcome == "unknown"
     assert "EVERY responsibility and work_constraint" in SYSTEM_PROMPT
-    assert "ALL SEVEN keys" in SYSTEM_PROMPT
+    assert "ALL NINE keys" in SYSTEM_PROMPT
 
 
 @pytest.mark.parametrize("quote", ["Python", "PyTorch", "Built Python APIs."])

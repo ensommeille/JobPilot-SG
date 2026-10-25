@@ -7,7 +7,13 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import ResumeDocument, User, UserProfile
-from app.profiles.schemas import APPLICATION_FIELDS, LocalProfileImport, ProfileUpdate, ResumeCreate
+from app.profiles.schemas import (
+    APPLICATION_FIELDS,
+    NAME_PART_FIELDS,
+    LocalProfileImport,
+    ProfileUpdate,
+    ResumeCreate,
+)
 
 
 def get_profile(db: Session, *, user: User) -> UserProfile:
@@ -29,11 +35,13 @@ def get_profile(db: Session, *, user: User) -> UserProfile:
     return get_profile(db, user=user)
 
 
-def update_profile(db: Session, *, user: User, payload: ProfileUpdate) -> UserProfile:
+def update_profile(
+    db: Session, *, user: User, payload: ProfileUpdate, partial: bool = False
+) -> UserProfile:
     profile = get_profile(db, user=user)
-    for field, value in payload.model_dump(mode="python").items():
+    for field, value in payload.model_dump(mode="python", exclude_unset=partial).items():
         # Preserve new fields when an older full-replacement client omits them.
-        if field in APPLICATION_FIELDS and field not in payload.model_fields_set:
+        if field in APPLICATION_FIELDS | NAME_PART_FIELDS and field not in payload.model_fields_set:
             continue
         setattr(profile, field, value)
     db.commit()

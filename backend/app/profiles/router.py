@@ -12,8 +12,15 @@ from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.formparsers import MultiPartException
 
+from app.ai_recommendations.runtime import AIRuntime, get_ai_runtime
 from app.auth.dependencies import BrowserUser, CurrentUser
 from app.db.session import get_db
+from app.profiles.autofill_facts import (
+    AutofillDetailsPatch,
+    AutofillRequest,
+    extract_resume_autofill,
+    update_autofill_details,
+)
 from app.profiles.resume_files import (
     MAX_BYTES,
     create_file,
@@ -101,6 +108,34 @@ def replace_profile(
 ) -> ProfileRead:
     response.headers["Cache-Control"] = "no-store"
     return ProfileRead.model_validate(update_profile(db, user=current_user, payload=payload))
+
+
+@router.patch("", response_model=ProfileRead)
+def patch_profile(
+    payload: ProfileUpdate, response: Response, db: DatabaseSession, current_user: CurrentUser
+) -> ProfileRead:
+    response.headers["Cache-Control"] = "no-store"
+    return ProfileRead.model_validate(
+        update_profile(db, user=current_user, payload=payload, partial=True)
+    )
+
+
+@router.patch("/autofill-details")
+def patch_autofill_details(
+    payload: AutofillDetailsPatch, db: DatabaseSession, current_user: CurrentUser
+) -> dict:
+    return update_autofill_details(db, current_user, payload)
+
+
+@router.post("/resumes/{resume_id}/autofill")
+async def analyze_resume_autofill(
+    resume_id: UUID,
+    payload: AutofillRequest,
+    db: DatabaseSession,
+    current_user: CurrentUser,
+    runtime: Annotated[AIRuntime, Depends(get_ai_runtime)],
+) -> dict:
+    return await extract_resume_autofill(db, current_user, resume_id, runtime)
 
 
 @router.post("/resumes", response_model=ResumeRead, status_code=status.HTTP_201_CREATED)

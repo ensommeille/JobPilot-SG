@@ -35,6 +35,7 @@ from app.llm import (
 )
 from app.main import app
 from app.profiles.resume_models import ResumeFileContent
+from tests.ai_reference_fixtures import reference_fixture
 from tests.test_extension_auth import CLIENT, connect
 from tests.test_profiles_applications_assistant import auth_headers
 
@@ -58,7 +59,7 @@ def seed_jobs(db, count=1, *, source_name=None):
     source = JobSource(
         name=source_name or "AI test public board " + uuid4().hex,
         source_type="api",
-        base_url="https://public-board.example.test",
+        base_url="https://jobs.ashbyhq.com/offline-fixture",
         enabled=True,
     )
     jobs = []
@@ -72,8 +73,8 @@ def seed_jobs(db, count=1, *, source_name=None):
                 city="Singapore",
                 job_type="internship",
                 description=JD,
-                apply_url=f"https://public-board.example.test/{index}/apply",
-                source_url=f"https://public-board.example.test/{index}",
+                apply_url=f"https://jobs.ashbyhq.com/offline-fixture/{index}/apply",
+                source_url=f"https://jobs.ashbyhq.com/offline-fixture/{index}",
                 deadline=datetime.now(NOW_SG).date() + timedelta(days=30),
                 raw_hash=uuid4().hex * 2,
                 dedup_hash=uuid4().hex * 2,
@@ -141,8 +142,10 @@ class ScriptedProvider:
             assert await asyncio.to_thread(self.release.wait, 8), "Test provider not released"
         if self.error is not None:
             raise self.error
+        scripted = deepcopy(self.data(request) if callable(self.data) else self.data)
+        scripted = reference_fixture(scripted, json.loads(request.messages[-1].content))
         return StructuredGenerationResponse(
-            data=deepcopy(self.data(request) if callable(self.data) else self.data),
+            data=scripted,
             provider="mock",
             model="scripted-fixture-v1",
             finish_reason="stop",
@@ -596,8 +599,16 @@ def test_identical_profiles_are_cached_per_account_not_globally(client, context,
     assert len(provider.calls) == 2
 
 
-@pytest.mark.parametrize("change", ["revision", "model"])
-def test_pipeline_identity_change_invalidates_cache(client, context, provider, change):
+@pytest.mark.parametrize(
+    ("change", "value"),
+    [
+        ("revision", "new-fixture-version"),
+        ("model", "new-fixture-version"),
+        ("max_output_tokens", 12000),
+        ("timeout_seconds", 60),
+    ],
+)
+def test_pipeline_identity_change_invalidates_cache(client, context, provider, change, value):
     first = post(client, context).json()
 
     @asynccontextmanager
@@ -605,7 +616,7 @@ def test_pipeline_identity_change_invalidates_cache(client, context, provider, c
         yield provider
 
     options = {"provider_factory": factory, "is_mock": True}
-    options[change] = "new-fixture-version"
+    options[change] = value
     app.dependency_overrides[get_ai_runtime] = lambda: AIRuntime(**options)
     second = post(client, context)
     assert second.status_code == 201
@@ -614,7 +625,9 @@ def test_pipeline_identity_change_invalidates_cache(client, context, provider, c
     assert len(provider.calls) == 2
 
 
-@pytest.mark.parametrize("change", ["education", "experience", "skills", "jd"])
+@pytest.mark.parametrize(
+    "change", ["education", "experience", "skills", "availability_period", "jd"]
+)
 def test_evidence_change_invalidates_cache(client, db, context, provider, change):
     first = post(client, context).json()
     if change == "jd":
@@ -684,7 +697,7 @@ def test_request_excludes_pii_but_preserves_years_and_profile_is_unchanged(
     assert "2024" in request_text
     assert "ObscureGraphLib" in request_text
     payload = json.loads(provider.calls[0].messages[-1].content)
-    assert set(payload["profile"]) == {"education", "experience", "skills"}
+    assert set(payload["profile"]) == {"education", "experience", "skills", "availability"}
     assert "nationality" not in payload["profile"]
     assert client.get("/profile", headers=context.headers).json() == before
     row = db.scalar(select(AIRecommendationRun))

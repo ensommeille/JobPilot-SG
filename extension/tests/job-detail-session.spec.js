@@ -25,7 +25,7 @@ function job(id, isFavorited = false) {
   };
 }
 
-const favoriteButton = page => page.getByRole('button', {name: /^(?:★ Favorited|☆ Add to Favorites)$/});
+const favoriteButton = page => page.getByRole('button', {name: /^(?:Saved job|Save job)$/});
 
 async function setup(page, context, options = {}) {
   const calls = [];
@@ -44,6 +44,11 @@ async function setup(page, context, options = {}) {
     const token = authorization.replace(/^Bearer /, '');
     const detail = path.match(/^\/jobs\/(session-fixture-(?:one|two))$/);
     const favorite = path.match(/^\/jobs\/(session-fixture-(?:one|two))\/favorite$/);
+    const advice = path.match(/^\/jobs\/(session-fixture-(?:one|two))\/ai-assessment$/);
+    if (advice) return route.fulfill({json: {
+      job_id: advice[1], status: 'not_analyzed', assessment: null, advice: null,
+      source_run_id: null, execution_mode: null, model: null, finished_at: null, reason: null,
+    }});
     if (detail) {
       calls.push({kind: 'detail', id: detail[1], token, method: request.method()});
       if (options.onDetail && await options.onDetail(route, detail[1], token)) return;

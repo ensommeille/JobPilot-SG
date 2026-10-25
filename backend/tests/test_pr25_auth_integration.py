@@ -139,6 +139,8 @@ def test_form_availability_survives_all_nested_job_serializations(
     available: bool,
 ) -> None:
     job, form = application_context
+    # Exercise public-list serialization using a public source; typed mocks are hidden.
+    job.source.source_type = "html"
     if form_state == "missing":
         db.delete(form)
     elif form_state == "nonfixture":

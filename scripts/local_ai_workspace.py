@@ -1,13 +1,16 @@
-"""Explicit local AI recommendation acceptance; secrets stay in this process only.
+"""Explicit local recommendation/PDF-autofill acceptance; secrets stay in this process only.
 
 Reuses the owned feature SQLite workspace. Existing extraction/form providers stay
-disabled, mail stays on the loopback test sink, and only the AI recommendation
-dependency can reach the fixed DeepSeek HTTPS endpoint after an explicit opt-in.
+disabled, mail stays on the loopback test sink, and the bounded shared runtime
+can reach the fixed DeepSeek HTTPS endpoint after an explicit opt-in. Its exact
+purposes are recommendations, source-grounded PDF facts, question-key mapping
+and source-bound application answer preparation.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import getpass
 import hashlib
 import ipaddress
@@ -20,9 +23,19 @@ from pathlib import Path
 from threading import Lock
 
 if __package__:
-    from .local_feature_workspace import absolute_workspace, seed_workspace, web_origin
+    from .local_feature_workspace import (
+        absolute_workspace,
+        registered_extension_id,
+        seed_workspace,
+        web_origin,
+    )
 else:
-    from local_feature_workspace import absolute_workspace, seed_workspace, web_origin
+    from local_feature_workspace import (
+        absolute_workspace,
+        registered_extension_id,
+        seed_workspace,
+        web_origin,
+    )
 
 
 def install_endpoint_network_policy():
@@ -100,7 +113,16 @@ class AcceptanceAudit:
         from app.llm.contracts import ProviderCapabilityError
 
         payload = json.loads(request.messages[-1].content)
-        ids = {str(job["id"]) for job in payload["jobs"]}
+        purpose = payload.get("purpose", "recommendation")
+        if purpose not in {
+            "recommendation", "resume_autofill", "form_mapping", "application_answers"
+        }:
+            raise ProviderCapabilityError("Local acceptance refuses this model purpose")
+        ids = {str(job["id"]) for job in payload.get("jobs", [])}
+        if purpose == "recommendation" and not ids:
+            raise ProviderCapabilityError("Recommendation acceptance requires explicit jobs")
+        if purpose != "recommendation" and self.allowed_ids:
+            raise ProviderCapabilityError("Job-restricted acceptance cannot run a different workflow")
         if self.allowed_ids and not ids <= self.allowed_ids:
             raise ProviderCapabilityError(
                 "Local acceptance is restricted to its chosen jobs"
@@ -112,7 +134,8 @@ class AcceptanceAudit:
                 )
             self.calls += 1
             number = self.calls
-        # Private audit input contains sanitized professional text, never the key.
+        # Private audit may contain CV contact text. Keep it outside the repository;
+        # the model credential is never part of this payload.
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         (self.directory / f"call-{number:02d}-input.json").write_text(
             encoded, encoding="utf-8"
@@ -124,6 +147,7 @@ class AcceptanceAudit:
                 "request_id": request.request_id,
                 "input_sha256": hashlib.sha256(encoded.encode()).hexdigest(),
                 "job_count": len(ids),
+                "purpose": purpose,
             }
         )
         return number
@@ -142,6 +166,7 @@ class AcceptanceAudit:
 
 def recommendation_runtime(key: str, audit: AcceptanceAudit, *, revision: str):
     import httpx
+
     from app.ai_recommendations.runtime import AIRuntime
     from app.llm.deepseek import DeepSeekProvider
 
@@ -156,6 +181,9 @@ def recommendation_runtime(key: str, audit: AcceptanceAudit, *, revision: str):
             number = audit.start(request)
             try:
                 response = await self.provider.generate_structured(request)
+            except asyncio.CancelledError:
+                audit.event({"call": number, "event": "cancelled", "error_code": "provider_cancelled"})
+                raise
             except Exception as error:
                 code = getattr(error, "code", "provider_error")
                 audit.event({"call": number, "event": "failed", "error_code": code})
@@ -179,13 +207,13 @@ def recommendation_runtime(key: str, audit: AcceptanceAudit, *, revision: str):
     @asynccontextmanager
     async def factory():
         async with httpx.AsyncClient(
-            timeout=60, trust_env=False, follow_redirects=False
+            timeout=75, trust_env=False, follow_redirects=False
         ) as client:
             provider = DeepSeekProvider(
                 api_key=key,
                 base_url="https://api.deepseek.com",
                 model="deepseek-flash",
-                timeout_seconds=60,
+                timeout_seconds=75,
                 max_retries=0,
                 thinking="disabled",
                 client=client,
@@ -197,8 +225,8 @@ def recommendation_runtime(key: str, audit: AcceptanceAudit, *, revision: str):
         provider="deepseek",
         model="deepseek-flash",
         is_mock=False,
-        timeout_seconds=60,
-        max_output_tokens=12000,
+        timeout_seconds=75,
+        max_output_tokens=20000,
         revision=revision,
     )
 
@@ -211,6 +239,10 @@ def main(argv=None):
         "--web-origin", type=web_origin, default="http://127.0.0.1:15523"
     )
     parser.add_argument("--smtp-port", type=int, default=1027)
+    parser.add_argument(
+        "--extension-client-id", type=registered_extension_id,
+        help="Register this installed JobPilot extension ID for this process only; omitted keeps connections disabled",
+    )
     parser.add_argument("--allow-live-ai", action="store_true")
     parser.add_argument("--audit-directory", type=absolute_workspace, required=True)
     parser.add_argument("--allowed-jobs-file", type=Path)
@@ -243,8 +275,10 @@ def main(argv=None):
         origin=args.web_origin,
         smtp_port=args.smtp_port,
         collect_live=False,
+        extension_client_id=args.extension_client_id,
     )
     from app.ai_recommendations.runtime import get_ai_runtime
+    from app.autofill_assistant import get_form_plan_runtime
     from app.main import app
 
     key = getpass.getpass("Temporary DeepSeek key (hidden; not saved): ").strip()
@@ -256,11 +290,12 @@ def main(argv=None):
     )
     runtime = recommendation_runtime(key, audit, revision=args.runtime_revision)
     app.dependency_overrides[get_ai_runtime] = lambda: runtime
+    app.dependency_overrides[get_form_plan_runtime] = lambda: runtime
     restore = install_endpoint_network_policy()
     print(
         json.dumps(
             {
-                "mode": "local-ai-recommendations-only",
+                "mode": "local-ai-recommendations-and-autofill",
                 "key_saved": False,
                 "max_live_calls": args.max_live_calls,
                 "allowed_job_count": len(allowed),
@@ -277,6 +312,7 @@ def main(argv=None):
     finally:
         restore()
         app.dependency_overrides.pop(get_ai_runtime, None)
+        app.dependency_overrides.pop(get_form_plan_runtime, None)
     return 0
 
 

@@ -124,6 +124,10 @@ def test_helper_refuses_existing_unowned_or_incomplete_directory(tmp_path):
         ("--smtp-port", "18523"),
         ("--web-origin", "https://example.com"),
         ("--web-origin", "http://127.0.0.1:15523/with/path"),
+        ("--extension-client-id", "*"),
+        ("--extension-client-id", "a" * 31),
+        ("--extension-client-id", "q" * 32),
+        ("--extension-client-id", "A" * 32),
     ],
 )
 def test_helper_refuses_nonlocal_or_invalid_configuration_before_creating_files(
@@ -144,10 +148,12 @@ def test_helper_import_is_inert_and_process_configuration_blocks_models_and_remo
             "-c",
             """
 from pathlib import Path
-import sys, socket
+import sys, socket, json, os
 from scripts.local_feature_workspace import configure_process
 assert 'app.db.session' not in sys.modules
 configure_process(Path(sys.argv[1]), 'http://127.0.0.1:15523', 1027)
+assert json.loads(os.environ['EXTENSION_CLIENT_IDS']) == []
+assert json.loads(os.environ['EXTENSION_WEB_ORIGINS']) == ['http://127.0.0.1:15523']
 from app.llm import build_live_provider
 from app.llm.contracts import ProviderCapabilityError
 try:
@@ -181,6 +187,47 @@ print('local-only-no-live-model')
     assert response.returncode == 0, response.stderr
     assert response.stdout.strip() == "local-only-no-live-model"
     assert not (tmp_path / "local.sqlite").exists()
+
+
+def test_installed_extension_id_is_explicit_process_configuration_without_workspace_changes(tmp_path):
+    response = subprocess.run(
+        [sys.executable, "-c", """
+from pathlib import Path
+import json, os, sys
+from scripts.local_feature_workspace import configure_process
+configure_process(Path(sys.argv[1]), 'http://127.0.0.1:15523', 1027, extension_client_id='abcdefghijklmnopabcdefghijklmnop')
+from app.core.config import Settings
+settings = Settings()
+assert settings.extension_client_ids == ['abcdefghijklmnopabcdefghijklmnop']
+assert settings.extension_web_origins == ['http://127.0.0.1:15523']
+assert settings.cors_origins == ['http://127.0.0.1:15523']
+assert json.loads(os.environ['EXTENSION_CLIENT_IDS']) == settings.extension_client_ids
+assert not Path(sys.argv[1]).exists()
+print('explicit-extension-id-only')
+""", str(tmp_path / "not-created")],
+        cwd=ROOT,
+        env={**os.environ, "PYTHONPATH": str(ROOT), "EXTENSION_CLIENT_IDS": '["*"]'},
+        capture_output=True, text=True, timeout=15, check=False,
+    )
+    assert response.returncode == 0, response.stderr
+    assert response.stdout.strip() == "explicit-extension-id-only"
+
+
+@pytest.mark.parametrize("extension_id", [None, "abcdefghijklmnopabcdefghijklmnop"])
+def test_feature_helper_cli_forwards_only_the_selected_extension_id(tmp_path, monkeypatch, extension_id):
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    spec = importlib.util.spec_from_file_location("feature_workspace_cli_test", HELPER)
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    calls = []
+    monkeypatch.setattr(helper, "seed_workspace", lambda *args, **kwargs: calls.append(kwargs) or {})
+    monkeypatch.setattr(helper, "loopback_only", lambda: None)
+    arguments = ["--workspace", str(tmp_path / "not-created"), "--seed-only"]
+    if extension_id:
+        arguments += ["--extension-client-id", extension_id]
+    assert helper.main(arguments) == 0
+    assert calls[0]["extension_client_id"] == extension_id
+    assert not (tmp_path / "not-created").exists()
 
 
 def test_snapshot_cannot_replace_official_recipient(tmp_path):

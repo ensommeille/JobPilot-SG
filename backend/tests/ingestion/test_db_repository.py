@@ -127,6 +127,29 @@ def test_recrawl_backfills_original_url_without_inventing_it(db: Session) -> Non
     assert job.apply_url != job.source_url
 
 
+def test_description_blocks_backfill_preserves_canonical_input_and_clears_on_change(db: Session):
+    source = JobSource(name="Readable JD", source_type="mock", base_url="https://jobs.example.test")
+    db.add(source)
+    db.commit()
+    repository = SqlAlchemyJobRepository(db, source)
+    record = make_record()
+    repository.upsert([record])
+    db.commit()
+    job = db.scalar(select(JobPosting))
+    original_id = job.id
+    blocks = [{"kind": "paragraph", "text": record.description}]
+    stats = repository.upsert([make_record(description_blocks=blocks)])
+    db.commit()
+    assert stats.items_updated == 1
+    assert job.id == original_id and job.description == record.description
+    assert job.raw_hash == record.raw_hash and job.description_blocks == blocks
+    assert repository.upsert([record]).items_unchanged == 1
+    assert job.description_blocks == blocks
+    repository.upsert([make_record(description="New canonical JD.", raw_hash="2" * 64)])
+    db.commit()
+    assert job.description == "New canonical JD." and job.description_blocks is None
+
+
 def test_same_hash_refreshes_metadata_and_observation_time(db: Session) -> None:
     source = JobSource(name="Metadata", source_type="mock", base_url="https://jobs.example.test")
     db.add(source)

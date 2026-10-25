@@ -1,41 +1,38 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { getToken, watchSession } from '../services/auth'
-import {
-  fetchAICandidates, fetchAIRecommendationRun, startAIRecommendations,
-  type AICandidateFilters, type AICandidatePreview, type AIRecommendationRun,
-} from '../services/aiRecommendations'
+import { fetchAIRecommendationRun, startAIRecommendations, type AIRecommendationRun } from '../services/aiRecommendations'
+import type { JobId, JobView } from '../services/jobs'
+import { applicationAssistanceLabel } from '../services/jobs'
+import { jobDetailLocation } from '../services/jobBrowseState'
+import JobAdvice from './JobAdvice'
 import './AIRecommendations.css'
 
 const validRunId = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-const outcomeLabels = { supported: 'Supported', gap: 'Gap', unknown: 'Unknown' }
-const fieldLabels = { skills: 'Saved skills', education: 'Saved education', experience: 'Saved experience' }
-const categoryLabels = {
-  skill: 'Skill', responsibility: 'Responsibility', education: 'Education',
-  experience: 'Experience', work_constraint: 'Work condition', other: 'Other requirement',
-}
 const errorMessages: Record<string, string> = {
-  profile_required: 'Save your skills, education or project experience in your profile before comparing jobs.',
-  profile_needed: 'Save your skills, education or project experience in your profile before comparing jobs.',
-  no_candidates: 'No jobs are available for this comparison. Reload candidates and choose current postings.',
-  invalid_output: 'The model response could not be verified. No ranking is shown. Review the original jobs before trying again.',
-  provider_unavailable: 'The AI provider is unavailable. Check the saved run status before requesting another comparison.',
-  invalid_evidence: 'The model quotes could not be verified against the source text. No ranking is shown.',
+  profile_required: 'Save your skills, education or project experience in your profile, then return to recommend jobs.',
+  profile_needed: 'Save your skills, education or project experience in your profile, then return to recommend jobs.',
+  no_candidates: 'No current jobs with enough profile relevance were found. You can show all jobs and read the original postings.',
+  invalid_output: 'AI could not complete these recommendations. You can still browse all jobs.',
+  provider_unavailable: 'The AI provider is unavailable. Check the saved status before requesting recommendations again.',
+  invalid_evidence: 'AI could not complete these recommendations reliably. You can still browse all jobs.',
 }
 
 function failureMessage(code: string | null) {
-  return (code && errorMessages[code]) || 'This AI comparison could not be completed. Review your saved profile and selected jobs, then explicitly request another comparison if needed.'
+  return (code && errorMessages[code]) || 'Recommendations could not be completed. You can show all jobs, edit your saved profile and explicitly try again.'
 }
 
 function requestMessage(error: unknown, fallback: string) {
   if (!axios.isAxiosError(error)) return fallback
+  const detail = error.response?.data?.detail
+  if (typeof detail === 'string' && errorMessages[detail]) return errorMessages[detail]
   if (error.response?.status === 401) return 'Your session ended. Sign in again to continue.'
-  if (error.response?.status === 403) return 'AI recommendations are not enabled for this account or environment.'
-  if (error.response?.status === 404) return 'This saved comparison is unavailable for your account. Choose jobs to start a new comparison.'
-  if (error.response?.status === 422) return 'Review your saved profile and select between one and five current jobs.'
+  if (error.response?.status === 403) return 'Recommendations are not enabled for this account or environment.'
+  if (error.response?.status === 404) return 'These saved recommendations are unavailable for your account. Show all jobs or request recommendations again.'
+  if (error.response?.status === 422) return 'Save your skills, education or experience in your profile before requesting recommendations.'
   if (error.response?.status === 429) return 'The AI request limit has been reached. Check your existing result and try later.'
-  if (error.response?.status === 503) return 'AI recommendations are not configured or available here. Your profile and jobs are still available.'
+  if (error.response?.status === 503) return 'The AI model is unavailable here. Your saved profile and all jobs are still available.'
   return fallback
 }
 
@@ -44,63 +41,74 @@ function timeLabel(value: string) {
   return Number.isNaN(date.getTime()) ? 'Time unavailable' : date.toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-export default function AIRecommendations() {
-  const token = useSyncExternalStore(watchSession, getToken, getToken)
-  return <AIRecommendationsSession key={token ?? 'signed-out'} token={token} />
+interface Props {
+  children: ReactNode
+  jobs: JobView[]
+  favorites: JobId[]
+  favoritePending: JobId[]
+  favoritesDisabled: boolean
+  favoriteError: string
+  onToggleFavorite: (event: MouseEvent, id: JobId) => Promise<void>
 }
 
-function AIRecommendationsSession({ token }: { token: string | null }) {
+export default function AIRecommendations(props: Props) {
+  const token = useSyncExternalStore(watchSession, getToken, getToken)
+  return <RecommendationSession key={token ?? 'signed-out'} {...props} token={token} />
+}
+
+function RecommendationSession({ token, children, jobs, favorites, favoritePending, favoritesDisabled, favoriteError, onToggleFavorite }: Props & { token: string | null }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedRun = searchParams.get('ai_run') ?? ''
-  const [filters, setFilters] = useState<AICandidateFilters>({ keyword: '', city: '', job_type: '' })
-  const [preview, setPreview] = useState<AICandidatePreview | null>(null)
-  const [selected, setSelected] = useState<string[]>([])
-  const [confirmed, setConfirmed] = useState(false)
-  const [loadingCandidates, setLoadingCandidates] = useState(false)
-  const [candidateError, setCandidateError] = useState('')
+  const [recommendationView, setRecommendationView] = useState(Boolean(requestedRun))
+  const viewRequested = useRef(recommendationView)
   const [report, setReport] = useState<AIRecommendationRun | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [loadingRun, setLoadingRun] = useState(false)
   const [runError, setRunError] = useState('')
   const [pollError, setPollError] = useState('')
   const [pollVersion, setPollVersion] = useState(0)
-  const candidateRequest = useRef<AbortController | null>(null)
   const startRequest = useRef<AbortController | null>(null)
+  const savedRunRequest = useRef<AbortController | null>(null)
+  const savedRunGeneration = useRef(0)
   const busy = submitting || loadingRun || report?.status === 'running'
 
-  useEffect(() => () => {
-    candidateRequest.current?.abort()
-    startRequest.current?.abort()
-  }, [])
+  useEffect(() => () => { startRequest.current?.abort(); savedRunRequest.current?.abort() }, [])
 
   useEffect(() => {
     const request = new AbortController()
+    const generation = ++savedRunGeneration.current
+    savedRunRequest.current?.abort()
+    savedRunRequest.current = request
+    const isCurrent = () => !request.signal.aborted && getToken() === token && viewRequested.current
+      && savedRunRequest.current === request && savedRunGeneration.current === generation
     const load = async () => {
-      if (!token || !requestedRun) return
-      if (!validRunId(requestedRun)) { setRunError('The saved comparison link is invalid. Choose jobs below to start a comparison.'); return }
+      if (!token || !requestedRun || !viewRequested.current) return
+      if (!validRunId(requestedRun)) { setRunError('This saved result link is invalid. Show all jobs or request recommendations again.'); return }
       setLoadingRun(true)
       setRunError('')
       try {
         const response = await fetchAIRecommendationRun(requestedRun, {
           signal: request.signal, timeout: 15000, headers: { Authorization: `Bearer ${token}` },
         })
-        if (!request.signal.aborted && getToken() === token) {
+        if (isCurrent()) {
           setReport(previous => ({ ...response.data, reused: response.data.reused || Boolean(previous?.id === response.data.id && previous.reused) }))
+          viewRequested.current = true
+          setRecommendationView(true)
         }
       } catch (error) {
-        if (!request.signal.aborted && getToken() === token) setRunError(requestMessage(error, 'The saved comparison could not be loaded. Reload this page to check it; loading a saved run does not start a new AI call.'))
+        if (isCurrent()) setRunError(requestMessage(error, 'Saved recommendations could not be loaded. Reload to check them; this does not start a new AI call.'))
       } finally {
-        if (!request.signal.aborted && getToken() === token) setLoadingRun(false)
+        if (isCurrent()) setLoadingRun(false)
       }
     }
     void load()
-    return () => request.abort()
+    return () => { request.abort(); if (savedRunRequest.current === request) savedRunRequest.current = null }
   }, [requestedRun, token])
 
   const runId = report?.id
   const runStatus = report?.status
   useEffect(() => {
-    if (!token || !runId || runStatus !== 'running') return
+    if (!token || !runId || runStatus !== 'running' || !recommendationView) return
     const request = new AbortController()
     let timer: ReturnType<typeof setTimeout>
     let attempts = 0
@@ -116,154 +124,120 @@ function AIRecommendationsSession({ token }: { token: string | null }) {
         attempts += 1
         if (response.data.status === 'running') {
           if (attempts < 60) timer = setTimeout(poll, 2500)
-          else setPollError('The comparison is still running. Automatic status checks have paused. Check status below; this does not start another AI call.')
+          else setPollError('Recommendations are still running. Automatic status checks have paused. Check saved status below; this does not start another AI call.')
         }
       } catch (error) {
-        if (!request.signal.aborted && getToken() === token) setPollError(requestMessage(error, 'The status could not be refreshed. Check status below; no extra AI request will be sent.'))
+        if (!request.signal.aborted && getToken() === token) setPollError(requestMessage(error, 'Status could not be refreshed. Check saved status below; no extra AI request will be sent.'))
       }
     }
     timer = setTimeout(poll, 1500)
     return () => { clearTimeout(timer); request.abort() }
-  }, [runId, runStatus, token, pollVersion])
+  }, [runId, runStatus, token, pollVersion, recommendationView])
 
-  function changeFilter(key: keyof AICandidateFilters, value: string) {
-    candidateRequest.current?.abort()
-    candidateRequest.current = null
-    setLoadingCandidates(false)
-    setPreview(null)
-    setSelected([])
-    setConfirmed(false)
-    setCandidateError('')
-    setFilters(previous => ({ ...previous, [key]: value }))
+  function showAllJobs() {
+    viewRequested.current = false
+    savedRunGeneration.current += 1
+    savedRunRequest.current?.abort()
+    savedRunRequest.current = null
+    setRecommendationView(false)
+    setLoadingRun(false)
+    setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('ai_run'); return next }, { replace: true })
   }
 
-  async function loadCandidates() {
-    if (!token || getToken() !== token || loadingCandidates || busy) return
-    candidateRequest.current?.abort()
-    const request = new AbortController()
-    candidateRequest.current = request
-    setLoadingCandidates(true)
-    setCandidateError('')
-    setSelected([])
-    setConfirmed(false)
-    try {
-      const response = await fetchAICandidates(filters, {
-        signal: request.signal, timeout: 15000, headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!request.signal.aborted && getToken() === token) setPreview(response.data)
-    } catch (error) {
-      if (!request.signal.aborted && getToken() === token) setCandidateError(requestMessage(error, 'Candidate jobs could not be loaded. Try loading them again; this does not call the AI provider.'))
-    } finally {
-      if (candidateRequest.current === request) candidateRequest.current = null
-      if (!request.signal.aborted && getToken() === token) setLoadingCandidates(false)
+  async function recommendJobs() {
+    if (report?.status === 'running' && !recommendationView) {
+      viewRequested.current = true
+      setRecommendationView(true)
+      setSearchParams(previous => { const next = new URLSearchParams(previous); next.set('ai_run', report.id); return next }, { replace: true })
+      return
     }
-  }
-
-  function toggleJob(id: string) {
-    setConfirmed(false)
-    setSelected(previous => previous.includes(id) ? previous.filter(value => value !== id) : previous.length < 5 ? [...previous, id] : previous)
-  }
-
-  async function runComparison(event: React.FormEvent) {
-    event.preventDefault()
-    if (!token || getToken() !== token || startRequest.current || busy || !confirmed || !preview?.profile_ready || selected.length < 1 || selected.length > 5) return
+    if (!token || getToken() !== token || startRequest.current || busy) return
     const request = new AbortController()
     startRequest.current = request
+    viewRequested.current = true
+    setRecommendationView(true)
     setSubmitting(true)
+    setReport(null)
     setRunError('')
     setPollError('')
+    setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('ai_run'); return next }, { replace: true })
     try {
-      const response = await startAIRecommendations(selected, {
+      const response = await startAIRecommendations(undefined, {
         signal: request.signal, timeout: 90000, headers: { Authorization: `Bearer ${token}` },
       })
       if (request.signal.aborted || getToken() !== token) return
       setReport(response.data)
-      setSearchParams(previous => { const next = new URLSearchParams(previous); next.set('ai_run', response.data.id); return next }, { replace: true })
+      if (viewRequested.current) setSearchParams(previous => { const next = new URLSearchParams(previous); next.set('ai_run', response.data.id); return next }, { replace: true })
     } catch (error) {
-      if (!request.signal.aborted && getToken() === token) setRunError(requestMessage(error, 'The request could not be confirmed. No automatic retry was sent. Retry the same selection to retrieve an existing run if one was created.'))
+      if (!request.signal.aborted && getToken() === token) setRunError(requestMessage(error, 'The request could not be confirmed. No automatic retry was sent. Click Recommend to me again to retrieve the same saved run if one was created.'))
     } finally {
       if (startRequest.current === request) startRequest.current = null
-      if (!request.signal.aborted && getToken() === token) { setSubmitting(false); setConfirmed(false) }
+      if (!request.signal.aborted && getToken() === token) setSubmitting(false)
     }
   }
 
   const ranked = report?.status === 'succeeded' && report.result
-    ? [...report.result.items].sort((a, b) => a.rank - b.rank) : []
+    ? [...report.result.items].sort((a, b) => {
+      if (report.is_current === false) return a.rank - b.rank
+      const order = report.display_order ?? []
+      const first = order.indexOf(a.job_id)
+      const second = order.indexOf(b.job_id)
+      return (first < 0 ? a.rank + order.length : first) - (second < 0 ? b.rank + order.length : second)
+    }) : []
 
-  return <section className="ai-recommendations" aria-labelledby="ai-recommendations-title">
-    <div className="ai-recommendations-heading">
-      <h2 id="ai-recommendations-title">AI recommendations</h2>
-      <Link to="/profile?returnTo=%2Fjobs">Review saved profile</Link>
+  return <div className="job-recommendation-view">
+    <div className="recommendation-toolbar">
+      <div>
+        <button type="button" className="btn btn-primary" disabled={!token || submitting || loadingRun || (recommendationView && report?.status === 'running')} aria-describedby="recommendation-consent" onClick={() => { void recommendJobs() }}>{submitting || (recommendationView && report?.status === 'running') ? 'Finding recommendations…' : 'Recommend to me'}</button>
+        {recommendationView && <button type="button" className="btn btn-secondary" onClick={showAllJobs}>Show all jobs</button>}
+      </div>
+      <p id="recommendation-consent" className="muted">Uses your saved profile to shortlist current jobs and compare up to 5 with AI. Clicking agrees to share saved skills, education, experience and availability; a new analysis may incur a charge. <Link to="/profile">Edit profile</Link></p>
+      {!token && <p><Link to="/">Sign in</Link> and save your profile to get recommendations.</p>}
     </div>
-    <p>Ask the configured AI model to compare selected job descriptions with your saved skills, education and project experience. Review its ranking, reasons and source quotes before deciding where to apply.</p>
-    <p className="muted">This uses paid AI when a new comparison is needed. PDF files and contact fields are excluded. Saved results may be reused; loading candidates or checking a saved result does not call the model.</p>
-    {!token ? <p className="ai-notice"><Link to="/">Sign in</Link> and save your reviewed profile to select jobs for an AI comparison.</p>
-      : <form onSubmit={runComparison}>
-        <div className="ai-candidate-filters">
-          <label>Role or company (optional)<input className="input" maxLength={200} disabled={busy} value={filters.keyword} onChange={event => changeFilter('keyword', event.target.value)} /></label>
-          <label>City (optional)<input className="input" maxLength={120} disabled={busy} placeholder="Singapore" value={filters.city} onChange={event => changeFilter('city', event.target.value)} /></label>
-          <label>Job type (optional)<input className="input" maxLength={80} disabled={busy} placeholder="internship" value={filters.job_type} onChange={event => changeFilter('job_type', event.target.value)} /></label>
-        </div>
-        <div className="ai-actions"><button type="button" className="btn btn-secondary" disabled={loadingCandidates || busy} onClick={() => { void loadCandidates() }}>{loadingCandidates ? 'Loading candidates…' : 'Load candidate jobs'}</button><span className="muted">No AI call</span></div>
-        {loadingCandidates && <p role="status">Finding current candidates from saved jobs…</p>}
-        {candidateError && <p role="alert" className="ai-error">{candidateError}</p>}
-        {preview && <>
-          {!preview.profile_ready && <p className="ai-notice">Add saved skills, education or experience in <Link to="/profile?returnTo=%2Fjobs">your profile</Link>, then reload candidates. Uploading a PDF alone does not save its suggestions.</p>}
-          {preview.candidates.length ? <fieldset className="ai-candidates" disabled={busy || !preview.profile_ready}>
-            <legend>Choose 1–5 jobs to compare</legend>
-            <p className="muted">These are candidates for review. This list is not an AI ranking or an eligibility assessment.</p>
-            <ul>{preview.candidates.map(job => <li key={job.id}>
-              <label className="ai-candidate-choice"><input type="checkbox" checked={selected.includes(job.id)} disabled={!selected.includes(job.id) && selected.length >= 5} onChange={() => toggleJob(job.id)} /><span><strong>{job.title}</strong><span className="muted">{job.company} · {job.city || 'City unspecified'} · {job.job_type || 'Type unspecified'}</span></span></label>
-              <Link to={`/jobs/${job.id}`} target="_blank" rel="noopener noreferrer">Review job<span className="ai-sr-only">: {job.title}</span></Link>
-            </li>)}</ul>
-          </fieldset> : <p className="ai-notice">No candidate jobs were found. Clear a filter and load candidates again, or browse stored jobs below.</p>}
-          {preview.truncated && <p className="muted">Showing a limited candidate set from {preview.scanned} scanned jobs. Narrow the filters to explore other roles.</p>}
-          {!!preview.candidates.length && <>
-            <p role="status" className="ai-selection-count">{selected.length} of 5 selected.{selected.length === 5 ? ' Uncheck a job before adding another.' : ''}</p>
-            <label className="ai-consent"><input type="checkbox" checked={confirmed} disabled={busy || !preview.profile_ready || selected.length === 0} onChange={event => setConfirmed(event.target.checked)} /><span>I confirm these selected jobs and agree to share my saved skills, education and experience with the configured AI provider for this comparison. A new run may incur an AI charge.</span></label>
-            <div className="ai-actions"><button className="btn btn-primary" disabled={busy || loadingCandidates || !confirmed || !preview.profile_ready || selected.length === 0}>{submitting ? 'Requesting comparison…' : `Compare ${selected.length || 'selected'} ${selected.length === 1 ? 'job' : 'jobs'} with AI`}</button></div>
-          </>}
-        </>}
-      </form>}
-    {submitting && <p role="status">Waiting for the AI comparison. This may take a minute. Leaving this page stops waiting here; it does not cancel a run already started on the server. No automatic model retry is sent.</p>}
-    {loadingRun && <p role="status">Loading saved AI comparison. No new model call is being requested…</p>}
-    {runError && <p role="alert" className="ai-error">{runError}</p>}
-    {report && <section className="ai-comparison" aria-labelledby="ai-result-title" aria-busy={report.status === 'running'}>
-      <div className="ai-recommendations-heading"><h3 id="ai-result-title">{report.status === 'running' ? 'AI comparison in progress' : report.status === 'failed' ? 'AI comparison unavailable' : 'AI comparison to review'}</h3><span className="ai-run-state">{report.execution_mode === 'mock' ? 'Mock preview' : 'Live AI'}{report.reused ? ' · Reused saved run' : ''}</span></div>
-      <p className="muted">{report.provider} · {report.model} · Requested {timeLabel(report.started_at)}</p>
-      <p className="muted">This result uses the saved profile and job descriptions from this run. After saving profile changes, explicitly request a new comparison to use them.</p>
-      {report.execution_mode === 'mock' && <p className="ai-notice">This is a mock preview, not a live model recommendation.</p>}
-      {report.status === 'running' && <>
-        <p role="status">Comparing {report.candidates.length} selected jobs. Status checks do not start another AI call. Leaving this page does not cancel the server run.</p>
+
+    {!recommendationView ? children : <section className="ai-recommendations" aria-labelledby="recommendation-results-title" aria-busy={submitting || loadingRun || report?.status === 'running'}>
+      <div className="ai-recommendations-heading">
+        <h2 id="recommendation-results-title">{report?.is_current === false && report.status === 'succeeded' ? 'Historical comparison' : 'Recommended for you'}</h2>
+        {report && <span className="ai-run-state">{report.execution_mode === 'mock' ? 'Mock preview' : 'Live AI'}{report.is_current === false ? `${report.reused ? ' · Saved result' : ''} · Out of date` : report.reused ? ' · Saved result' : ''}</span>}
+      </div>
+      {submitting && <p role="status">Finding relevant jobs and comparing them with your saved profile. This may take a minute. Leaving this view does not cancel a run already started.</p>}
+      {loadingRun && <p role="status">Loading saved recommendations. No new AI call is being requested…</p>}
+      {runError && <p role="alert" className="ai-error">{runError} <Link to="/profile">Edit profile</Link></p>}
+      {report?.execution_mode === 'mock' && <p className="ai-notice">This is a mock preview, not a live recommendation. Show all jobs to browse current postings.</p>}
+      {report?.status === 'running' && <>
+        <p role="status">Comparing {report.candidates.length} shortlisted jobs. Checking status does not call the AI model again.</p>
         <ul className="ai-running-jobs">{report.candidates.map(job => <li key={job.id}>{job.title} · {job.company}</li>)}</ul>
         {pollError && <p role="alert" className="ai-error">{pollError}</p>}
         <button type="button" className="btn btn-secondary" onClick={() => { setPollError(''); setPollVersion(value => value + 1) }}>Check saved status</button>
       </>}
-      {report.status === 'failed' && <p role="alert" className="ai-error">{failureMessage(report.error_code)}{report.error_code && <span className="ai-error-code">Reference: {report.error_code}</span>}</p>}
-      {report.status === 'succeeded' && <>
-        <p className="ai-notice">Model suggestions require review. Supported, Gap and Unknown describe the model’s reading of the saved evidence; they do not verify proficiency, eligibility or employer acceptance.</p>
-        {!ranked.length && <p>No ranked jobs were returned. Review the selected postings directly.</p>}
-        <ol className="ai-ranked-jobs">{ranked.map((item, index) => {
-          const job = report.candidates.find(candidate => candidate.id === item.job_id)
+      {report?.status === 'failed' && <p role="alert" className="ai-error">{failureMessage(report.error_code)}</p>}
+      {report?.status === 'succeeded' && <>
+        {report.is_current === false ? <p className="ai-notice" role="status">Historical result: the profile, jobs or analysis rules have changed. Click Recommend to me for an up-to-date comparison; no new analysis starts automatically.</p>
+          : <p className="muted">{ranked.length} shortlisted {ranked.length === 1 ? 'job' : 'jobs'}, ranked using your saved profile. Browse filters are paused in this view; Show all jobs restores them.</p>}
+        {favoriteError && <p role="alert" className="ai-error">{favoriteError} Show all jobs to reload saved jobs.</p>}
+        {!ranked.length && <p>No ranked jobs were returned. Show all jobs to read current postings.</p>}
+        <ol className="ai-ranked-jobs">{ranked.map(item => {
+          const candidate = report.candidates.find(value => value.id === item.job_id)
+          const job = jobs.find(value => String(value.id) === item.job_id)
+          const favoriteId = job?.id ?? item.job_id
+          const saved = favorites.includes(favoriteId)
           return <li key={item.job_id}>
-            <p className="ai-rank">AI order {item.rank}</p>
-            <h3><Link to={`/jobs/${item.job_id}`}>{job?.title || 'View selected job'}</Link></h3>
-            {job && <p className="muted">{job.company} · {job.city || 'City unspecified'} · {job.job_type || 'Type unspecified'}</p>}
-            <p className="ai-summary">{item.summary}</p>
-            {!!item.warnings.length && <ul className="ai-warnings">{item.warnings.map((warning, warningIndex) => <li key={warningIndex}>{warning}</li>)}</ul>}
-            <details open={index === 0} className="ai-evidence-details"><summary>Review {item.requirements.length} requirements and source quotes</summary>
-              <ul className="ai-requirements">{item.requirements.map((requirement, requirementIndex) => <li key={requirementIndex}>
-                <div className="ai-requirement-heading"><h4>{requirement.requirement}</h4><strong className={`ai-outcome ai-outcome-${requirement.outcome}`}>{outcomeLabels[requirement.outcome]}</strong></div>
-                <p className="muted">{categoryLabels[requirement.category]} · Model assessment</p>
-                <p>{requirement.reason}</p>
-                <dl className="ai-quotes"><div><dt>Job description quote</dt><dd>{requirement.jd_quote}</dd></div><div><dt>{requirement.profile_field ? fieldLabels[requirement.profile_field] : 'Saved profile evidence'}</dt><dd>{requirement.profile_quote || 'No explicit saved evidence cited. More information or manual review is needed.'}</dd></div></dl>
-              </li>)}</ul>
-            </details>
-            <div className="ai-actions"><Link to={`/jobs/${item.job_id}`}>View job and original posting</Link><Link to={`/jobs/${item.job_id}/prepare`}>Prepare application</Link></div>
+            <article className="ai-job-result">
+              <div className="ai-job-heading">
+                <div><h3><Link to={jobDetailLocation(item.job_id, searchParams.get('browse'), report.id)}>{candidate?.title || 'View job'}</Link></h3>
+                  {candidate && <p className="muted">{candidate.company} · {candidate.city || 'City unspecified'} · {candidate.job_type || 'Type unspecified'}</p>}
+                  {job?.source && report.is_current !== false && <p className="ai-job-source muted">Source: {job.source}{job.salaryText ? ` · ${job.salaryText}` : ''}</p>}
+                  {job?.applicationAssistance && report.is_current !== false && <p className="ai-job-source muted">{applicationAssistanceLabel(job.applicationAssistance)}</p>}
+                </div>
+                <button type="button" className={`icon-btn ${saved ? 'saved' : ''}`} aria-label={`${saved ? 'Remove from saved' : 'Save job'}: ${candidate?.title || 'recommended job'}`} aria-pressed={saved} disabled={favoritesDisabled || favoritePending.includes(favoriteId)} onClick={event => { void onToggleFavorite(event, favoriteId) }}><svg width="18" height="18" viewBox="0 0 24 24" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z" /></svg></button>
+              </div>
+              <JobAdvice assessment={item} advice={report.advice?.[item.job_id] ?? null} historical={report.is_current === false} />
+              <div className="ai-actions">{report.is_current !== false && <Link to={`/jobs/${item.job_id}/prepare`} className="btn btn-secondary">Prepare application</Link>}<Link to={jobDetailLocation(item.job_id, searchParams.get('browse'), report.id)}>{report.is_current === false ? 'View current job' : 'View job and original posting'}</Link></div>
+            </article>
           </li>
         })}</ol>
       </>}
-      <details className="ai-run-details"><summary>Comparison details</summary><p>Provider: {report.provider}. Model: {report.model}. Prompt version: {report.prompt_version}.</p><p>{report.profile_skill_count} saved skill entries supplied. {report.candidates.length} jobs selected.</p><p>{report.usage.input_tokens === null && report.usage.output_tokens === null ? 'Token usage was not reported.' : `Input tokens: ${report.usage.input_tokens ?? 'not reported'} · Output tokens: ${report.usage.output_tokens ?? 'not reported'}`}</p></details>
+      {report && <details className="ai-run-details"><summary>About this analysis</summary><p>AI-assisted guidance based on your saved profile and these jobs. Hiring decisions remain with the employer.</p><p>{report.provider} · {report.model} · {timeLabel(report.started_at)}</p>{report.reused && <p>This view uses a saved result.</p>}<p>Profile or job changes may require a new analysis. Identical inputs reuse the saved result.</p>{report.error_code && <p>Reference: {report.error_code}</p>}</details>}
     </section>}
-  </section>
+  </div>
 }

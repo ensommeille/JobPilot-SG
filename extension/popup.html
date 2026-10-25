@@ -2,49 +2,52 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JobPilot — Review & Fill</title><link rel="stylesheet" href="popup.css"></head>
 <body>
-<header><h1>JobPilot <span>Application companion</span></h1></header>
+<header><h1>JobPilot <span id="runtime-version">Review & fill</span></h1></header>
 <main>
 <form id="login">
   <h2>Use your saved details</h2>
-  <p>Connect once, then review and fill applications in JobPilot. No extra password here.</p>
+  <p>Connect once. Opening the extension then loads the current supported form and your saved answers. No extra password here.</p>
   <button type="submit">Connect through JobPilot</button>
   <details id="connection-settings">
     <summary>Connection settings</summary>
     <label for="platform">JobPilot platform</label>
-    <select id="platform"><option value="http://127.0.0.1:5173">Local demo (127.0.0.1)</option><option value="http://localhost:5173">Local development (localhost)</option><option value="http://127.0.0.1:5174">Isolated ATS acceptance (127.0.0.1:5174)</option></select>
+    <select id="platform"><option value="http://127.0.0.1:15523">Current local JobPilot (127.0.0.1:15523)</option><option value="http://127.0.0.1:5173">Local demo (127.0.0.1)</option><option value="http://localhost:5173">Local development (localhost)</option><option value="http://127.0.0.1:5174">Isolated ATS acceptance (127.0.0.1:5174)</option></select>
     <p id="extension-id"></p>
   </details>
 </form>
 <section id="workspace" hidden>
-  <h2>Connected to JobPilot</h2>
-  <p id="account"></p>
-  <a id="open-jobpilot" class="primary-action" target="_blank" rel="noopener noreferrer">Open JobPilot</a>
-  <p class="field-reason">Maintain your details and review applications on the platform.</p>
+  <div class="account-row"><p id="account"></p><a id="open-jobpilot" target="_blank" rel="noopener noreferrer">Open JobPilot</a></div>
+  <p id="active-tool" class="field-reason">Checking the current application…</p>
+  <p id="preparation-status" class="preparation-status" role="status" aria-live="polite" hidden></p>
+  <div id="workspace-content" tabindex="0" aria-label="Application preview and settings">
+  <details id="ats-tools">
+    <summary>ATS application</summary>
+    <p id="ats-intro" class="field-reason">Saved PDF and Profile answers load automatically. Missing narrative answers prepare in the background.</p>
+    <p id="ats-target" class="field-reason"></p>
+    <p id="ats-profile-note" class="field-reason" hidden>Saved facts and editable AI drafts · edits apply here only.</p>
+    <p id="ats-counts" class="field-reason" aria-live="polite" hidden></p>
+    <div id="ats-fields"></div>
+    <section id="ats-attachment" hidden aria-label="Attach saved resume">
+      <p id="ats-resume" class="field-reason"></p>
+      <button id="ats-attach" type="button" class="secondary" disabled>Attach saved PDF</button>
+      <p class="field-reason">This may upload the PDF to the employer immediately. It does not submit your application.</p>
+      <p id="ats-attach-result" role="status" aria-live="polite"></p>
+    </section>
+    <details id="ats-manual" hidden></details>
+    <details class="form-help"><summary>What stays manual?</summary><p>Check AI drafts and unresolved answers. Attach your PDF separately. Personal declarations, consent, CAPTCHA and final submission remain yours.</p></details>
+  </details>
+  <details id="original-tools">
+  <summary>InternSG</summary>
   <section id="embedded-access" aria-label="InternSG access">
     <p id="embedded-status" role="status">Checking InternSG access…</p>
     <button id="enable-embedded" class="secondary" type="button" hidden>Enable embedded InternSG access</button>
     <p id="embedded-help" class="field-reason" hidden>Allow JobPilot and InternSG access to fill the form you review. Other websites are not read.</p>
   </section>
-  <details id="ats-tools">
-    <summary>Greenhouse / Lever — review & fill</summary>
-    <p>Open a hosted application form in the active tab. Common text questions can use facts already saved in your JobPilot profile. Check each proposed answer against the original question and tick it before filling. Unsupported questions, files, consent, CAPTCHA and final submission stay manual. No resume file is read or uploaded.</p>
-    <button id="ats-inspect" class="secondary" type="button">Read form & load saved details</button>
-    <p id="ats-target" class="field-reason"></p>
-    <div id="ats-fields"></div>
-    <details id="ats-manual" class="notice" hidden></details>
-    <button id="ats-fill" type="button" disabled>Fill reviewed fields only</button>
-    <p id="ats-result" role="status" aria-live="polite">Nothing was submitted.</p>
-  </details>
-  <details id="original-tools">
-  <summary>Original-site tools</summary>
-  <p>Use these fallback tools if you cannot fill from JobPilot.</p>
-  <p id="target">Open an InternSG application page, then read its fields.</p>
-  <button id="inspect" class="secondary" type="button">Read page & load profile</button>
-  <p class="field-reason">Read again after updating your JobPilot profile. Edits here apply only to this application.</p>
+  <p id="target">Loading the current InternSG form…</p>
+  <button id="inspect" class="secondary recovery-action" type="button" hidden>Refresh form</button>
+  <p class="field-reason">Saved answers load automatically. A missing introduction prepares from your saved evidence. Fill uses only this preview.</p>
   <div id="fields"></div>
-  <p class="notice">Clicking Fill application form approves the answers shown above and replaces nationality and study country when both are selected. Existing text stays unchanged. CAPTCHA, files and site consent remain manual. Nothing is submitted.</p>
-  <button id="fill" type="button" disabled>Fill application form</button>
-  <details id="advanced-submission" class="submission">
+  <details id="advanced-submission" class="submission" hidden>
     <summary>Advanced: send from the original site</summary>
     <p>First finish filling and complete CAPTCHA on InternSG. Then review the actual website answers below. This sends a real application, not a test.</p>
     <button id="prepare-submit" class="secondary" type="button">Review website answers before sending</button>
@@ -70,7 +73,7 @@
     <label for="local-period">Availability period</label><input id="local-period" maxlength="500" placeholder="Enter your actual start and end dates">
     <label for="local-summary">Reusable summary (plain text)</label><textarea id="local-summary" maxlength="3000" aria-describedby="summary-help"></textarea>
     <p id="summary-help">Write your own introduction and save it to reuse in future applications. No AI generation is used.</p>
-    <p>Country selections in Original-site tools are saved with these details after you read a supported page. Nothing is inferred from your resume.</p>
+    <p>Country selections in InternSG tools are saved with these details after the supported form loads. Nothing is inferred from your resume.</p>
     <button id="save-local" class="secondary" type="button">Save on this device</button>
     <button id="clear-local" class="secondary" type="button">Delete saved details</button>
     <p>Applications now use your JobPilot profile, not this device copy. Review the text above and the saved countries below before importing. Existing platform values are never replaced. Afterwards, maintain your details in JobPilot.</p>
@@ -79,6 +82,19 @@
     <button id="import-local" class="secondary" type="button" disabled>Import reviewed details to JobPilot</button>
   </details>
   </details>
+  </div>
+  <footer id="review-actions" hidden>
+    <div id="ats-actions" hidden>
+      <p id="ats-consent" class="field-reason" hidden>Fill approves this preview. Existing answers stay unchanged.</p>
+      <button id="ats-fill" type="button" aria-describedby="ats-consent" disabled hidden>Fill application form</button>
+      <button id="ats-inspect" class="secondary recovery-action" type="button" hidden>Refresh form</button>
+      <p id="ats-result" role="status" aria-live="polite"></p>
+    </div>
+    <div id="original-actions" hidden>
+      <p class="field-reason">Fill approves these answers and both selected countries. Attach your PDF, complete CAPTCHA and submit on InternSG yourself.</p>
+      <button id="fill" type="button" disabled>Fill application form</button>
+    </div>
+  </footer>
 </section>
 <p id="status" role="status" aria-live="polite">Ready to connect.</p>
 </main>

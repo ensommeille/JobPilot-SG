@@ -2,6 +2,6 @@
   "name": "jobpilot-browser-assistant",
   "private": true,
   "type": "module",
-  "scripts": {"test": "playwright test", "check": "node --check popup.js && node --check ats-page.js && node --check page.js && node --check widgets.js && node --check submission.js && node --check frames.js && node --check background.js && node --check connection.js && node --check application-bridge.js"},
+  "scripts": {"test:unit": "node --test node-tests/*.test.mjs", "test": "npm run test:unit && playwright test", "check": "node --check popup.js && node --check popup-preparation.js && node --check popup-autoload.js && node --check ats-page.js && node --check page.js && node --check widgets.js && node --check submission.js && node --check frames.js && node --check background.js && node --check connection.js && node --check application-bridge.js"},
   "devDependencies": {"@playwright/test": "1.64.0"}
 }

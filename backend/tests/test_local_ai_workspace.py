@@ -1,5 +1,6 @@
 """The opt-in acceptance helper never grants general outbound access or extra calls."""
 
+import asyncio
 import importlib.util
 import json
 import socket
@@ -89,3 +90,87 @@ def test_helper_audit_has_a_hard_call_budget_and_exact_job_allowlist(local_ai, t
     assert json.loads(inputs[0].read_text("utf-8"))["profile"]["skills"] == ["Python"]
     events = (tmp_path / "model-call-ledger.jsonl").read_text("utf-8").splitlines()
     assert len(events) == 1 and json.loads(events[0])["job_count"] == 1
+
+
+def test_autofill_purposes_share_budget_but_cannot_escape_a_job_allowlist(local_ai, tmp_path):
+    def request(purpose):
+        return SimpleNamespace(request_id="offline", messages=[SimpleNamespace(content=json.dumps({"purpose": purpose, "text": "Fictional resume source"}))])
+
+    restricted = local_ai.AcceptanceAudit(tmp_path / "restricted", max_calls=3, allowed_ids={"chosen"})
+    for purpose in ("resume_autofill", "form_mapping", "application_answers"):
+        with pytest.raises(ProviderCapabilityError):
+            restricted.start(request(purpose))
+    assert restricted.calls == 0
+    audit = local_ai.AcceptanceAudit(tmp_path / "autofill", max_calls=3, allowed_ids=set())
+    assert audit.start(request("resume_autofill")) == 1
+    assert audit.start(request("form_mapping")) == 2
+    assert audit.start(request("application_answers")) == 3
+    with pytest.raises(ProviderCapabilityError):
+        audit.start(request("application_answers"))
+    with pytest.raises(ProviderCapabilityError):
+        audit.start(request("arbitrary_provider_workflow"))
+    events = [json.loads(line) for line in (audit.directory / "model-call-ledger.jsonl").read_text().splitlines()]
+    assert [event["purpose"] for event in events] == ["resume_autofill", "form_mapping", "application_answers"]
+    assert len(events) == 3
+
+
+def test_bounded_answer_preparation_cancellation_is_audited_and_consumes_one_call(
+    local_ai, tmp_path, monkeypatch
+):
+    calls = []
+
+    class WaitingProvider:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def generate_structured(self, request):
+            calls.append(request.request_id)
+            await asyncio.sleep(60)
+
+    monkeypatch.setattr("app.llm.deepseek.DeepSeekProvider", WaitingProvider)
+    audit = local_ai.AcceptanceAudit(tmp_path / "answers", max_calls=1, allowed_ids=set())
+    runtime = local_ai.recommendation_runtime("offline-fixture-only", audit, revision="offline-test")
+    request = SimpleNamespace(request_id="bounded-preparation", messages=[SimpleNamespace(
+        content=json.dumps({"purpose": "application_answers", "source_catalog": []})
+    )])
+
+    async def run():
+        async with runtime.provider_factory() as provider:
+            with pytest.raises(TimeoutError):
+                await asyncio.wait_for(provider.generate_structured(request), timeout=0.01)
+            with pytest.raises(ProviderCapabilityError):
+                await provider.generate_structured(request)
+
+    asyncio.run(run())
+    assert calls == ["bounded-preparation"]
+    assert audit.calls == 1
+    events = [json.loads(line) for line in
+              (audit.directory / "model-call-ledger.jsonl").read_text().splitlines()]
+    assert [event["event"] for event in events] == ["started", "cancelled"]
+    assert events[-1]["error_code"] == "provider_cancelled"
+
+
+@pytest.mark.parametrize("extension_id", [None, "abcdefghijklmnopabcdefghijklmnop"])
+def test_ai_helper_forwards_extension_registration_before_any_model_runtime(
+    local_ai, tmp_path, monkeypatch, extension_id
+):
+    class StopBeforeRuntime(Exception):
+        pass
+
+    calls = []
+
+    def seed(*args, **kwargs):
+        calls.append(kwargs)
+        raise StopBeforeRuntime
+
+    monkeypatch.setattr(local_ai, "seed_workspace", seed)
+    monkeypatch.setattr(local_ai.sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    arguments = ["--workspace", str(tmp_path / "workspace"), "--allow-live-ai",
+                 "--audit-directory", str(tmp_path / "audit")]
+    if extension_id:
+        arguments += ["--extension-client-id", extension_id]
+    with pytest.raises(StopBeforeRuntime):
+        local_ai.main(arguments)
+    assert calls[0]["extension_client_id"] == extension_id
+    assert not (tmp_path / "workspace").exists()
+    assert not (tmp_path / "audit").exists()

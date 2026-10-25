@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import api from '../services/api'
 import { getToken } from '../services/auth'
 import { countries } from '../services/countries'
@@ -8,6 +8,9 @@ import { applicationFields, draftFingerprint, parseApplicationReview, parseFillR
   type ApplicationFieldId, type ApplicationValues, type CountryChoices,
   type FillReport, type SavedApplicationDraft } from '../services/applicationPreparation'
 import InternSGApplication from './InternSGApplication'
+import ExtensionStatus from './ExtensionStatus'
+import PreparedAnswersStatus from './PreparedAnswersStatus'
+import { useApplicationFacts, usePreparedAnswers } from '../hooks/usePreparedAnswers'
 import './ApplicationPreparation.css'
 
 export default function ApplicationPreparation({jobId, url, token}: {jobId: string; url: string; token: string}) {
@@ -20,12 +23,44 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
   const [error, setError] = useState('')
   const [report, setReport] = useState<FillReport | null>(null)
   const [frameLoaded, setFrameLoaded] = useState(false)
+  const [extensionConnected, setExtensionConnected] = useState(false)
+  const [editingSaved, setEditingSaved] = useState(false)
+  const [factsRevision, setFactsRevision] = useState(0)
+  const [editedFields, setEditedFields] = useState<ApplicationFieldId[]>([])
+  const [editedCountries, setEditedCountries] = useState(false)
+  const [fillStarted, setFillStarted] = useState(false)
   const alive = useRef(true)
   const generation = useRef(0)
   const busy = useRef(false)
   const filling = useRef(false)
   const draftRequest = useRef<AbortController | null>(null)
-  const profileLink = '/profile?returnTo=' + encodeURIComponent(`/jobs/${jobId}/apply-external`)
+  const [search] = useSearchParams()
+  const requestedResume = search.get('resume')
+  const attachmentResumeId = requestedResume && /^[a-f0-9-]{36}$/i.test(requestedResume) ? requestedResume : undefined
+  const facts = useApplicationFacts(token, true, factsRevision)
+  const preparation = usePreparedAnswers({ token, jobId, profile: facts, enabled: !!savedDraft && !draftBusy, attachmentResumeId })
+  const profileLink = '/profile?returnTo=' + encodeURIComponent(`/jobs/${jobId}/apply-external${attachmentResumeId ? `?resume=${attachmentResumeId}` : ''}`)
+  const shownValues = { ...values }
+  const shownChoices = { ...choices }
+  const canUsePrepared = !fillStarted && !['pdf_mismatch', 'pdf_selection'].includes(preparation.phase)
+  const factKeys: Record<ApplicationFieldId, string> = { applicant_name: 'full_name', applicant_email: 'contact_email',
+    applicant_contact: 'phone', applicant_period: 'availability_period', applicant_summary: 'resume_summary' }
+  if (savedDraft && facts && canUsePrepared) {
+    for (const field of applicationFields) if (!editedFields.includes(field.id) && !shownValues[field.id].trim()
+      && !savedDraft.values[field.id].trim()) {
+      const value = facts.values[factKeys[field.id]]
+      if (value && value.length <= field.maxLength) shownValues[field.id] = value
+    }
+    if (!editedCountries) {
+      if (!shownChoices.nationality && !savedDraft.countries.nationality) shownChoices.nationality = facts.values.nationality || ''
+      if (!shownChoices.campus && !savedDraft.countries.campus) shownChoices.campus = facts.values.study_country || ''
+    }
+  }
+  const introduction = preparation.report?.answers.find(answer => answer.field_id === 'intro'
+    && ['saved', 'ai_draft'].includes(answer.source) && answer.value.trim() && answer.value.length <= 3000)
+  const useIntroduction = !!savedDraft && canUsePrepared && !editedFields.includes('applicant_summary')
+    && !savedDraft.values.applicant_summary.trim() && !shownValues.applicant_summary.trim() && !!introduction
+  if (useIntroduction) shownValues.applicant_summary = introduction!.value
 
   const loadDraft = useCallback(() => {
     if (busy.current || getToken() !== token) return
@@ -38,6 +73,7 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
       if (!alive.current || request.signal.aborted || getToken() !== token) return
       const draft = parseSavedDraft(response.data)
       setSavedDraft(draft); setValues(draft.values); setChoices(draft.countries)
+      setEditedFields([]); setEditedCountries(false); setFillStarted(false)
     }).catch(err => {
       if (alive.current && !request.signal.aborted && getToken() === token) setDraftError(err instanceof Error && !('isAxiosError' in err)
         ? err.message : 'Could not load saved application details. Your account has not been changed. Try loading them again.')
@@ -49,6 +85,9 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
     generation.current++
     setReport(null); setError('')
     setDraftBusy(true); setDraftError(''); setSavedDraft(null)
+    setEditingSaved(false)
+    setExtensionConnected(false)
+    setFactsRevision(value => value + 1)
     void loadDraft()
   }
 
@@ -74,10 +113,11 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
 
   const handleFill = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (busy.current || !savedDraft || draftBusy || !frameLoaded || getToken() !== token) return
+    if (busy.current || !savedDraft || draftBusy || !frameLoaded || !extensionConnected || getToken() !== token) return
     if (!event.currentTarget.reportValidity()) return
     // The explicit click approves this snapshot, never later edits or a stale review.
-    const shown = {values: {...values}, countries: {...choices}}
+    const shown = {values: {...shownValues}, countries: {...shownChoices}}
+    setValues(shown.values); setChoices(shown.countries); setFillStarted(true)
     const version = ++generation.current
     let dispatched = false
     busy.current = true; setOperation('inspect'); setError(''); setReport(null)
@@ -123,78 +163,79 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
   }
 
   function changeValue(id: ApplicationFieldId, value: string) {
+    setEditedFields(previous => previous.includes(id) ? previous : [...previous, id])
     setValues(previous => ({...previous, [id]: value})); setReport(null)
   }
   function fieldReason(id: ApplicationFieldId) {
     if (report?.filled.includes(id)) return 'Filled. Check the answer on the original form.'
     if (report?.skipped.includes(id)) return report.reasons[id]
-    if (!values[id].trim()) return 'No saved answer. Add one here for this application, or update your profile to reuse it.'
+    if (id === 'applicant_summary' && useIntroduction && introduction?.source === 'ai_draft') return `${preparation.report?.execution_mode === 'mock' ? 'Mock ' : ''}AI draft for this application. Review or edit it before filling.`
+    if (!shownValues[id].trim()) return 'No saved answer. Add one here for this application, or update your profile to reuse it.'
     return null
   }
-  const missingCount = applicationFields.filter(field => !values[field.id].trim()).length
-    + Number(!choices.nationality) + Number(!choices.campus)
+  const missingCount = applicationFields.filter(field => !shownValues[field.id].trim()).length
+    + Number(!shownChoices.nationality) + Number(!shownChoices.campus)
+
+  const hasMissingSavedAnswers = savedDraft && (applicationFields.some(field => !savedDraft.values[field.id].trim()) || !savedDraft.countries.nationality || !savedDraft.countries.campus)
+  const fillState = operation === 'inspect' ? 'Checking the original form…' : operation === 'fill' ? 'Filling approved answers…'
+    : !frameLoaded ? 'Waiting for the original form to load.' : !extensionConnected ? 'Connect this account’s extension to fill supported fields.'
+      : draftBusy ? 'Loading saved details…' : 'Ready to fill your saved details.'
 
   return <div className="application-preparation">
     <section className="application-review" aria-labelledby="application-review-title" aria-busy={draftBusy}>
-      <header className="stack">
-        <h2 id="application-review-title">Review your application details</h2>
-        <p>Review or edit your saved details, then fill the original form in one click. Your introduction stays user-written.</p>
-        <p className="muted">Edits here apply only to this review. <Link to={profileLink}>Update my saved profile</Link> to reuse changes in future applications.</p>
+      <header className="preparation-summary">
+        <h2 id="application-review-title">Your application details</h2>
+        {savedDraft && <p role="status">{missingCount ? `${7 - missingCount} application details ready; ${missingCount} need your input.` : 'All seven application details are ready.'} No need to type them again.</p>}
+        <PreparedAnswersStatus state={preparation} profileLink={profileLink} />
       </header>
       {draftBusy && <p role="status" className="preparation-loading">Loading your saved application details…</p>}
-      {draftError && <p role="alert" className="alert alert-error">{draftError}</p>}
-      <div className="preparation-actions">
-        <button type="button" className="btn btn-secondary" disabled={draftBusy || !!operation} onClick={() => void reloadDraft()}>Reload saved details</button>
-        <span className="muted">Reloading replaces any one-off edits below.</span>
-      </div>
+      {draftError && <p role="alert" className="alert alert-error">{draftError} <button type="button" className="link" onClick={() => void reloadDraft()}>Reload saved details</button></p>}
       {savedDraft && <>
-        <p role="status">{missingCount ? `${missingCount} details are not saved yet. Missing answers stay blank; nothing is invented.` : 'All seven reusable details are present. Check that they are right for this role.'}</p>
-        <form noValidate onSubmit={handleFill}>
-          <fieldset disabled={!!operation || draftBusy} className="preparation-fields">
-            <legend className="preparation-legend">Application answers</legend>
-            {applicationFields.map(field => <div className={'preparation-field' + (field.id === 'applicant_summary' ? ' preparation-field-wide' : '')} key={field.id}>
+        <details className="preparation-saved-details"><summary>Review the details already loaded</summary><dl>{applicationFields.filter(field => shownValues[field.id].trim()).map(field => <div key={field.id}><dt>{field.label}</dt><dd>{shownValues[field.id]}</dd></div>)}{(['nationality', 'campus'] as const).filter(key => shownChoices[key]).map(key => <div key={key}><dt>{key === 'nationality' ? 'Nationality' : 'Country of study / graduation'}</dt><dd>{countries.find(country => country.code === shownChoices[key])?.name || shownChoices[key]}</dd></div>)}</dl>
+          <div className="preparation-actions"><Link to={profileLink}>Update my saved profile</Link><button type="button" className="link" disabled={draftBusy || !!operation} onClick={() => void reloadDraft()}>Reload saved details</button></div>
+          <p className="muted preparation-hint">Reloading replaces one-off edits. Edits below apply only to this application.</p>
+        </details>
+        <button type="button" className="link preparation-edit" disabled={!!operation} onClick={() => setEditingSaved(value => !value)}>{editingSaved ? 'Show only missing answers' : 'Edit loaded answers for this application'}</button>
+        <form id="jobpilot-application-review" noValidate onSubmit={handleFill}>
+          {(editingSaved || hasMissingSavedAnswers) && <fieldset disabled={!!operation || draftBusy} className="preparation-fields">
+            <legend className="preparation-legend">{editingSaved ? 'Application answers' : 'Complete missing answers'}</legend>
+            {applicationFields.filter(field => editingSaved || !savedDraft.values[field.id].trim()).map(field => <div className={'preparation-field' + (field.id === 'applicant_summary' ? ' preparation-field-wide' : '')} key={field.id}>
               <label htmlFor={'review-' + field.id}>{field.label}</label>
               {field.id === 'applicant_summary'
-                ? <textarea id={'review-' + field.id} rows={5} value={values[field.id]} maxLength={field.maxLength} onChange={event => changeValue(field.id, event.target.value)} aria-describedby={fieldReason(field.id) ? field.id + '-reason' : undefined} />
+                ? <textarea id={'review-' + field.id} rows={5} value={shownValues[field.id]} maxLength={field.maxLength} onChange={event => changeValue(field.id, event.target.value)} aria-describedby={fieldReason(field.id) ? field.id + '-reason' : undefined} />
                 : <input id={'review-' + field.id} type={field.id === 'applicant_email' ? 'email' : field.id === 'applicant_contact' ? 'tel' : 'text'}
-                    value={values[field.id]} maxLength={field.maxLength} onChange={event => changeValue(field.id, event.target.value)} aria-describedby={fieldReason(field.id) ? field.id + '-reason' : undefined} />}
+                    value={shownValues[field.id]} maxLength={field.maxLength} onChange={event => changeValue(field.id, event.target.value)} aria-describedby={fieldReason(field.id) ? field.id + '-reason' : undefined} />}
               {fieldReason(field.id) && <p className="muted preparation-hint" id={field.id + '-reason'}>{fieldReason(field.id)}</p>}
             </div>)}
-            {(['nationality', 'campus'] as const).map(key => <div className="preparation-field" key={key}>
+            {(['nationality', 'campus'] as const).filter(key => editingSaved || !savedDraft.countries[key]).map(key => <div className="preparation-field" key={key}>
               <label htmlFor={'review-country-' + key}>{key === 'nationality' ? 'Nationality' : 'Country of study / graduation'}</label>
-              <select id={'review-country-' + key} value={choices[key]} onChange={event => {
-                setChoices(previous => ({...previous, [key]: event.target.value})); setReport(null)
-              }}>
-                <option value="">Not specified</option>
-                {countries.map(country => <option key={country.code} value={country.code}>{country.name}</option>)}
+              <select id={'review-country-' + key} value={shownChoices[key]} onChange={event => { setEditedCountries(true); setChoices({...shownChoices, [key]: event.target.value}); setReport(null) }}>
+                <option value="">Not specified</option>{countries.map(country => <option key={country.code} value={country.code}>{country.name}</option>)}
               </select>
             </div>)}
             {report?.skipped.includes('applicant_countries') && <p className="preparation-field-wide preparation-hint">{report.reasons.applicant_countries}</p>}
-          </fieldset>
-          <p id="fill-permission" className="preparation-hint">Clicking fills the details shown above, including replacing nationality and study country with your choices. Existing text is preserved; missing or unsupported answers are skipped. It never submits. CAPTCHA and final submission remain yours.</p>
-          <div className="preparation-actions">
-            <button type="submit" className="btn btn-primary" aria-describedby="fill-permission" disabled={!!operation || !frameLoaded || draftBusy}>
-              {operation === 'inspect' ? 'Checking original form…' : operation === 'fill' ? 'Filling application form…' : 'Fill application form'}</button>
-          </div>
-          {!frameLoaded && <p className="muted preparation-hint">Load the original application below first. Your answers are not sent to InternSG until you click Fill application form.</p>}
+          </fieldset>}
         </form>
       </>}
+    </section>
+    <InternSGApplication url={url} platformManaged onFrameChange={frameChanged} controls={savedDraft && <div className="preparation-fill-controls">
+      <ExtensionStatus token={token} onConnectionChange={setExtensionConnected} />
+      <div className="preparation-actions">
+        {frameLoaded && <button type="submit" form="jobpilot-application-review" className="btn btn-primary" aria-describedby="fill-permission fill-readiness" disabled={!!operation || draftBusy || !extensionConnected}>
+          {operation === 'inspect' ? 'Checking original form…' : operation === 'fill' ? 'Filling application form…' : 'Fill application form'}</button>}
+        <span id="fill-readiness" role="status">{fillState}</span>
+      </div>
+      <p id="fill-permission" className="preparation-hint muted">Clicking Fill approves these answers, including your nationality and study-country choices. Existing text stays unchanged. PDF upload, CAPTCHA and final submission are yours.</p>
       {error && <p role="alert" className="alert alert-error">{error}</p>}
       {report && <div className="preparation-result" role="status">
         <p><strong>Filled {report.filled.length}; skipped {report.skipped.length}. Nothing was submitted.</strong></p>
         {report.skipped.length > 0 && <ul>{report.skipped.map(id => <li key={id}>{applicationFields.find(field => field.id === id)?.label || 'Nationality / study country'}: {report.reasons[id]}</li>)}</ul>}
-        <p>Review the original form below. This is not a delivery receipt and no application record was marked as sent.</p>
+        <p>Check the original form below. This is not an employer delivery receipt.</p>
       </div>}
-      <details className="preparation-setup">
-        <summary>First-time setup or extension not responding?</summary>
-        <ol>
-          <li>Use Chrome with the updated JobPilot extension. Reload the existing extension after an update; keep its original ID.</li>
-          <li>Open the extension once, choose Connect through JobPilot and confirm the same platform account. No second password is needed.</li>
-          <li>In the extension, choose Enable embedded InternSG access and approve access to this platform and InternSG. Then return here to fill the form.</li>
-        </ol>
-        <p>An older extension can still use Read page &amp; load profile in its popup. Platform filling needs the updated extension and explicit website permissions.</p>
-      </details>
-    </section>
-    <InternSGApplication url={url} platformManaged onFrameChange={frameChanged} />
+    </div>} />
+    <details className="preparation-setup"><summary>Connection and filling help</summary>
+      <ol><li>Use Chrome with the updated JobPilot extension.</li><li>Choose Connect through JobPilot in the extension and confirm this same account.</li><li>Enable embedded InternSG access in its popup, then return here.</li></ol>
+      <p>Unsupported fields stay manual. Reload saved details after profile changes. Nothing is filled or submitted automatically.</p>
+    </details>
   </div>
 }

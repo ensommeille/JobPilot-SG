@@ -12,8 +12,13 @@ from app.db.session import get_db
 from app.email_applications.router import PrivateRoute
 
 from .runtime import AIRuntime, get_ai_runtime
-from .schemas import CandidatePreview, RecommendationReport, RecommendationRequest
-from .service import candidate_preview, execute, present, read_run
+from .schemas import (
+    CandidatePreview,
+    JobAssessmentReport,
+    RecommendationReport,
+    RecommendationRequest,
+)
+from .service import candidate_preview, execute, job_assessment, present, read_run
 
 router = APIRouter(tags=["AI recommendations"], route_class=PrivateRoute)
 Database = Annotated[Session, Depends(get_db)]
@@ -42,9 +47,14 @@ def recommend(
 ):
     run, reused = asyncio.run(execute(db, user=user, payload=payload, runtime=runtime))
     response.status_code = 202 if run.status == "running" else 200 if reused else 201
-    return present(run, reused=reused)
+    return present(run, reused=reused, db=db, user=user)
 
 
 @router.get("/ai-recommendations/{run_id}", response_model=RecommendationReport)
 def detail(run_id: UUID, db: Database, user: CurrentUser):
-    return present(read_run(db, user, run_id), reused=True)
+    return present(read_run(db, user, run_id), reused=True, db=db, user=user)
+
+
+@router.get("/jobs/{job_id}/ai-assessment", response_model=JobAssessmentReport)
+def assessment(job_id: UUID, db: Database, user: CurrentUser):
+    return job_assessment(db, user, job_id)

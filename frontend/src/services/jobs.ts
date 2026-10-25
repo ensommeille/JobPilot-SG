@@ -2,6 +2,11 @@ import api from './api'
 import type { AxiosRequestConfig } from 'axios'
 
 export type JobId = number | string
+export type ApplicationAssistance = 'internsg_extension' | 'ats_extension' | 'manual_external' | 'unavailable'
+export const applicationAssistanceLabel = (value?: ApplicationAssistance) => ({
+  internsg_extension: 'Assisted filling · extension required', ats_extension: 'Assisted filling · extension required',
+  manual_external: 'Employer site · manual', unavailable: 'Check application channel',
+})[value ?? 'unavailable']
 
 export const fetchJobs = (params?: {
   q?: string; tags?: string; city?: string
@@ -48,6 +53,7 @@ export interface JobView {
   deadline: string | null      // YYYY-MM-DD
   postedAt: string | null
   source: string | null
+  applicationAssistance?: ApplicationAssistance
 }
 
 type RawTag = string | { name?: string }
@@ -83,6 +89,8 @@ export const normalizeJob = (raw: RawJob): JobView => {
     deadline: str(raw.deadline),
     postedAt: str(raw.posted_at),
     source: typeof source === 'object' && source ? str((source as { name?: unknown }).name) : str(source),
+    applicationAssistance: ['internsg_extension', 'ats_extension', 'manual_external', 'unavailable'].includes(String(raw.application_assistance))
+      ? raw.application_assistance as ApplicationAssistance : undefined,
   }
 }
 

@@ -2,6 +2,7 @@
 
 import re
 
+from .claim_scope import activity_evidence_issue, zero_experience_entry_route
 from .schemas import BatchAssessment, RequirementAssessment
 
 UNDERGRADUATE = re.compile(
@@ -12,7 +13,80 @@ GRADUATION_YEAR = re.compile(
     re.I,
 )
 DATE_RANGE = re.compile(r"\b(?:19|20)\d{2}\s*[-–—]\s*((?:19|20)\d{2})\b")
-PREFERRED = re.compile(r"\b(?:preferred|preferably|a plus|nice.to.have|optional|bonus)\b", re.I)
+PREFERRED = re.compile(
+    r"\b(?:preferred|preferably|a plus|nice.to.have|optional|bonus|beneficial)\b", re.I
+)
+BUILD_ACTION = re.compile(
+    r"\b(?:built|build(?:ing|s)?|develop(?:ed|ing|s)?|design(?:ed|ing|s)?|"
+    r"implement(?:ed|ing|s)?|maintain(?:ed|ing|s)?|deploy(?:ed|ing|s)?|"
+    r"architect(?:ed|ing|s)?|scal(?:e|ed|ing|es))\b",
+    re.I,
+)
+INFRASTRUCTURE = (
+    (
+        "data pipelines",
+        re.compile(r"\b(?:(?:data|training|evaluation|etl|ml) pipelines?|etl)\b", re.I),
+    ),
+    ("ML infrastructure", re.compile(r"\b(?:ml|machine learning) infrastructure\b", re.I)),
+    ("distributed systems", re.compile(r"\bdistributed (?:systems?|computing)\b", re.I)),
+)
+
+
+def _construction_evidence(row: RequirementAssessment) -> None:
+    """Related annotation/evaluation work does not establish building infrastructure.
+
+    A bounded conservative check only downgrades supported claims. It does not
+    promote mere mentions, decide equivalence, or reclassify missing facts as gaps.
+    """
+    if row.outcome != "supported":
+        return
+    requested = row.requirement + "\n" + row.jd_quote
+    targets = [(label, pattern) for label, pattern in INFRASTRUCTURE if pattern.search(requested)]
+    if not targets or not BUILD_ACTION.search(requested):
+        return
+    alternatives = bool(re.search(r"\bor\b", requested, re.I))
+    if alternatives and (
+        re.search(r"\band\b", requested, re.I)
+        or any(
+            not any(pattern.search(branch) for _, pattern in INFRASTRUCTURE)
+            for branch in re.split(r"\bor\b", row.jd_quote, flags=re.I)
+        )
+    ):
+        # Mixed clauses and non-infrastructure alternatives require semantic
+        # review. This narrow check must not reject a different complete OR
+        # branch or promote an originally unknown assessment.
+        return
+    quote = row.profile_quote or ""
+    actions = list(BUILD_ACTION.finditer(quote))
+    negated = re.search(
+        r"\b(?:no|not|never|without|cannot|unable|planned|planning|intend|would|could|might|"
+        r"didn['’]t|don['’]t|haven['’]t|hasn['’]t|hadn['’]t|couldn['’]t)\b",
+        quote,
+        re.I,
+    )
+    missing = []
+    for label, pattern in targets:
+        objects = list(pattern.finditer(quote))
+        if negated or not any(
+            0 <= obj.start() - action.end() <= 100
+            and not re.search(
+                r"\b(?:using|used|uses?|existing|pre[- ]?built|leverag(?:e|ed|ing))\b",
+                quote[action.end() : obj.start()],
+                re.I,
+            )
+            for action in actions
+            for obj in objects
+        ):
+            missing.append(label)
+    if missing and not (alternatives and len(missing) < len(targets)):
+        row.outcome = "unknown"
+        row.reason = (
+            "The displayed profile quote does not explicitly establish building or maintaining "
+            + ", ".join(missing)
+            + ". Data annotation, quality checks, model evaluation, or using an existing pipeline "
+            "are related activities; they do not by themselves prove infrastructure construction. "
+            "Confirm this experience before treating the requirement as supported."
+        )
 
 
 def _education_timing(row: RequirementAssessment, education: str) -> tuple[str, bool] | None:
@@ -59,7 +133,7 @@ def _education_timing(row: RequirementAssessment, education: str) -> tuple[str, 
     )
 
 
-def _compound_evidence(row: RequirementAssessment) -> None:
+def _compound_evidence(row: RequirementAssessment, *, allow_promotions: bool = True) -> None:
     """Correct only source-checkable, bounded cases, not arbitrary semantic entailment."""
     if row.category != "skill":
         return
@@ -93,7 +167,8 @@ def _compound_evidence(row: RequirementAssessment) -> None:
     # A teacher/student distillation experiment supports the explicitly listed generic
     # model-distillation alternative, not a separate video/domain-specific responsibility.
     if (
-        row.outcome == "unknown"
+        allow_promotions
+        and row.outcome == "unknown"
         and row.profile_field == "experience"
         and re.search(r"\bmodel distillation\b", jd)
         and re.search(r",\s+or\s+", jd)
@@ -126,14 +201,41 @@ def _hard_gap(row: RequirementAssessment) -> bool:
     )
 
 
-def prioritize_assessment(result: BatchAssessment, profile: dict) -> BatchAssessment:
+def prioritize_assessment(
+    result: BatchAssessment,
+    profile: dict,
+    *,
+    allow_promotions: bool = True,
+    condition_context: bool = False,
+) -> BatchAssessment:
     """Keep model order except known hard conflicts; summaries reflect validated rows."""
     concerns = {}
     for item in result.items:
         notes = []
         for row in item.requirements:
-            _compound_evidence(row)
-            timing = _education_timing(row, profile.get("education") or "")
+            # Atomic evidence is checked against that condition, not an adjacent
+            # AND clause inside the parent's exact (and still retained) JD quote.
+            scope = (
+                row.model_copy(update={"jd_quote": row.requirement}) if condition_context else row
+            )
+            _compound_evidence(scope, allow_promotions=allow_promotions)
+            _construction_evidence(scope)
+            row.outcome, row.reason = scope.outcome, scope.reason
+            issue = activity_evidence_issue(
+                row.requirement, row.category, row.profile_field, row.profile_quote
+            )
+            if row.outcome == "supported" and issue:
+                row.outcome = "unknown"
+                row.reason = issue
+            if row.category == "experience" and zero_experience_entry_route(row.requirement):
+                # Actual duration can remain unknown without inventing an entry
+                # barrier explicitly waived by the employer's zero-year route.
+                row.reason = (
+                    "The source explicitly welcomes fresh graduates with a zero-year lower bound. "
+                    "This is not a positive minimum-years barrier. Actual experience duration "
+                    "is not inferred from education or project dates."
+                )
+            timing = _education_timing(scope, profile.get("education") or "")
             if timing:
                 note, explicit = timing
                 row.outcome = "gap" if explicit else "unknown"
@@ -149,19 +251,14 @@ def prioritize_assessment(result: BatchAssessment, profile: dict) -> BatchAssess
         for note in notes:
             if note not in item.warnings:
                 item.warnings = [note, *item.warnings][:20]
-        counts = {
-            outcome: sum(row.outcome == outcome for row in item.requirements)
-            for outcome in ("supported", "gap", "unknown")
-        }
-        supported = [
-            row.requirement[:180] for row in item.requirements if row.outcome == "supported"
-        ][:3]
+        from .advice import derive_advice
+
+        action = derive_advice(item)
         summary = (
             (notes[0] + " Lower priority until this condition is clarified. " if notes else "")
-            + f"Evidence review: {counts['supported']} supported, {counts['gap']} explicit gaps, "
-            + f"{counts['unknown']} needing confirmation."
-            + (" Supported evidence: " + "; ".join(supported) + "." if supported else "")
-            + " Review the individual conditions; technical relevance does not establish eligibility."
+            + action.headline
+            + ". "
+            + " ".join(action.reasons[:2])
         )
         item.summary = summary[:3000]
     result.items.sort(key=lambda item: (bool(concerns[str(item.job_id)]), item.rank))
