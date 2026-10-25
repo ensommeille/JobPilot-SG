@@ -37,7 +37,7 @@ def test_default_batch_budget_matches_the_provider_timeout(monkeypatch):
     runtime = get_ai_runtime()
     assert runtime.snapshot()["max_output_tokens"] == 20000
     assert runtime.snapshot()["timeout_seconds"] == 75
-    assert runtime.snapshot()["prompt_version"] == "ai-recommendation-v9-evidence-scope"
+    assert runtime.snapshot()["prompt_version"] == module.PROMPT_VERSION
 
     async def enter():
         async with runtime.provider_factory():

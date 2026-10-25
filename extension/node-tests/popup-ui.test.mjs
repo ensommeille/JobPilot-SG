@@ -40,4 +40,7 @@ test('the popup keeps a definite Chrome width and one scrolling preview above it
   assert.match(css, /#workspace-content\s*\{[^}]*overflow-y:\s*auto/s);
   assert.match(html, /<\/div>\s*<footer id="review-actions"/);
   assert.ok(html.indexOf('id="ats-inspect"') > html.indexOf('id="review-actions"'), 'Refresh recovery remains visible in the action footer');
+  assert.match(css, /#ats-fields \.prepared-fields-body\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/s);
+  assert.match(css, /#ats-fields \.prepared-fields-body > \.field-name\s*\{[^}]*grid-column:\s*auto/s,
+    'First and last name remain side by side inside the expanded saved-answer group');
 });

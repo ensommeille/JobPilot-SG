@@ -88,11 +88,13 @@ function groupReadyAnswers(container, group) {
   let details = container.readyGroup;
   if (!details || !details.isConnected) {
     details = document.createElement('details'); details.className = 'prepared-fields'; details.open = true;
-    const summary = document.createElement('summary'); details.append(summary);
+    const summary = document.createElement('summary');
+    const body = document.createElement('div'); body.className = 'prepared-fields-body';
+    details.append(summary, body); details.readyBody = body;
     container.insertBefore(details, container.children[0] || null); container.readyGroup = details;
   }
   details.children[0].textContent = `Saved answers ready (${ready.length})`;
-  for (const editor of ready) details.append(editor.row);
+  for (const editor of ready) details.readyBody.append(editor.row);
 }
 function startPreparation(context, profile, group) {
   const fields = preparationFields(group);
@@ -232,7 +234,7 @@ function refresh() {
   $('ats-fill').hidden = !$('ats-fields').childElementCount;
   $('ats-intro').hidden = !!$('ats-fields').childElementCount;
   $('ats-profile-note').hidden = !$('ats-fields').childElementCount;
-  $('ats-actions').hidden = !$('ats-fields').childElementCount;
+  $('ats-actions').hidden = !$('ats-fields').childElementCount && recoveryTool !== 'ats-tools';
   $('original-actions').hidden = !$('fields').childElementCount;
   $('review-actions').hidden = $('ats-actions').hidden && $('original-actions').hidden;
   $('status').hidden = !$('status').classList.contains('error') && !!$('ats-fields').childElementCount;

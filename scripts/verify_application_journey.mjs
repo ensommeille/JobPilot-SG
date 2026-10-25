@@ -210,7 +210,27 @@ try {
   await request('PUT', '/profile', {...profile, skills: ['Python']});
   checks.push('Unrelated and learning-only negative profiles do not generate suggestions');
 
+  // Details now start a single current-job analysis automatically. The isolated
+  // workspace still refuses models, so assert the real 503 rather than treating
+  // this authorized request as an unexpected retry of the list recommendation.
+  const expectedAIRequests = [{confirmed: true}, {confirmed: true, job_ids: [seed.job_id]}];
+  const detailUnavailable = page.waitForResponse(response => response.url() === api + '/jobs/ai-recommendations'
+    && response.request().method() === 'POST'
+    && JSON.stringify(response.request().postDataJSON()) === JSON.stringify(expectedAIRequests[1]));
   await page.goto(web + `/jobs/${seed.job_id}`);
+  const detailAIResponse = await detailUnavailable;
+  expect(detailAIResponse.status()).toBe(503);
+  expect((await detailAIResponse.json()).detail).toBe('ai_recommendations_disabled');
+  const recommendation = page.locator('.job-ai-advice');
+  await expect(recommendation.getByRole('heading', {name: 'Application recommendation', exact: true})).toBeVisible();
+  await expect(recommendation.getByRole('alert')).toContainText('AI is unavailable. No recommendation was created.');
+  await expect(recommendation.locator('.job-advice-status, .job-advice-summary')).toHaveCount(0);
+  await expect(recommendation.getByRole('button', {name: 'Analyze this job', exact: true})).toHaveCount(0);
+  expect(aiRequests).toEqual(expectedAIRequests);
+  await recommendation.getByRole('button', {name: 'Refresh status', exact: true}).click();
+  await expect(recommendation.locator('.job-advice-status, .job-advice-summary')).toHaveCount(0);
+  expect(aiRequests).toEqual(expectedAIRequests);
+  checks.push('Job detail automatically requests only this job once, shows disabled AI without a fabricated recommendation, and refreshes status for free');
   const description = page.getByRole('region', {name: 'Job Description', exact: true});
   await expect(description).toBeVisible();
   for (const reason of related) await expect(description).toContainText(reason.job_evidence);
@@ -219,6 +239,9 @@ try {
   await expect(page.getByRole('button', {name: 'Saved job', exact: true})).toHaveAttribute('aria-pressed', 'true');
   await page.reload();
   await expect(page.getByRole('button', {name: 'Saved job', exact: true})).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.job-ai-advice').getByRole('alert')).toContainText('An analysis was already requested for these inputs. No repeat AI call was sent.');
+  await expect(page.locator('.job-ai-advice .job-advice-status, .job-ai-advice .job-advice-summary')).toHaveCount(0);
+  expect(aiRequests).toEqual(expectedAIRequests);
   await page.goto(web + '/favorites');
   await expect(page.getByRole('article', {name: job.title})).toBeVisible();
   checks.push('Real job favorited, retained on reload and listed in Favorites');
@@ -293,7 +316,7 @@ try {
   await expect(page.getByRole('article')).toHaveCount(0);
   await expect(page.getByRole('alert')).toContainText('Sign in');
   checks.push('Logout clears access to application history');
-  expect(aiRequests).toEqual([{confirmed: true}]);
+  expect(aiRequests).toEqual(expectedAIRequests);
   expect(failures).toEqual([]);
   expect(blocked).toEqual([]);
   const result = {
@@ -303,6 +326,7 @@ try {
     recommendation_scope: 'Free saved-source comparison and current AI-disabled UI; not live AI recommendation acceptance',
     public_catalog: {total: catalog.total, jobs: browseBefore, sandbox_form_job_ids: fixtureJobIds, show_all_restored_same_ids_and_titles: true},
     ai_disabled_requests: aiRequests.length,
+    ai_disabled_request_scope: {list: 1, automatic_job_detail: 1, detail_job_id: seed.job_id, automatic_retries: 0},
     new_model_calls: 0, employer_submissions: 0, test_accounts: 2,
     optional_font_stylesheet_blocked: optionalFonts.size > 0,
     note: 'Isolated integration using saved source-bound evidence; not a new live model acceptance or employer submission.',

@@ -599,3 +599,25 @@ rendering acceptance, not a new installed-Chrome filling acceptance.
 The existing local API was restarted with v11 and the frontend targets API18523.
 No extension update or new permissions were needed in this follow-up. No
 deployment, PR publication/merge, employer submission or PDF upload occurred.
+
+## Release CI follow-up: popup 0.10.10
+
+The release CI exercised the complete browser and integration suites. Recovery
+controls were hidden by their footer container when an ATS read failed with zero
+fields; the recovery state now keeps that container visible. Saved contact rows
+also regain an internal two-column name grid after grouping, preserving the
+default expanded preview and keeping email within the initial viewport.
+
+Browser expectations now wait for actual Profile navigation and asynchronous
+Fill dispatch, and explicitly check the new editable pending-answer contract.
+Existing account/document isolation, nationality snapshots, recovery visibility
+and first-viewport assertions remain. The disposable application journey checks
+one explicit list analysis and one automatic current-job analysis, both returning
+the real AI-disabled response; free refresh/reload must make no repeated call.
+Backend tests assert the current prompt constant and structured zero-positive
+outcomes instead of requiring the retired numeric summary copy. No workflow,
+coverage threshold, validation rule or test case was disabled for these changes.
+
+The extension patch version is 0.10.10. Current release-head CI status and full
+test counts are recorded in PR #55; the earlier local-only checkpoints above do
+not claim that those full browser suites had already been executed locally.

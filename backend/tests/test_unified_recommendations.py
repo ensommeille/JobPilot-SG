@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import select
 
+from app.ai_recommendations.advice import derive_advice
 from app.ai_recommendations.models import AIRecommendationRun
 from app.jobs.provenance import is_public_http_url
 from tests import test_ai_recommendations as shared
@@ -123,7 +124,9 @@ def test_related_data_work_cannot_become_infrastructure_building(experience, cat
     fact = assessed.items[0].requirements[0]
     assert fact.outcome == "unknown"
     assert "do not by themselves prove infrastructure construction" in fact.reason
-    assert "0 supported" in assessed.items[0].summary
+    assert fact.profile_field == "experience" and fact.profile_quote == experience
+    advice = derive_advice(assessed.items[0])
+    assert advice.counts.supported == 0 and advice.strengths == []
 
 
 @pytest.mark.parametrize(

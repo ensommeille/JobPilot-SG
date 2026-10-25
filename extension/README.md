@@ -268,7 +268,7 @@ study-country replacement; it does not authorize submission.
    the account in the backend database.
 3. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**
    and select this directory. Existing users should reload the extension
-   (version 0.10.9), then reopen its popup. Keep the same directory and extension
+   (version 0.10.10), then reopen its popup. Keep the same directory and extension
    ID to preserve device copies. Register its 32-letter ID in the backend
    `EXTENSION_CLIENT_IDS=["your-installed-extension-id"]` environment setting.
    The default empty list intentionally rejects connections.

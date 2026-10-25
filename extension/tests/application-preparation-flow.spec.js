@@ -59,6 +59,16 @@ async function setup(page, {channel = 'external', files = [pdf], connection, use
   return calls;
 }
 
+async function returnFromProfile(page) {
+  await page.getByRole('link', {name: 'Edit profile', exact: true}).click();
+  // A URL update alone can precede React committing the other route. Wait for
+  // Profile to mount, then use the actual return link so this tests a remount.
+  await expect(page).toHaveURL(/\/profile\?returnTo=/);
+  await expect(page.locator('#saved-profile-details > summary')).toBeVisible();
+  await page.getByRole('link', {name: 'Back to application', exact: true}).click();
+  await expect(page).toHaveURL(`${base}/jobs/${jobId}/prepare`);
+}
+
 test('saved profile and the only saved PDF are reused without asking for a new upload', async ({page}) => {
   const calls = await setup(page);
   await expect(page.getByRole('heading', {name: 'Your saved details'})).toBeVisible();
@@ -197,9 +207,8 @@ test('supported preparation reads cache only across StrictMode and returning fro
   const calls = await setup(page, {channel: 'ats'});
   await expect(page.locator('.prepared-answers-status')).toContainText('1 saved application answer ready');
   expect(calls.warm).toEqual([{body: {confirmed: true, job_id: jobId, profile_fingerprint: 'fixture-preparation-facts', resume_id: pdfId, cache_only: true}, authorization: `Bearer ${token}`}]);
-  await page.getByRole('link', {name: 'Edit profile', exact: true}).click();
-  await expect(page).toHaveURL(/\/profile\?returnTo=/);
-  await page.goBack();
+  await returnFromProfile(page);
+  await expect.poll(() => calls.warm.filter(call => call.body.cache_only).length).toBe(2);
   await expect(page.locator('.prepared-answers-status')).toContainText('1 saved application answer ready');
   expect(calls.warm.filter(call => !call.body.cache_only)).toHaveLength(0);
   expect(calls.warm.filter(call => call.body.cache_only)).toHaveLength(2);
@@ -240,8 +249,8 @@ test('preparation stays optional while running and polls only free cached status
 test('a failed optional warm-up does not retry when returning to the application', async ({page}) => {
   const calls = await setup(page, {channel: 'ats', warmHandler: route => route.fulfill({status: 503, json: {detail: 'fixture_unavailable'}})});
   await expect(page.locator('.prepared-answers-status')).toContainText('Open JobPilot on the application form');
-  await page.getByRole('link', {name: 'Edit profile', exact: true}).click();
-  await page.goBack();
+  await returnFromProfile(page);
+  await expect.poll(() => calls.warm.filter(call => call.body.cache_only).length).toBe(2);
   await expect(page.locator('.prepared-answers-status')).toContainText('Open JobPilot on the application form');
   expect(calls.warm.filter(call => !call.body.cache_only)).toHaveLength(0);
   expect(calls.warm.filter(call => call.body.cache_only)).toHaveLength(2);
@@ -254,8 +263,8 @@ test('returning after a JD cache change cannot reuse an old draft or start anoth
     ? {...readyPreparation, status: 'unavailable', preparation_id: null, answers: [], error_code: 'preparation_not_cached'}
     : readyPreparation})});
   await expect(page.locator('.prepared-answers-status')).toContainText('1 saved application answer ready');
-  await page.getByRole('link', {name: 'Edit profile', exact: true}).click();
-  await page.goBack();
+  await returnFromProfile(page);
+  await expect.poll(() => calls.warm.filter(call => call.body.cache_only).length).toBe(2);
   await expect(page.locator('.prepared-answers-status')).toContainText('Open JobPilot on the application form');
   await expect(page.locator('.prepared-answers-status')).not.toContainText('1 saved application answer ready');
   expect(calls.warm.filter(call => !call.body.cache_only)).toHaveLength(0);

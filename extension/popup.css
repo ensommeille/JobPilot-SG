@@ -36,6 +36,9 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 #ats-fields > .field { grid-column: 1 / -1; }
 #ats-fields > .field-name { grid-column: auto; }
 #ats-fields > .prepared-fields { grid-column: 1 / -1; }
+#ats-fields .prepared-fields-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 12px; }
+#ats-fields .prepared-fields-body > .field { grid-column: 1 / -1; }
+#ats-fields .prepared-fields-body > .field-name { grid-column: auto; }
 .prepared-fields { margin-top: 4px; }
 .prepared-fields > summary { color: #315c54; }
 .prepared-fields .field:last-child { border-bottom: 0; }

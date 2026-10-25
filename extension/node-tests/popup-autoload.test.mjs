@@ -104,6 +104,8 @@ test('real popup loads saved facts immediately and only shows unfinished pending
   await settle();
   assert.equal(f.get('ats-first_name').value, 'Avery');
   assert.equal(f.get('ats-fields').readyGroup.open, true, 'Loaded answers are visible without opening a disclosure');
+  assert.equal(f.get('ats-first_name').parentElement.parentElement, f.get('ats-fields').readyGroup.readyBody,
+    'Saved rows retain an inner layout container after grouping');
   assert.equal(f.get('ats-custom:unknown').value, 'Your ordinary unknown');
   assert.match(f.get('source-ats-custom:unknown').textContent, /AI did not return a verified answer/);
   assert.doesNotMatch(f.get('source-ats-custom:unknown').textContent, /Profile/);
@@ -316,6 +318,8 @@ test('unsupported routes and missing embedded permission do not inject or reques
 test('one read failure offers Refresh; recovery retries once and remains free', async () => {
   const f = await fixture({start: false}); f.state.inspectError = 'Not ready'; await f.launch();
   assert.equal(f.get('ats-inspect').hidden, false);
+  assert.equal(f.get('ats-actions').hidden, false, 'Recovery remains visible even when inspection produced no fields');
+  assert.equal(f.get('review-actions').hidden, false, 'A visible recovery button must not have a hidden footer');
   assert.equal(f.state.calls.length, 1);
   f.state.inspectError = null; await f.get('ats-inspect').emit();
   assert.equal(f.get('ats-first_name').value, 'Avery');
@@ -339,6 +343,8 @@ test('changed saved profile after preview reveals free recovery and writes nothi
   await f.get('ats-fill').emit();
   assert.equal(f.get('ats-fields').childElementCount, 0);
   assert.equal(f.get('ats-inspect').hidden, false);
+  assert.equal(f.get('ats-actions').hidden, false, 'Discarding stale answers must preserve the recovery action');
+  assert.equal(f.get('review-actions').hidden, false);
   assert.equal(f.state.calls.filter(x => x.args?.[0]?.action === 'fill').length, 0);
 });
 
