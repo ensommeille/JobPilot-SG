@@ -55,6 +55,9 @@ test('maintain application details once, reload, and explicitly clear', async ({
 
 test('failed load prevents overwriting an existing profile', async ({page}) => {
   await profilePage(page, {failLoad: true});
+  await expect(page.getByRole('button', {name: 'Reload profile'})).toBeVisible();
+  await expect(page.locator('#saved-profile-details')).not.toHaveAttribute('open');
+  await page.locator('#saved-profile-details > summary').click();
   await expect(page.getByRole('button', {name: 'Save Profile'})).toBeDisabled();
   await expect(page.getByLabel('Personal introduction (written by you)')).toBeDisabled();
   await expect(page.getByRole('button', {name: 'Reload profile'})).toBeVisible();

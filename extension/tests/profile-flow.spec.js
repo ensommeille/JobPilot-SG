@@ -179,7 +179,10 @@ test('an old account delayed profile load cannot populate the new account screen
   await switchAccount(page);
   release.resolve();
   await expect(page.getByRole('alert').filter({hasText: 'Account changed'}).first()).toBeVisible();
+  await expect(page.locator('#saved-profile-details')).not.toHaveAttribute('open');
+  await page.locator('#saved-profile-details > summary').click();
   await expect(page.getByRole('button', {name: 'Save Profile'})).toBeDisabled();
+  await expect(page.getByLabel('Full Name', {exact: true})).toBeDisabled();
   await expect(page.getByLabel('Full Name', {exact: true})).toHaveValue('');
   await expect(page.getByLabel('First / given name', {exact: true})).toHaveValue('');
   await expect(page.getByLabel('Last / family name', {exact: true})).toHaveValue('');

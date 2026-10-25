@@ -1,4 +1,4 @@
-// Real loopback HTTP + built UI. Requires the disposable PR #45 review workspace.
+// Real loopback HTTP + built UI. Requires the disposable source-review workspace.
 // No intercepted responses, paid model calls or employer submissions.
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -26,6 +26,8 @@ const output = path.join(root, 'output/application-journey');
 await fs.mkdir(output, {recursive: true});
 const checks = [], failures = [], blocked = [];
 const optionalFonts = new Set();
+const expectedResourceFailures = new Set();
+const aiRequests = [];
 const fontStylesheet = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap';
 const browser = await chromium.launch({headless: true});
 const context = await browser.newContext({viewport: {width: 1440, height: 1000}});
@@ -49,7 +51,12 @@ page.on('console', event => {
   if (event.type() !== 'error') return;
   if (event.text() === 'Failed to load resource: net::ERR_FAILED'
       && optionalFonts.has(event.location().url)) return;
+  if (/^Failed to load resource: the server responded with a status of 503\b/.test(event.text())
+      && expectedResourceFailures.has(event.location().url)) return;
   failures.push(event.text());
+});
+page.on('request', request => {
+  if (request.url() === api + '/jobs/ai-recommendations' && request.method() === 'POST') aiRequests.push(request.postDataJSON());
 });
 const profile = {
   full_name: 'Fictional End-to-End Applicant', contact_email: 'journey-contact@example.com',
@@ -67,15 +74,18 @@ async function request(method, route, data, status = 200, credential = token) {
   expect(response.status(), `${method} ${route}`).toBe(status);
   return response;
 }
-async function recommendations() {
-  await page.goto(web + '/jobs');
-  const pending = page.waitForResponse(response => response.url() === api + '/jobs/recommendations'
-    && response.request().method() === 'POST');
-  await page.getByRole('button', {name: 'Find jobs for me', exact: true}).click();
-  const response = await pending;
-  expect(response.status()).toBe(200);
+async function sourceComparison() {
+  // Retain the free saved-extraction contract separately from the current AI UI.
+  const response = await request('POST', '/jobs/recommendations', {include_experience: true});
   expect(response.headers()['cache-control']).toBe('no-store');
   return response.json();
+}
+async function editSavedProfile() {
+  const details = page.locator('#saved-profile-details');
+  const summary = page.locator('#saved-profile-details > summary');
+  await expect(summary).toBeVisible();
+  if (!await details.evaluate(element => element.open)) await summary.click();
+  await expect(page.getByLabel('Full Name', {exact: true})).toBeVisible();
 }
 try {
   const job = await (await request('GET', `/jobs/${seed.job_id}`)).json();
@@ -97,6 +107,8 @@ try {
   checks.push('UI register and sign in using a generated ordinary test account');
 
   await page.goto(web + '/profile');
+  await expect(page.locator('#saved-profile-details')).not.toHaveAttribute('open');
+  await editSavedProfile();
   for (const [label, value] of [['Full Name', profile.full_name], ['Contact Email', profile.contact_email],
     ['Phone', profile.phone], ['Education', profile.education], ['Experience', profile.experience]])
     await page.getByLabel(label, {exact: true}).fill(value);
@@ -108,10 +120,11 @@ try {
   for (const [key, value] of Object.entries(profile)) expect(saved[key]).toBe(value);
   expect(saved.skills).toEqual(['Python']);
   await page.reload();
+  await editSavedProfile();
   await expect(page.getByLabel('Experience', {exact: true})).toHaveValue(profile.experience);
   checks.push('Profile saved through UI, persisted through API and reload');
 
-  const report = await recommendations();
+  const report = await sourceComparison();
   expect(report.status).toBe('ready');
   expect(report.evaluated).toBe(1);
   expect(report.matched).toBe(1);
@@ -126,11 +139,30 @@ try {
   }
   expect(item.supported).toEqual([]);
   expect(item.unknown.length).toBeGreaterThan(0);
-  await expect(page.getByText('Locally corrected draft').first()).toBeVisible();
-  await expect(page.getByRole('region', {name: 'Related project experience'})).toContainText('class project');
+  checks.push('Free saved-source comparison retains exact JD/project evidence and pending human review');
+
+  // This workspace deliberately disables live models. Exercise the real current
+  // button and its safe failure instead of fabricating a successful AI ranking.
+  await page.goto(web + '/jobs');
   await expect(page.locator('.job-card')).toHaveCount(3);
-  await page.screenshot({path: path.join(output, 'real-job-recommendation.png'), fullPage: true});
-  checks.push('One real Stripe snapshot suggested with exact JD/profile evidence; human review remains pending');
+  expect(aiRequests).toEqual([]);
+  expectedResourceFailures.add(api + '/jobs/ai-recommendations');
+  const unavailable = page.waitForResponse(response => response.url() === api + '/jobs/ai-recommendations'
+    && response.request().method() === 'POST');
+  await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
+  const aiResponse = await unavailable;
+  expect(aiResponse.status()).toBe(503);
+  expect((await aiResponse.json()).detail).toBe('ai_recommendations_disabled');
+  await expect(page.getByRole('alert')).toContainText('The AI model is unavailable here. Your saved profile and all jobs are still available.');
+  await expect(page.locator('.ai-ranked-jobs')).toHaveCount(0);
+  await expect(page).not.toHaveURL(/ai_run=/);
+  expect(aiRequests).toEqual([{confirmed: true}]);
+  await page.getByRole('button', {name: 'Show all jobs', exact: true}).click();
+  await expect(page.locator('.job-card')).toHaveCount(3);
+  await expect(page.locator('.job-card').filter({hasText: job.title})).toHaveCount(1);
+  expect(aiRequests).toHaveLength(1);
+  await page.screenshot({path: path.join(output, 'real-job-browse-after-disabled-ai.png'), fullPage: true});
+  checks.push('Current Recommend to me UI safely reports disabled AI; Show all restores real snapshot browse without retry');
 
   // Negative controls must not manufacture suggestions from unrelated or learning-only profiles.
   await request('PUT', '/profile', {full_name: profile.full_name, skills: ['AutoCAD']});
@@ -143,9 +175,14 @@ try {
   checks.push('Unrelated and learning-only negative profiles do not generate suggestions');
 
   await page.goto(web + `/jobs/${seed.job_id}`);
-  await page.getByRole('button', {name: '☆ Add to Favorites', exact: true}).click();
+  const description = page.getByRole('region', {name: 'Job Description', exact: true});
+  await expect(description).toBeVisible();
+  for (const reason of related) await expect(description).toContainText(reason.job_evidence);
+  await expect(page.getByRole('link', {name: 'View original posting', exact: true})).toHaveAttribute('href', job.source_url);
+  await page.getByRole('button', {name: 'Save job', exact: true}).click();
+  await expect(page.getByRole('button', {name: 'Saved job', exact: true})).toHaveAttribute('aria-pressed', 'true');
   await page.reload();
-  await expect(page.getByRole('button', {name: '★ Favorited', exact: true})).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Saved job', exact: true})).toHaveAttribute('aria-pressed', 'true');
   await page.goto(web + '/favorites');
   await expect(page.getByRole('article', {name: job.title})).toBeVisible();
   checks.push('Real job favorited, retained on reload and listed in Favorites');
@@ -226,12 +263,15 @@ try {
   await expect(page.getByRole('article')).toHaveCount(0);
   await expect(page.getByRole('alert')).toContainText('Sign in');
   checks.push('Logout clears access to application history');
+  expect(aiRequests).toEqual([{confirmed: true}]);
   expect(failures).toEqual([]);
   expect(blocked).toEqual([]);
   const result = {
     result: 'passed', checked_at: new Date().toISOString(), checks,
     real_job: {title: job.title, company: job.company, source_url: job.source_url},
     source: 'Saved actual live artifact plus explicit source-bound agent correction; final human review pending',
+    recommendation_scope: 'Free saved-source comparison and current AI-disabled UI; not live AI recommendation acceptance',
+    ai_disabled_requests: aiRequests.length,
     new_model_calls: 0, employer_submissions: 0, test_accounts: 2,
     optional_font_stylesheet_blocked: optionalFonts.size > 0,
     note: 'Isolated integration using saved source-bound evidence; not a new live model acceptance or employer submission.',

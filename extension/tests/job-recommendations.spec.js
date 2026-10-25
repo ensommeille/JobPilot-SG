@@ -275,7 +275,10 @@ for (const changed of ['profile', 'job description', 'analysis rules']) test(`a 
   await expect(page.locator('.ai-ranked-jobs').getByRole('link', {name: 'Prepare application'})).toHaveCount(0);
   await page.getByText('Review historical evidence', {exact: true}).click();
   await expect(page.locator('.job-advice-evidence')).toContainText('Snapshot only.');
-  await expect(page.locator('.job-advice-quotes')).toContainText('Python required.');
+  const quotes = page.locator('.job-advice-quotes');
+  await expect(quotes).toHaveCount(2);
+  await expect(quotes.locator('dd').filter({hasText: /^Python required\.$/})).toHaveCount(1);
+  await expect(quotes.locator('dd').filter({hasText: /^Python$/})).toHaveCount(1);
   await expect(page.getByRole('button', {name: 'Recommend to me', exact: true})).toBeEnabled();
   expect(calls.posts).toBe(0);
   await page.getByRole('button', {name: 'Show all jobs'}).click();

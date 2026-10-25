@@ -9,11 +9,14 @@ const approved = (field, value) => ({id: field.id, key: field.key, label: field.
   ...(['select', 'combobox'].includes(field.kind) ? {optionLabel: field.kind === 'combobox' ? value
     : field.options.find(option => option.value === value)?.label} : {})});
 async function fixture(page, url, markup, script = '', formless = false) {
-  await page.route(url, route => route.fulfill({status: 200, contentType: 'text/html', body: `<!doctype html><html><body>
+  // Real hosted forms declare their encoding. Without it, the browser can
+  // decode UTF-8 question text (notably the required-field ✱) as Windows-1252.
+  await page.route(url, route => route.fulfill({status: 200, contentType: 'text/html; charset=utf-8', body: `<!doctype html><html><head><meta charset="utf-8"></head><body>
     ${formless ? markup : '<form id="application">' + markup + '<button type="submit">Submit</button></form>'}
     <script>window.submits=0;document.querySelector('form')?.addEventListener('submit',event=>{event.preventDefault();window.submits++});${script}</script>
     </body></html>`}));
   await page.goto(url);
+  expect(await page.evaluate(() => document.characterSet)).toBe('UTF-8');
 }
 test('Greenhouse reviewed identity fields persist after blur while legal controls and submit stay untouched', async ({page}) => {
   await fixture(page, greenhouse, `<label>First name<input name="first_name"></label><label>Last name<input name="last_name"></label>
@@ -36,6 +39,7 @@ test('Lever keeps occupied answers, uses unique sibling availability label and f
     <label>Which technical skills do you not have?<textarea name="negative"></textarea></label>`);
   const review = await page.evaluate(interactWithATSPage, {action: 'inspect'});
   const availability = review.fields.find(field => field.evidenceKey === 'availability');
+  expect(availability?.label).toBe('When is your availability (eg. Jan to Jun 2027)?✱');
   expect(review.fields.find(field => field.key === 'name:skills').evidenceKey).toBe('skills');
   expect(review.fields.find(field => field.key === 'name:negative').manualOnly).toBe(true);
   const result = await page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: lever,
@@ -52,6 +56,7 @@ test('ordinary native choices and unknown text may be explicitly filled without 
     <label>Preferred working hours<input name="hours"></label><label>Citizenship<select name="citizen"><option value="">Choose one</option><option value="CN">China</option></select></label>`);
   const review = await page.evaluate(interactWithATSPage, {action: 'inspect'});
   const country = review.fields.find(field => field.evidenceKey === 'nationality_country');
+  expect(country?.label).toBe('Nationality✱');
   const hours = review.fields.find(field => field.key === 'name:hours');
   expect(hours.evidenceKey).toBeNull(); expect(hours.needsMapping).toBe(true);
   expect(matchATSSelectOption(country, 'cn')).toBe('CN');

@@ -75,6 +75,11 @@ async function setup(page, {signedIn = true, installed = true, bridgeMode = 'nor
   await page.route('https://fonts.googleapis.com/**', route => route.fulfill({contentType: 'text/css', body: ''}));
   await page.route('**/profile', route => route.request().resourceType() === 'document' ? route.continue()
     : route.fulfill({json: {full_name: 'Fictional platform account'}}));
+  await page.route('**/profile/resumes', route => route.fulfill({json: []}));
+  await page.route('**/browser-assistant/autofill-profile', route => route.fulfill({json: {
+    values: {}, sources: {}, missing_fields: [], resume: null, resumes: [],
+    requires_resume_selection: false, extraction_status: 'no_resume', fingerprint: 'fixture-platform-empty',
+  }}));
   await page.route('**/users/me', route => route.fulfill({json: {id: 'fixture-platform-user', role: 'job_seeker'}}));
   await page.route(new RegExp(`/jobs/(${jobA}|${jobB})$`), route => {
     if (route.request().resourceType() === 'document') return route.continue();
@@ -162,7 +167,8 @@ test('one explicit click inspects and fills the shown answers without submitting
   await loadForm(page);
   expect(await messages(page, 'application-inspect')).toHaveLength(0);
   expect(await messages(page, 'application-fill')).toHaveLength(0);
-  await expect(page.locator('#fill-permission')).toContainText('including replacing nationality and study country');
+  await expect(page.locator('#fill-permission')).toContainText('Clicking Fill approves these answers, including your nationality and study-country choices.');
+  await expect(page.locator('#fill-permission')).toContainText('Existing text stays unchanged.');
   await page.getByRole('button', {name: 'Fill application form', exact: true}).click();
   await expect(page.getByText(/^Filled 6; skipped 0/)).toBeVisible();
   const checks = await messages(page, 'application-inspect');
@@ -462,6 +468,9 @@ test('saving the linked profile and returning loads the new reusable application
   const before = calls.drafts.length;
   await page.getByRole('link', {name: 'Update my saved profile'}).click();
   await expect(page).toHaveURL(`${base}/profile?returnTo=${encodeURIComponent(`/jobs/${jobA}/apply-external`)}`);
+  await expect(page.locator('#saved-profile-details')).not.toHaveAttribute('open');
+  await page.locator('#saved-profile-details > summary').click();
+  await expect(page.getByLabel('Full Name', {exact: true})).toBeVisible();
   await expect(page.getByLabel('Full Name', {exact: true})).toHaveValue(savedDraft.values.applicant_name);
   await page.getByLabel('Full Name', {exact: true}).fill('New saved fictional applicant');
   await page.getByLabel('Personal introduction (written by you)').fill('My newly saved reusable introduction.');

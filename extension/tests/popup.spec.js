@@ -461,11 +461,17 @@ test('ATS preview never guesses given and family names from a full name', async 
   await connectApplication(page, 'ats');
   await expect(page.getByLabel('First name', {exact: true})).toHaveValue('MING');
   await expect(page.getByLabel('Last name', {exact: true})).toHaveValue('LI');
+  expect(await page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill'))).toHaveLength(0);
   await page.locator('#ats-fill').click();
+  // Fill first revalidates the grant, saved-facts fingerprint and document.
+  // A completed click event does not mean its asynchronous page command ran.
+  await expect(page.locator('#ats-result')).toHaveText('Filled 2; skipped 0. Nothing was submitted.');
+  expect(await page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill'))).toHaveLength(1);
   expect(await page.evaluate(() => window.atsCalls.find(x => x.action === 'fill').approved)).toEqual([
     {id: 'first_name', value: 'MING', confirmed: true, kind: 'text', key: 'id:first_name', label: 'First name', evidenceKey: 'given_name', factKey: 'given_name'},
     {id: 'last_name', value: 'LI', confirmed: true, kind: 'text', key: 'id:last_name', label: 'Last name', evidenceKey: 'family_name', factKey: 'family_name'},
   ]);
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
 });
 
 test('a delayed draft body cannot expose the previous account after reconnecting', async ({page}) => {
@@ -593,11 +599,15 @@ test('ATS country selects use explicit saved facts and telephone country remains
   await expect(page.getByLabel('Phone country code', {exact: true})).toHaveValue('');
   expect(await page.evaluate(() => window.drafts.filter(x => x.url.endsWith('/ats-evidence')))).toHaveLength(0);
   await page.getByLabel('Phone country code', {exact: true}).selectOption('65');
+  expect(await page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill'))).toHaveLength(0);
   await page.locator('#ats-fill').click();
+  await expect(page.locator('#ats-result')).toHaveText('Filled 2; skipped 0. Nothing was submitted.');
+  expect(await page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill'))).toHaveLength(1);
   expect(await page.evaluate(() => window.atsCalls.find(x => x.action === 'fill').approved)).toEqual([
     {id: 'country:0', value: 'cn', confirmed: true, kind: 'select', optionLabel: 'China', key: 'id:nationality', label: 'Nationality', evidenceKey: 'nationality_country', factKey: 'nationality'},
     {id: 'country:1', value: '65', confirmed: true, kind: 'select', optionLabel: 'Singapore (+65)', key: 'id:phone-country', label: 'Phone country code', evidenceKey: 'phone_country_code', factKey: 'phone_country_code'},
   ]);
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
 });
 
 test('the current ATS provider opens with a saved-answer preview and no read, permission or paid action', async ({page}) => {

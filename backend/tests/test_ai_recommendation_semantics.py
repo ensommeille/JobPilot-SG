@@ -274,7 +274,9 @@ def test_maximum_length_model_reason_remains_valid_after_a_conservative_downgrad
     fact = assessed.items[0].requirements[0]
     assert fact.outcome == "unknown"
     assert len(fact.reason) <= 2000
-    assert fact.reason.endswith("missing information remains unknown.")
+    assert fact.reason.startswith("Server evidence correction:")
+    assert "Missing information remains unknown; confirm the stated condition." in fact.reason
+    assert "x" * 100 not in fact.reason
     assert type(assessed).model_validate(assessed.model_dump(mode="json")) == assessed
 
 
