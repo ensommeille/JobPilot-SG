@@ -24,6 +24,27 @@ export interface AIRequirement {
   profile_field: 'skills' | 'education' | 'experience' | 'availability' | null
   profile_quote: string | null
   reason: string
+  condition_checks?: AIConditionEvidence[]
+  condition_operator?: 'atomic' | 'all_of' | 'any_of' | 'unspecified' | null
+}
+
+export interface AIConditionEvidence {
+  condition: string
+  outcome: AIRequirement['outcome']
+  profile_field: AIRequirement['profile_field']
+  profile_quote: string | null
+  reason: string
+}
+
+export interface AIRelatedEvidence {
+  requirement_index: number
+  condition_index: number | null
+  kind: 'partial_condition' | 'related_activity'
+  statement: string
+  jd_quote: string
+  profile_field: Exclude<AIRequirement['profile_field'], null>
+  profile_quote: string
+  reason: string
 }
 
 export interface AIJobAssessment {
@@ -32,22 +53,33 @@ export interface AIJobAssessment {
   summary: string
   requirements: AIRequirement[]
   warnings: string[]
+  related_evidence?: AIRelatedEvidence[]
 }
 
 export interface AdviceEvidence extends AIRequirement { requirement_index: number }
 
+export interface ApplicationRecommendation {
+  verdict: 'priority_apply' | 'consider' | 'not_priority' | 'insufficient_information'
+  summary: string
+  strengths: string[]
+  considerations: string[]
+}
+
 export interface JobActionAdvice {
-  version: 'action-advice-v1' | 'action-advice-v2' | 'action-advice-v3'
+  version: 'action-advice-v1' | 'action-advice-v2' | 'action-advice-v3' | 'action-advice-v4' | 'action-advice-v5'
   status: 'priority_apply' | 'consider' | 'check_first' | 'not_priority'
   headline: string
   reasons: string[]
   blockers: AdviceEvidence[]
   strengths: AdviceEvidence[]
   counts: { supported: number; gap: number; unknown: number }
+  related_evidence?: AIRelatedEvidence[]
+  application_recommendation?: ApplicationRecommendation | null
 }
 
 export interface SavedJobAIAssessment {
   job_id: string
+  context_hash?: string | null
   status: 'available' | 'not_analyzed' | 'outdated' | 'running' | 'failed' | 'unavailable'
   source_run_id: string | null
   assessment: AIJobAssessment | null

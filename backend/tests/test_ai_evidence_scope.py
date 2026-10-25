@@ -50,6 +50,10 @@ def test_degree_abbreviations_do_not_split_their_major_and_dates():
     second["jd_source_range"] = source_range(
         spans(catalog, scope="job", owner=payload["jobs"][1]["id"])
     )
+    for current_item, job in zip(raw["items"], payload["jobs"], strict=True):
+        current_item["career_fit"]["jd_source_range"] = source_range(
+            spans(catalog, scope="job", owner=job["id"])
+        )
     resolved = resolve_assessment(raw, payload, catalog)
     assessed = validate_assessment(resolved, payload, allow_promotions=False)
     condition = assessed.items[0].requirements[0]

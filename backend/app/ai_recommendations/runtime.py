@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 from app.llm import LLMProvider, LLMSettings, build_live_provider
 
-PROMPT_VERSION = "ai-recommendation-v9-evidence-scope"
+PROMPT_VERSION = "ai-recommendation-v11-career-application-judgment"
 
 
 @dataclass(frozen=True)

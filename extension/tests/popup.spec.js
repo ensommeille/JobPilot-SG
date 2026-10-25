@@ -72,7 +72,7 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
       if (window.offline) throw new Error('Network unavailable');
       if (window.expired) return new Response('', {status: 401});
       if (url.endsWith('/auth/extension/session')) return new Response(JSON.stringify({user_id: window.stored.jobpilotSession.userId}));
-      window.drafts.push({url, payload});
+      window.drafts.push({url, payload, method: options.method});
       const facts = () => {
         const values = {full_name: 'Fictional Applicant', linkedin: 'https://www.linkedin.com/in/fictional', ...(window.platformValues || {})};
         for (const key of Object.keys(values)) if (typeof values[key] !== 'string' || !values[key]) delete values[key];
@@ -80,6 +80,10 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
           missing_fields: [], resume: null, resumes: [], requires_resume_selection: false, extraction_status: 'no_resume', fingerprint: JSON.stringify(values)};
       };
       if (url.endsWith('/browser-assistant/autofill-profile')) return new Response(JSON.stringify(facts()));
+      if (url.endsWith('/browser-assistant/prepare-answers')) {
+        if (window.prepareGate) await window.prepareGate;
+        return new Response(JSON.stringify(window.prepareResponse || {status: 'partial', profile_fingerprint: facts().fingerprint, answers: [], omitted: payload.fields.map(field => ({field_id: field.id, reason: 'No saved fact'})), reused: false, execution_mode: 'not_needed', elapsed_ms: 1, error_code: null}));
+      }
       if (url.endsWith('/browser-assistant/form-plan')) return new Response(JSON.stringify({mappings: window.planMappings || [], execution_mode: 'not_needed', reused: false, profile_fingerprint: facts().fingerprint}));
       if (url.endsWith('/browser-assistant/resume-content')) {
         const resume = facts().resume, bytes = '%PDF-1.4\nfictional UI fixture';
@@ -104,7 +108,7 @@ async function setup(page, {expired = false, unsupported = false, skipped = fals
   }, {expired, unsupported, skipped, widgetsReady, embeddedAccess});
   await page.route('https://popup.test/**', async route => {
     const name = new URL(route.request().url()).pathname.slice(1);
-    if (!['popup.html', 'popup.css', 'popup.js', 'popup-autoload.js', 'popup-review.js', 'ats-page.js', 'page.js', 'widgets.js', 'submission.js', 'frames.js', 'connection.js'].includes(name)) return route.abort();
+    if (!['popup.html', 'popup.css', 'popup.js', 'popup-autoload.js', 'popup-preparation.js', 'popup-review.js', 'ats-page.js', 'page.js', 'widgets.js', 'submission.js', 'frames.js', 'connection.js'].includes(name)) return route.abort();
     await route.fulfill({body: await readFile(path.join(root, name)), contentType: name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : 'text/html'});
   });
   await page.goto('https://popup.test/popup.html');
@@ -122,15 +126,22 @@ async function login(page, email = 'fictional@example.test', {expand = true} = {
   if (expand) {
     await openDetails(page, '#original-tools');
     await openDetails(page, '#settings');
+    await expect(page.locator('#inspect')).toBeEnabled();
+    await expandReadyAnswers(page);
   }
 }
 
 async function openDetails(page, selector) {
   if (!await page.locator(selector).evaluate(node => node.open)) await page.locator(selector + ' > summary').click();
 }
+async function expandReadyAnswers(page) {
+  for (const details of await page.locator('.prepared-fields').all()) {
+    if (!await details.evaluate(node => node.open)) await details.locator('summary').first().click();
+  }
+}
 // A new mock connection grant exercises the real restore/automatic-load entrypoint.
 // Do not dispatch a hidden Refresh click: these cases also cover current-tab changes.
-async function connectApplication(page, tool = 'internsg') {
+async function connectApplication(page, tool = 'internsg', {waitForPreview = true} = {}) {
   const keepSettingsOpen = await page.locator('#settings').evaluate(node => node.open);
   const keepDeviceDetailsOpen = await page.locator('#local-profile').evaluate(node => node.open);
   const expired = await page.evaluate(tool => {
@@ -140,6 +151,10 @@ async function connectApplication(page, tool = 'internsg') {
   }, tool);
   if (!expired) {
     await expect(page.locator(tool === 'ats' ? '#ats-tools' : '#original-tools')).toHaveAttribute('open');
+    if (waitForPreview) {
+      await expect(page.locator(tool === 'ats' ? '#ats-inspect' : '#inspect')).toBeEnabled();
+      await expandReadyAnswers(page);
+    }
     if (keepSettingsOpen) await openDetails(page, '#settings');
     if (keepDeviceDetailsOpen) await openDetails(page, '#local-profile');
   }
@@ -155,7 +170,7 @@ test('opening a supported InternSG application loads saved answers and needs onl
   await expect(fill).toBeEnabled();
   expect(await page.evaluate(() => window.operations.map(call => call[0]))).toEqual(['inspect']);
   expect(await page.evaluate(() => window.permissionRequests)).toEqual([]);
-  expect(await page.evaluate(() => window.drafts.every(call => call.url.endsWith('/autofill-profile')))).toBe(true);
+  expect(await page.evaluate(() => window.drafts.every(call => call.url.endsWith('/autofill-profile') || call.url.endsWith('/prepare-answers')))).toBe(true);
   await fill.click();
   await expect(page.locator('#status')).toContainText('Nothing was submitted');
   const calls = await page.evaluate(() => window.drafts);
@@ -171,7 +186,7 @@ test('public ATS popup authorizes the edited preview in one click without per-an
   await expect(page.locator('#ats-full_name')).toHaveValue('Fictional Applicant');
   await expect(page.locator('#ats-inspect')).toBeHidden();
   expect(await page.evaluate(() => window.permissionRequests)).toEqual([]);
-  expect(await page.evaluate(() => window.drafts.every(call => call.url.endsWith('/autofill-profile')))).toBe(true);
+  expect(await page.evaluate(() => window.drafts.every(call => call.url.endsWith('/autofill-profile') || call.url.endsWith('/prepare-answers')))).toBe(true);
   await expect(page.locator('[id="ats-custom:0"]')).toHaveValue('https://www.linkedin.com/in/fictional');
   await expect(page.locator('#ats-fields input[type=checkbox]')).toHaveCount(0);
   await expect(page.locator('#ats-manual > summary')).toContainText('Other fields to check (2)');
@@ -179,6 +194,7 @@ test('public ATS popup authorizes the edited preview in one click without per-an
   await page.locator('#ats-manual > summary').click();
   await expect(page.locator('#ats-manual')).toContainText('Why this company?');
   await expect(page.locator('#ats-manual')).toContainText('This scan is partial.');
+  await expandReadyAnswers(page);
   await page.locator('[id="ats-custom:0"]').fill('https://www.linkedin.com/in/edited');
   await expect(page.locator('#ats-fill')).toBeEnabled();
   await page.locator('#ats-fill').click();
@@ -192,6 +208,125 @@ test('public ATS popup authorizes the edited preview in one click without per-an
   ]);
   expect(await page.evaluate(() => window.drafts.some(call => call.url.includes('generate')))).toBe(false);
   expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+});
+
+test('only a model-confirmed missing professional link becomes editable pending text', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => {
+    window.activeUrl = 'https://jobs.lever.co/acme/abc-123/apply';
+    window.platformValues = {linkedin: ''};
+    window.prepareResponse = {status: 'partial', profile_fingerprint: JSON.stringify({full_name: 'Fictional Applicant'}), answers: [
+      {field_id: 'custom:0', value: 'To be confirmed', source: 'pending_confirmation', fact_key: null, citations: []}],
+      analyzed_field_ids: ['custom:0'], omitted: [], reused: false, execution_mode: 'mock', error_code: null};
+  });
+  await login(page, undefined, {expand: false});
+  const input = page.locator('[id="ats-custom:0"]');
+  await expect(input).toHaveValue('Your LinkedIn URL');
+  await expect(page.locator('[id="source-ats-custom:0"]')).toContainText('AI found no supporting information');
+  await expect(page.locator('#ats-counts')).toContainText('1 ready');
+  await page.locator('#ats-fill').click();
+  const approved = await page.evaluate(() => window.atsCalls.find(call => call.action === 'fill').approved.find(item => item.id === 'custom:0'));
+  expect(approved.value).toBe('Your LinkedIn URL'); expect(approved).not.toHaveProperty('factKey');
+  expect(await page.evaluate(() => window.drafts.filter(call => call.method !== 'GET').every(call => call.url.endsWith('/prepare-answers')))).toBe(true);
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+});
+
+test('AI prepares current ordinary Lever questions before missing-evidence fallback, preserving saved and edited values', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => {
+    window.activeUrl = 'https://jobs.lever.co/acme/abc-123/apply';
+    window.autofillProfile = {fingerprint: 'ordinary-text-fixture', values: {full_name: 'Fictional Applicant', current_city: 'Singapore', school: 'Northern Institute'}, sources: {}, resume: null, resumes: []};
+    const field = (id, label, evidenceKey, extra = {}) => ({id, label, evidenceKey, key: 'id:' + id, kind: 'text', available: true, occupied: false, maxLength: 1000, ...extra});
+    window.atsFields = [field('full_name', 'Full name', 'full_name'), field('location', 'Current location', 'current_city', {requiresWebsiteChoice: true}),
+      field('company', 'Current company', 'current_company'), field('combined', 'Github / Portfolio URL', null, {needsMapping: true}),
+      field('school', 'Institution attended', null, {needsMapping: true}), field('cover', 'Cover letter', null, {needsMapping: true, draftable: true})];
+    window.prepareGate = new Promise(resolve => { window.releasePreparation = resolve; });
+    window.prepareResponse = {status: 'partial', profile_fingerprint: 'ordinary-text-fixture', execution_mode: 'mock', reused: false, omitted: [], answers: [
+      {field_id: 'company', value: 'To be confirmed', source: 'pending_confirmation', fact_key: null, citations: []},
+      {field_id: 'combined', value: 'To be confirmed', source: 'pending_confirmation', fact_key: null, citations: []},
+      {field_id: 'school', value: 'Northern Institute', source: 'saved', fact_key: 'school', citations: []},
+      {field_id: 'cover', value: 'I built a small Python service.', source: 'ai_draft', fact_key: null,
+        citations: [{source: 'profile', source_id: 'profile:experience', quote: 'Built a small Python service.'}]}]};
+  });
+  await login(page, undefined, {expand: false});
+  await expect(page.locator('#ats-location')).toHaveValue('Singapore');
+  await expect(page.locator('#source-ats-location')).toContainText('Choose the suggested location on the website');
+  await expect(page.locator('#ats-company')).toHaveValue('');
+  await expect(page.locator('#ats-combined')).toHaveValue('');
+  await expect(page.locator('#ats-cover')).toHaveValue('');
+  await expect(page.locator('#ats-counts')).toContainText('2 ready · 4 preparing');
+  await page.locator('#ats-company').fill('My own company entry');
+  await page.evaluate(() => window.releasePreparation());
+  await expect(page.locator('#ats-school')).toHaveValue('Northern Institute');
+  await expect(page.locator('#ats-cover')).toHaveValue('I built a small Python service.');
+  await expect(page.locator('#ats-company')).toHaveValue('My own company entry');
+  await expect(page.locator('#ats-counts')).toContainText('5 ready · 1 templates to replace');
+  const requested = await page.evaluate(() => window.drafts.find(call => call.url.endsWith('/prepare-answers')).payload.fields.map(field => field.id));
+  expect(requested).toEqual(['company', 'combined', 'school', 'cover']);
+  await page.locator('#ats-fill').click();
+  const approved = await page.evaluate(() => window.atsCalls.find(call => call.action === 'fill').approved);
+  expect(approved.find(field => field.id === 'combined').value).toBe('Your GitHub or portfolio URL');
+  expect(approved.find(field => field.id === 'school')).toMatchObject({evidenceKey: null, factKey: 'school'});
+  expect(await page.evaluate(() => window.drafts.filter(call => call.method !== 'GET').every(call => call.url.endsWith('/prepare-answers')))).toBe(true);
+});
+
+test('saved facts are immediately ready while one background batch prepares an editable narrative draft', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => {
+    window.activeUrl = 'https://jobs.lever.co/acme/abc-123/apply';
+    window.platformValues = {experience: 'Built a Python service.'};
+    window.atsFields = [{id: 'full_name', key: 'name:name', label: 'Full name', kind: 'text', evidenceKey: 'full_name', available: true, occupied: false},
+      {id: 'question:cover', key: 'id:cover', label: 'Cover letter', kind: 'text', evidenceKey: null, draftable: true, needsMapping: true, maxLength: 3000, available: true, occupied: false}];
+    window.prepareGate = new Promise(resolve => { window.releasePreparation = resolve; });
+    window.prepareResponse = {status: 'ready', profile_fingerprint: JSON.stringify({full_name: 'Fictional Applicant', linkedin: 'https://www.linkedin.com/in/fictional', experience: 'Built a Python service.'}),
+      preparation_id: 'fixture-preparation', answers: [{field_id: 'question:cover', value: 'I built a Python service and would like to contribute those skills.', source: 'ai_draft', fact_key: null,
+        citations: [{source: 'profile', source_id: 'profile:experience', quote: 'Built a Python service.'}]}], omitted: [], reused: true, execution_mode: 'live', elapsed_ms: 1};
+  });
+  await login(page, undefined, {expand: false});
+  await expect(page.locator('#ats-full_name')).toHaveValue('Fictional Applicant');
+  await expect(page.locator('.prepared-fields')).toHaveAttribute('open');
+  await expect(page.locator('#ats-fill')).toBeEnabled();
+  await expect(page.locator('#preparation-status')).toContainText('preparing');
+  await expect(page.locator('[id="ats-question:cover"]')).toHaveValue('');
+  expect(await page.evaluate(() => window.atsCalls.map(call => call.action))).toEqual(['inspect']);
+  const batches = await page.evaluate(() => window.drafts.filter(call => call.url.endsWith('/prepare-answers')));
+  expect(batches).toHaveLength(1); expect(batches[0].payload.fields).toEqual([{id: 'question:cover', label: 'Cover letter', kind: 'text', maxLength: 3000, manualOnly: false, draftable: true}]);
+  await page.evaluate(() => window.releasePreparation());
+  await expect(page.locator('[id="ats-question:cover"]')).toHaveJSProperty('tagName', 'TEXTAREA');
+  await expect(page.locator('[id="ats-question:cover"]')).toHaveValue('I built a Python service and would like to contribute those skills.');
+  await expect(page.locator('[id="source-ats-question:cover"]')).toContainText('AI answer');
+  await page.locator('[id="ats-question:cover"]').fill('My edited draft.');
+  await page.locator('#ats-fill').click();
+  await expect(page.locator('#ats-result')).toHaveText('Filled 2; skipped 0. Nothing was submitted.');
+  expect(await page.evaluate(() => window.atsCalls.find(call => call.action === 'fill').approved[1].value)).toBe('My edited draft.');
+  expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
+  expect(await page.evaluate(() => window.drafts.filter(call => call.url.endsWith('/resume-content')))).toHaveLength(0);
+});
+
+test('one early Fill click waits for the existing AI batch and writes its actual grounded answer once', async ({page}) => {
+  await setup(page);
+  await page.evaluate(() => {
+    window.activeUrl = 'https://jobs.lever.co/acme/abc-123/apply';
+    window.autofillProfile = {fingerprint: 'early-fill-fixture', values: {full_name: 'Fictional Applicant'}, sources: {}, resume: null, resumes: []};
+    window.atsFields = [{id: 'full_name', key: 'name:name', label: 'Full name', kind: 'text', evidenceKey: 'full_name', available: true, occupied: false},
+      {id: 'strengths', key: 'id:strengths', label: 'Relevant technical strengths', kind: 'text', evidenceKey: null, draftable: false, needsMapping: true, available: true, occupied: false, maxLength: 1000}];
+    window.prepareGate = new Promise(resolve => { window.releasePreparation = resolve; });
+    window.prepareResponse = {status: 'ready', profile_fingerprint: 'early-fill-fixture', execution_mode: 'mock', reused: true, omitted: [], analyzed_field_ids: ['strengths'], answers: [
+      {field_id: 'strengths', value: 'Built a small Python service.', source: 'ai_draft', fact_key: null,
+        citations: [{source: 'resume', source_id: 'resume:project', quote: 'Built a small Python service.'}]}]};
+  });
+  await login(page, undefined, {expand: false});
+  await expect(page.locator('#ats-strengths')).toHaveValue('');
+  await page.locator('#ats-fill').click();
+  await expect(page.locator('#ats-fill')).toHaveText('Preparing…');
+  await expect(page.locator('#ats-strengths')).toBeDisabled();
+  expect(await page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill'))).toHaveLength(0);
+  await page.evaluate(() => window.releasePreparation());
+  await expect(page.locator('#ats-result')).toHaveText('Filled 2; skipped 0. Nothing was submitted.');
+  const calls = await page.evaluate(() => window.atsCalls.filter(call => call.action === 'fill'));
+  expect(calls).toHaveLength(1);
+  expect(calls[0].approved.find(answer => answer.id === 'strengths').value).toBe('Built a small Python service.');
+  expect(await page.evaluate(() => window.drafts.filter(call => call.url.endsWith('/prepare-answers')))).toHaveLength(1);
 });
 
 test('a failed automatic facts read offers one free Refresh action without filling or attaching', async ({page}) => {
@@ -217,7 +352,7 @@ test('a failed automatic facts read offers one free Refresh action without filli
   await expect(page.locator('#ats-inspect')).toBeHidden();
   await expect(page.locator('#ats-fill')).toBeEnabled();
   expect(await page.evaluate(() => window.atsCalls.map(call => call.action))).toEqual(['inspect', 'inspect']);
-  expect(await page.evaluate(() => window.drafts.every(call => call.url.endsWith('/autofill-profile')))).toBe(true);
+  expect(await page.evaluate(() => window.drafts.every(call => call.url.endsWith('/autofill-profile') || call.url.endsWith('/prepare-answers')))).toBe(true);
   expect(await page.evaluate(() => window.permissionRequests)).toEqual([]);
 });
 
@@ -452,11 +587,11 @@ test('ATS preview never guesses given and family names from a full name', async 
   await setup(page); await login(page, undefined, {expand: false});
   await page.evaluate(() => { window.atsFields = ['first_name', 'last_name'].map(id => ({id, key: 'id:' + id, label: id === 'first_name' ? 'First name' : 'Last name', kind: 'text', evidenceKey: id === 'first_name' ? 'given_name' : 'family_name', available: true, occupied: false, maxLength: 100})); });
   await connectApplication(page, 'ats');
-  await expect(page.getByLabel('First name', {exact: true})).toHaveValue('');
-  await expect(page.getByLabel('Last name', {exact: true})).toHaveValue('');
-  await expect(page.locator('#ats-fields')).toContainText('No saved answer.');
-  await expect(page.locator('#ats-fields a').first()).toHaveAttribute('href', 'http://localhost:5173/profile');
-  await expect(page.locator('#ats-fill')).toBeDisabled();
+  await expect(page.getByLabel('First name', {exact: true})).toHaveValue('Your first name');
+  await expect(page.getByLabel('Last name', {exact: true})).toHaveValue('Your last name');
+  await expect(page.locator('#ats-fields')).toContainText('AI did not return a verified answer');
+  await expect(page.locator('#ats-counts')).toContainText('0 ready · 2 templates to replace');
+  await expect(page.locator('#ats-fill')).toBeEnabled();
   await page.evaluate(() => { window.platformValues = {given_name: 'MING', family_name: 'LI'}; });
   await connectApplication(page, 'ats');
   await expect(page.getByLabel('First name', {exact: true})).toHaveValue('MING');
@@ -486,7 +621,7 @@ test('a delayed draft body cannot expose the previous account after reconnecting
       return {ok: true, status: 200, json: () => new Promise(resolve => { window.releaseOldDraft = () => resolve(value); })};
     };
   });
-  await connectApplication(page);
+  await connectApplication(page, 'internsg', {waitForPreview: false});
   await expect.poll(() => page.evaluate(() => typeof window.releaseOldDraft)).toBe('function');
   await page.evaluate(() => { window.activeUrl = 'http://localhost:5173/jobs'; window.connect('account-b@example.test'); });
   await expect(page.locator('#account')).toBeEmpty();
@@ -610,7 +745,7 @@ test('ATS country selects use explicit saved facts and telephone country remains
   expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
 });
 
-test('the current ATS provider opens with a saved-answer preview and no read, permission or paid action', async ({page}) => {
+test('the current ATS provider opens with a saved-answer preview and no read or permission action', async ({page}) => {
   await setup(page);
   await page.evaluate(() => { window.activeUrl = 'https://job-boards.eu.greenhouse.io/straitsx/jobs/4942133101'; });
   await login(page, undefined, {expand: false});
@@ -621,7 +756,7 @@ test('the current ATS provider opens with a saved-answer preview and no read, pe
   await expect(page.locator('#ats-inspect')).toBeHidden();
   await expect(page.locator('#ats-fill')).toBeEnabled();
   expect(await page.evaluate(() => window.atsCalls.map(call => call.action))).toEqual(['inspect']);
-  expect(await page.evaluate(() => window.drafts.every(call => call.url.endsWith('/autofill-profile')))).toBe(true);
+  expect(await page.evaluate(() => window.drafts.every(call => call.url.endsWith('/autofill-profile') || call.url.endsWith('/prepare-answers')))).toBe(true);
   expect(await page.evaluate(() => window.permissionRequests)).toEqual([]);
   expect(await page.evaluate(() => window.submitCalls || 0)).toBe(0);
 });

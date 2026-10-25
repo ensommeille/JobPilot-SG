@@ -94,8 +94,10 @@ test('saved natural skills lead to evidence and the correct explicit InternSG en
     profile_skill_count: currentProfile().skills.length,
     candidates: [{id: job.id, title: job.title, company: job.company, city: job.city, job_type: job.job_type}],
     display_order: [job.id], advice: {[job.id]: {
-      version: 'action-advice-v1', status: 'check_first', headline: 'Check the full spreadsheet requirements before applying.',
+      version: 'action-advice-v5', status: 'check_first', headline: 'Check the full spreadsheet requirements before applying.',
       reasons: ['The complete conditions remain unverified.'], blockers: [], strengths: [], counts: {supported: 0, gap: 0, unknown: 1},
+      application_recommendation: {verdict: 'consider', summary: 'Your spreadsheet skills are relevant; confirm the other role requirements.',
+        strengths: [naturalSkill], considerations: ['Confirm the complete spreadsheet requirements before applying.']},
     }},
     result: {requires_review: true, items: [{
       job_id: job.id, rank: 1, summary: 'Microsoft Excel appears in the saved skills and the job; other conditions remain unverified.',
@@ -144,10 +146,10 @@ test('saved natural skills lead to evidence and the correct explicit InternSG en
   await expect(page).toHaveURL(`${base}/jobs`);
   expect(recommendationCalls).toBe(0);
   await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
-  await expect(page.locator('.ai-ranked-jobs')).toContainText('Check the full spreadsheet requirements before applying.');
-  await page.getByText('Review 1 requirement and source quotes', {exact: true}).click();
-  await expect(page.locator('.job-advice-quotes')).toContainText(naturalSkill);
-  await expect(page.locator('.job-advice-requirements')).toContainText('conditions remain unverified');
+  await expect(page.locator('.job-advice-summary')).toHaveText('Your spreadsheet skills are relevant; confirm the other role requirements.');
+  await expect(page.locator('.job-advice-strengths')).toContainText(naturalSkill);
+  await expect(page.locator('.job-advice-considerations')).toContainText('Confirm the complete spreadsheet requirements');
+  await expect(page.locator('.job-advice-evidence, .job-advice-quotes')).toHaveCount(0);
   await page.getByRole('link', {name: 'View job and original posting'}).click();
   await expect(page.getByRole('heading', {name: job.title})).toBeVisible();
   await expect(page.getByRole('link', {name: 'Apply with AI Assistant'})).toHaveCount(0);

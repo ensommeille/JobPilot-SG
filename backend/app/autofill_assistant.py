@@ -43,6 +43,8 @@ FACT_DESCRIPTIONS = {
     "nationality_country": "Explicit nationality country, not citizenship eligibility",
     "study_country": "Explicit country of study",
     "school": "Selected education institution",
+    "institution_type": "University or Polytechnic explicitly named in the selected school, or a personal override",
+    "current_student": "Explicit Yes/No; Yes may be grounded in the same selected ongoing education entry",
     "degree": "Degree type of the same selected education entry",
     "discipline": "Subject / major of the same selected education entry",
     "education_start_year": "Starting year of selected education entry",
@@ -59,6 +61,11 @@ FACT_DESCRIPTIONS = {
     "work_arrangement": "Explicit full-time/part-time preference",
     "salary_expectation": "Explicit saved expected stipend / salary text",
     "notice_period": "Explicit saved notice period",
+    "internship_commitment": "Personally saved exact internship commitment option, never inferred from course duration",
+    "internship_type": "Personally saved internship type such as Credit Bearing or Leave of Absence",
+    "fulltime_start_year": "Personally saved full-time job availability year, never a graduation year",
+    "job_discovery_source": "Personally saved actual job-discovery channel; not inferred from profile links or school",
+    "job_discovery_other": "Personally saved explanation for the Other job-discovery choice",
     "linkedin": "A saved LinkedIn profile URL",
     "github": "A saved GitHub profile URL",
     "portfolio": "A separately saved portfolio website URL",
@@ -173,6 +180,8 @@ def _appropriate_kind(field: MappingField, key: str) -> bool:
         return key in {"internship_start_date", "internship_end_date"}
     if field.kind == "number":
         return key.startswith("education_") and key.endswith(("_year", "_month"))
+    if key == "current_student" and _rule_key(field.label) == key:
+        return True
     # A yes/no or generic screening choice is not a copy of an applicant fact.
     return not (field.options and {option.label.strip().lower() for option in field.options}
                 <= {"yes", "no", "select...", ""})
@@ -192,18 +201,24 @@ def _rule_key(label: str) -> str | None:
         (r"^(?:nationality|country of nationality)$", "nationality_country"),
         (r"^(?:country of study|study country)$", "study_country"),
         (r"^(?:school|university|institution|education institution)$", "school"),
+        (r"^(?:varsity|institution type|school type|type of institution)$", "institution_type"),
+        (r"^(?:still student|current student|are you currently (?:a )?student)$", "current_student"),
         (r"^(?:degree|degree type)$", "degree"),
         (r"^(?:discipline|major|field of study|subject)$", "discipline"),
         (r"^(?:start date of internship|internship start date|earliest start date)$", "internship_start_date"),
         (r"^(?:end date of internship|internship end date)$", "internship_end_date"),
         (r"^(?:notice period|how long is your notice period)$", "notice_period"),
+        (r"^how long is your commitment period for a full-time internship(?:\?\s*\(mondays to fridays, entire workday\))?$", "internship_commitment"),
+        (r"^is your internship\s*-?$", "internship_type"),
+        (r"^when would you be available to start a full-time role$", "fulltime_start_year"),
+        (r"^how did you hear about\b", "job_discovery_source"),
         (r"(?:expected (?:monthly )?(?:salary|stipend)|expecting for your internship stipend)", "salary_expectation"),
         (r"(?:work arrangements?|part-time, full-time)", "work_arrangement"),
         (r"^(?:programming languages|technical skills|relevant skills|skills summary)$", "skills"),
         (r"^(?:education summary|educational background|describe your education)$", "education"),
         (r"^(?:work experience|experience summary|describe your (?:relevant |work )?experience)$", "experience"),
         (r"^(?:professional summary|brief introduction|tell us about yourself)$", "summary"),
-        (r"^(?:availability(?: period| dates?| window)?|when is your availability(?:\s*\([^)]*\))?)$", "availability"),
+        (r"^(?:availability(?: period| dates?| window)?|when is your availability(?:\s*\([^)]*\))?|please indicate internship period)$", "availability"),
         (r"^linkedin(?: profile)?(?: url| link)?$", "linkedin"),
         (r"^github(?: profile)?(?: url| link)?$", "github"),
         (r"^(?:portfolio|personal website)(?: url| link)?$", "portfolio"),

@@ -9,9 +9,9 @@ from uuid import UUID
 
 from pydantic import Field, model_validator
 
-from .claim_scope import activity_evidence_issue, compound_scope_issue
+from .claim_scope import activity_evidence_issue, compound_scope_issue, performed_actions
 from .gap_evidence import NEGATIVE, unverified_gap_reason
-from .schemas import StrictModel
+from .schemas import ApplicationVerdict, CareerConsideration, CareerStrength, StrictModel
 
 ProfileField = Literal["education", "experience", "skills", "availability"]
 Outcome = Literal["supported", "gap", "unknown"]
@@ -52,12 +52,33 @@ class ReferencedRequirement(StrictModel):
         return self
 
 
+class ReferencedActivity(StrictModel):
+    requirement_index: int = Field(ge=0, strict=True)
+    profile_field: Literal["experience"]
+    profile_source_range: SourceRange
+
+
+class ReferencedCareerFit(StrictModel):
+    direction: Literal["direct", "adjacent", "low", "undetermined"]
+    proposed_verdict: ApplicationVerdict
+    summary: str = Field(min_length=1, max_length=420)
+    jd_source_range: SourceRange
+    profile_field: Literal["education", "experience", "skills"] | None
+    profile_source_range: SourceRange | None
+    job_focus: str = Field(min_length=1, max_length=100)
+    profile_focus: str | None = Field(max_length=100)
+    strengths: list[CareerStrength] = Field(max_length=3)
+    considerations: list[CareerConsideration] = Field(max_length=3)
+
+
 class ReferencedJob(StrictModel):
     job_id: UUID
     rank: int = Field(ge=1, le=5, strict=True)
     summary: str = Field(min_length=1, max_length=3000)
     requirements: list[ReferencedRequirement] = Field(min_length=1, max_length=25)
     warnings: list[str] = Field(max_length=20)
+    related_evidence: list[ReferencedActivity] = Field(default_factory=list, max_length=3)
+    career_fit: ReferencedCareerFit
 
 
 class ReferencedBatch(StrictModel):
@@ -217,7 +238,7 @@ def resolve_assessment(data: dict, payload: dict, catalog: dict[str, SourceSpan]
                 field="description",
             )
             profile_quote = _profile_quote(row.profile_field, row.profile_source_range, catalog)
-            outcomes = []
+            outcomes, checks = [], []
             unproven_gap = False
             for condition in row.condition_checks:
                 proof = _profile_quote(
@@ -236,8 +257,20 @@ def resolve_assessment(data: dict, payload: dict, catalog: dict[str, SourceSpan]
                 )
                 contradicted = condition.outcome != "gap" or bool(proof and NEGATIVE.search(proof))
                 unproven_gap |= condition.outcome == "gap" and not contradicted
-                outcomes.append(
+                checked_outcome = (
                     condition.outcome if shown and scoped and contradicted else "unknown"
+                )
+                outcomes.append(checked_outcome)
+                checks.append(
+                    {
+                        "condition": condition.condition,
+                        "outcome": checked_outcome,
+                        "profile_field": condition.profile_field,
+                        "profile_quote": proof,
+                        "reason": condition.reason
+                        if checked_outcome == condition.outcome
+                        else "The cited source does not establish this condition within the full requirement's displayed evidence.",
+                    }
                 )
             if row.condition_operator in {"atomic", "all_of"}:
                 aggregate = (
@@ -286,8 +319,61 @@ def resolve_assessment(data: dict, payload: dict, catalog: dict[str, SourceSpan]
                     "profile_field": row.profile_field,
                     "profile_quote": profile_quote,
                     "reason": reason,
+                    "condition_checks": checks,
+                    "condition_operator": row.condition_operator,
                 }
             )
+        related = []
+        seen_related = set()
+        for activity in item.related_evidence:
+            if activity.requirement_index >= len(rows):
+                raise ValueError("invalid_evidence")
+            parent = rows[activity.requirement_index]
+            proof = _profile_quote(activity.profile_field, activity.profile_source_range, catalog)
+            if not proof:
+                raise ValueError("invalid_evidence")
+            if not performed_actions(proof):
+                continue
+            if parent["category"] not in {"skill", "experience", "responsibility"}:
+                raise ValueError("invalid_evidence")
+            # On-the-job learning is not a pre-existing applicant qualification.
+            if re.search(
+                r"\b(?:training program|learn from|will (?:learn|receive training))\b",
+                parent["requirement"],
+                re.I,
+            ):
+                continue
+            identity = (activity.requirement_index, proof)
+            if identity in seen_related:
+                raise ValueError("invalid_evidence")
+            seen_related.add(identity)
+            related.append(
+                {
+                    "requirement_index": activity.requirement_index,
+                    "condition_index": None,
+                    "kind": "related_activity",
+                    "statement": "Related hands-on project activity",
+                    "jd_quote": parent["jd_quote"],
+                    "profile_field": "experience",
+                    "profile_quote": proof,
+                    "reason": "This is related activity from your profile, not proof that the entire job requirement is met.",
+                }
+            )
+        fit = None
+        if item.career_fit is not None:
+            fit = item.career_fit.model_dump(exclude={"jd_source_range", "profile_source_range"})
+            fit["jd_quote"] = _resolve(
+                item.career_fit.jd_source_range,
+                catalog,
+                scope="job",
+                owner=str(item.job_id),
+                field="description",
+            )
+            fit["profile_quote"] = _profile_quote(
+                item.career_fit.profile_field, item.career_fit.profile_source_range, catalog
+            )
+            if item.career_fit.direction != "undetermined" and not fit["profile_quote"]:
+                raise ValueError("invalid_evidence")
         result["items"].append(
             {
                 "job_id": str(item.job_id),
@@ -295,6 +381,8 @@ def resolve_assessment(data: dict, payload: dict, catalog: dict[str, SourceSpan]
                 "summary": item.summary,
                 "requirements": rows,
                 "warnings": item.warnings,
+                "related_evidence": related,
+                "career_fit": fit,
             }
         )
     return result

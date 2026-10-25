@@ -13,7 +13,9 @@ GRADUATION_YEAR = re.compile(
     re.I,
 )
 DATE_RANGE = re.compile(r"\b(?:19|20)\d{2}\s*[-–—]\s*((?:19|20)\d{2})\b")
-PREFERRED = re.compile(r"\b(?:preferred|preferably|a plus|nice.to.have|optional|bonus)\b", re.I)
+PREFERRED = re.compile(
+    r"\b(?:preferred|preferably|a plus|nice.to.have|optional|bonus|beneficial)\b", re.I
+)
 BUILD_ACTION = re.compile(
     r"\b(?:built|build(?:ing|s)?|develop(?:ed|ing|s)?|design(?:ed|ing|s)?|"
     r"implement(?:ed|ing|s)?|maintain(?:ed|ing|s)?|deploy(?:ed|ing|s)?|"
@@ -200,15 +202,25 @@ def _hard_gap(row: RequirementAssessment) -> bool:
 
 
 def prioritize_assessment(
-    result: BatchAssessment, profile: dict, *, allow_promotions: bool = True
+    result: BatchAssessment,
+    profile: dict,
+    *,
+    allow_promotions: bool = True,
+    condition_context: bool = False,
 ) -> BatchAssessment:
     """Keep model order except known hard conflicts; summaries reflect validated rows."""
     concerns = {}
     for item in result.items:
         notes = []
         for row in item.requirements:
-            _compound_evidence(row, allow_promotions=allow_promotions)
-            _construction_evidence(row)
+            # Atomic evidence is checked against that condition, not an adjacent
+            # AND clause inside the parent's exact (and still retained) JD quote.
+            scope = (
+                row.model_copy(update={"jd_quote": row.requirement}) if condition_context else row
+            )
+            _compound_evidence(scope, allow_promotions=allow_promotions)
+            _construction_evidence(scope)
+            row.outcome, row.reason = scope.outcome, scope.reason
             issue = activity_evidence_issue(
                 row.requirement, row.category, row.profile_field, row.profile_quote
             )
@@ -223,7 +235,7 @@ def prioritize_assessment(
                     "This is not a positive minimum-years barrier. Actual experience duration "
                     "is not inferred from education or project dates."
                 )
-            timing = _education_timing(row, profile.get("education") or "")
+            timing = _education_timing(scope, profile.get("education") or "")
             if timing:
                 note, explicit = timing
                 row.outcome = "gap" if explicit else "unknown"
@@ -239,19 +251,14 @@ def prioritize_assessment(
         for note in notes:
             if note not in item.warnings:
                 item.warnings = [note, *item.warnings][:20]
-        counts = {
-            outcome: sum(row.outcome == outcome for row in item.requirements)
-            for outcome in ("supported", "gap", "unknown")
-        }
-        supported = [
-            row.requirement[:180] for row in item.requirements if row.outcome == "supported"
-        ][:3]
+        from .advice import derive_advice
+
+        action = derive_advice(item)
         summary = (
             (notes[0] + " Lower priority until this condition is clarified. " if notes else "")
-            + f"Evidence review: {counts['supported']} supported, {counts['gap']} explicit gaps, "
-            + f"{counts['unknown']} needing confirmation."
-            + (" Supported evidence: " + "; ".join(supported) + "." if supported else "")
-            + " Review the individual conditions; technical relevance does not establish eligibility."
+            + action.headline
+            + ". "
+            + " ".join(action.reasons[:2])
         )
         item.summary = summary[:3000]
     result.items.sort(key=lambda item: (bool(concerns[str(item.job_id)]), item.rank))

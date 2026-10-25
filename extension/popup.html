@@ -2,7 +2,7 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JobPilot — Review & Fill</title><link rel="stylesheet" href="popup.css"></head>
 <body>
-<header><h1>JobPilot <span>Review & fill</span></h1></header>
+<header><h1>JobPilot <span id="runtime-version">Review & fill</span></h1></header>
 <main>
 <form id="login">
   <h2>Use your saved details</h2>
@@ -18,13 +18,13 @@
 <section id="workspace" hidden>
   <div class="account-row"><p id="account"></p><a id="open-jobpilot" target="_blank" rel="noopener noreferrer">Open JobPilot</a></div>
   <p id="active-tool" class="field-reason">Checking the current application…</p>
+  <p id="preparation-status" class="preparation-status" role="status" aria-live="polite" hidden></p>
   <div id="workspace-content" tabindex="0" aria-label="Application preview and settings">
   <details id="ats-tools">
     <summary>ATS application</summary>
-    <p id="ats-intro" class="field-reason">Saved PDF and Profile answers load automatically. Opening the extension starts no paid analysis. Add missing answers yourself.</p>
-    <button id="ats-inspect" class="secondary recovery-action" type="button" hidden>Refresh form</button>
+    <p id="ats-intro" class="field-reason">Saved PDF and Profile answers load automatically. Missing narrative answers prepare in the background.</p>
     <p id="ats-target" class="field-reason"></p>
-    <p id="ats-profile-note" class="field-reason" hidden>Saved PDF / Profile · edits apply here only.</p>
+    <p id="ats-profile-note" class="field-reason" hidden>Saved facts and editable AI drafts · edits apply here only.</p>
     <p id="ats-counts" class="field-reason" aria-live="polite" hidden></p>
     <div id="ats-fields"></div>
     <section id="ats-attachment" hidden aria-label="Attach saved resume">
@@ -34,7 +34,7 @@
       <p id="ats-attach-result" role="status" aria-live="polite"></p>
     </section>
     <details id="ats-manual" hidden></details>
-    <details class="form-help"><summary>What stays manual?</summary><p>Use Attach saved PDF or choose a file on the website. Answer remaining questions and personal declarations, complete consent and CAPTCHA, then submit there yourself.</p></details>
+    <details class="form-help"><summary>What stays manual?</summary><p>Check AI drafts and unresolved answers. Attach your PDF separately. Personal declarations, consent, CAPTCHA and final submission remain yours.</p></details>
   </details>
   <details id="original-tools">
   <summary>InternSG</summary>
@@ -45,7 +45,7 @@
   </section>
   <p id="target">Loading the current InternSG form…</p>
   <button id="inspect" class="secondary recovery-action" type="button" hidden>Refresh form</button>
-  <p class="field-reason">Saved answers load automatically. Fill uses the preview shown here; edits apply only to this application.</p>
+  <p class="field-reason">Saved answers load automatically. A missing introduction prepares from your saved evidence. Fill uses only this preview.</p>
   <div id="fields"></div>
   <details id="advanced-submission" class="submission" hidden>
     <summary>Advanced: send from the original site</summary>
@@ -87,6 +87,7 @@
     <div id="ats-actions" hidden>
       <p id="ats-consent" class="field-reason" hidden>Fill approves this preview. Existing answers stay unchanged.</p>
       <button id="ats-fill" type="button" aria-describedby="ats-consent" disabled hidden>Fill application form</button>
+      <button id="ats-inspect" class="secondary recovery-action" type="button" hidden>Refresh form</button>
       <p id="ats-result" role="status" aria-live="polite"></p>
     </div>
     <div id="original-actions" hidden>

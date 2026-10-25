@@ -3,22 +3,27 @@ import {interactWithWidgets} from './widgets.js';
 import {submissionPage, reserveAttempt} from './submission.js';
 import {resolveApplicationTarget, assertApplicationContext} from './frames.js';
 import {DEPLOYMENTS} from './connection.js';
-import {interactWithATSPage, parseATSInspectionResult} from './ats-page.js';
-import {autofillSuggestion, approvedAutofillAnswers} from './popup-review.js';
+import {interactWithATSPage, parseATSInspectionResult, parseATSFillResult} from './ats-page.js';
+import {autofillSuggestion, approvedAutofillAnswers, autofillPlaceholder} from './popup-review.js';
 import {popupConnectionKey, capturePopupTarget, assertCapturedPopupTarget, assertPopupDocumentBinding, resolveCapturedInternSG} from './popup-autoload.js';
+import {preparationFields, preparationOverflowFields, preparationPatch, unfinishedPreparationPatch, checkedPreparation, requestPreparation, boundedPreparation} from './popup-preparation.js';
 
 const $ = id => document.getElementById(id);
+const popupVersion = chrome.runtime.getManifest?.()?.version;
+if (popupVersion) $('runtime-version').textContent = 'Review & fill · ' + popupVersion;
 // This popup is a fill-only companion. Legacy submission code stays disabled.
 const SUBMISSION_ENABLED = false;
 let session = null, snapshot = null, busy = false;
 let supplements = {};
 let submissionReview = null;
 let atsReview = null, atsAttachmentReview = null, atsScanCounts = null;
+let atsFillState = 'idle';
 const atsEditors = new Map();
 let permissionVersion = 0;
 let connectionKey = '', connectionGeneration = 0, restoreVersion = 0;
 let initialization = Promise.resolve(), operationCompletion = Promise.resolve();
 let recoveryTool = null, activeTool = null;
+let preparation = null;
 const showRecovery = tool => { recoveryTool = tool; $('inspect').hidden = tool !== 'original-tools'; $('ats-inspect').hidden = tool !== 'ats-tools'; };
 const embeddedOrigins = current => ['https://www.internsg.com/*', 'https://internsg.com/*', current.site + '/*'];
 async function refreshEmbeddedAccess() {
@@ -51,6 +56,130 @@ async function loadLocal() {
   $('import-consent').checked = false;
 }
 const editors = new Map();
+function cancelPreparation() {
+  if (preparation) preparation.cancelled = true;
+  preparation = null;
+  const node = $('preparation-status');
+  if (node) { node.hidden = true; node.textContent = ''; }
+}
+function updatePreparationStatus() {
+  const node = $('preparation-status');
+  if (!node) return;
+  const group = activeTool === 'ats-tools' ? atsEditors : editors;
+  const ready = [...group.values()].filter(editor => !editor.blocked && editor.input.value.trim() && !['pending_confirmation', 'template', 'unfinished'].includes(editor.source)).length;
+  const templates = [...group.values()].filter(editor => !editor.blocked && editor.input.value.trim() && ['template', 'pending_confirmation', 'unfinished'].includes(editor.source)).length;
+  const unresolved = [...group.values()].filter(editor => !editor.blocked && !editor.input.value.trim()).length;
+  node.hidden = !group.size;
+  if (activeTool === 'ats-tools' && !atsReview && atsFillState !== 'idle') {
+    node.textContent = atsFillState === 'filling' ? 'Copying your answers to the application…'
+      : atsFillState === 'complete' ? 'Fill finished. Check the original form.'
+        : atsFillState === 'rejected' ? 'Nothing was filled. Refresh the form before trying again.'
+          : 'Check the website, then refresh this preview before trying again.';
+    return;
+  }
+  node.textContent = preparation?.status === 'preparing'
+    ? `${ready} ready · AI preparing answers to ${preparation.fields.length} current questions… ${preparation.overflowFields.length ? 'Only the first 40 questions are sent for analysis. ' : ''}Fill will wait for this batch.`
+    : `${ready} answers loaded${templates ? ` · ${templates} templates to replace` : ''} · ${unresolved} unanswered${preparation?.message ? '. ' + preparation.message : ''}`;
+}
+function groupReadyAnswers(container, group) {
+  const rows = [...group.values()].filter(editor => editor.row);
+  const ready = rows.filter(editor => editor.source === 'saved' && !editor.edited && editor.input.value.trim());
+  if (!ready.length) return;
+  let details = container.readyGroup;
+  if (!details || !details.isConnected) {
+    details = document.createElement('details'); details.className = 'prepared-fields'; details.open = true;
+    const summary = document.createElement('summary'); details.append(summary);
+    container.insertBefore(details, container.children[0] || null); container.readyGroup = details;
+  }
+  details.children[0].textContent = `Saved answers ready (${ready.length})`;
+  for (const editor of ready) details.append(editor.row);
+}
+function startPreparation(context, profile, group) {
+  const fields = preparationFields(group);
+  const overflowFields = preparationOverflowFields(group);
+  if (!fields.length) { updatePreparationStatus(); return; }
+  const owner = session;
+  const job = {context, owner, group, fields, overflowFields, status: 'preparing', cancelled: false, awaitedForFill: false};
+  preparation = job; refresh();
+  const valid = () => !job.cancelled && job.status === 'preparing' && preparation === job && session === owner
+    && (context === atsReview || context === snapshot);
+  const unchanged = () => { assertSession(owner); if (!valid()) throw new Error('This application preview changed.'); };
+  const body = {confirmed: true, page_url: context.url, profile_fingerprint: profile.fingerprint, fields};
+  const apply = (editor, patch, message) => {
+    editor.input.value = patch.value; editor.factKey = patch.factKey; editor.source = patch.source;
+    editor.templateValue = ['pending_confirmation', 'unfinished'].includes(patch.source) ? patch.value : null;
+    editor.note.hidden = false; editor.note.textContent = message;
+    if (editor.field.requiresWebsiteChoice) editor.note.append(' Choose the suggested location on the website.');
+    editor.row?.classList.toggle('ai-draft', patch.source === 'ai_draft');
+    editor.input.setAttribute('aria-describedby', editor.note.id);
+  };
+  const unfinished = (message, excluded = new Set(), targets = fields) => {
+    let count = 0;
+    for (const {id} of targets) {
+      if (excluded.has(id)) continue;
+      const editor = group.get(id), patch = unfinishedPreparationPatch(editor, profile);
+      if (patch) { apply(editor, patch, message); count++; }
+    }
+    return count;
+  };
+  const markOverflow = () => {
+    if (!overflowFields.length) return;
+    unfinished('Not analyzed: this question is beyond the first 40. Replace this pending text before submitting.', new Set(), overflowFields);
+    job.message += ' Only the first 40 questions were sent for analysis; the remaining questions were not analyzed.';
+  };
+  // One total deadline covers the existing batch, result binding and free checks.
+  // Fill can await this same promise; it never starts a second model request.
+  job.promise = boundedPreparation(async signal => {
+  const result = await requestPreparation(async cacheOnly => {
+    unchanged();
+    if (cacheOnly) await assertPopupDocumentBinding(chrome, context.popupTarget, context, unchanged);
+    unchanged();
+    return api('/browser-assistant/prepare-answers', {...body, ...(cacheOnly ? {cache_only: true} : {})}, 'POST', 8200, signal);
+  });
+    unchanged(); checkedPreparation(result, profile.fingerprint, fields);
+    const answers = result.status === 'preparing' || result.status === 'unavailable' || result.error_code ? [] : result.answers;
+    if (answers.length) {
+      const latest = await loadAutofillProfile(unchanged, signal);
+      if (latest.fingerprint !== profile.fingerprint) throw new Error('Saved details changed. Refresh the form to use them.');
+    }
+    await assertPopupDocumentBinding(chrome, context.popupTarget, context, unchanged);
+    unchanged();
+    if (busy && !job.awaitedForFill) { job.status = 'partial'; job.message = 'Another action has started; late answers were not added.'; refresh(); return; }
+    for (const answer of answers) {
+      if (answer.source !== 'saved' && result.analyzed_field_ids && !result.analyzed_field_ids.includes(answer.field_id)) continue;
+      const editor = group.get(answer.field_id), patch = preparationPatch(answer, editor, profile);
+      if (!patch) continue;
+      apply(editor, patch, patch.source === 'ai_draft'
+        ? `${result.execution_mode === 'mock' ? 'Mock AI answer' : 'AI answer'} · based on saved evidence. Review before filling.`
+        : patch.source === 'pending_confirmation' ? 'AI found no supporting information for this question. Replace this pending text before submitting.'
+          : result.execution_mode === 'live' ? 'AI matched this question to a saved answer.' : 'Saved answer ready.');
+    }
+    if (result.status === 'unavailable' || result.error_code || result.status === 'preparing') {
+      unfinished('AI did not finish answering this question. Replace this pending text before submitting.');
+      job.message = 'AI did not finish. Pending text is not an AI answer; replace it before submitting.';
+    } else {
+      const excluded = new Set(result.omitted.filter(item => item.reason === 'personal_or_qualification_question').map(item => item.field_id));
+      const unfinishedCount = unfinished('AI did not return a verified answer for this question. Replace this pending text before submitting.', excluded);
+      job.message = result.execution_mode === 'live' ? `${result.analyzed_field_ids ? `AI checked ${result.analyzed_field_ids.length} current questions` : 'AI preparation completed'} against your saved evidence. Review its answers before submitting.`
+        : result.execution_mode === 'mock' ? 'Mock preparation result; not a live AI analysis.' : 'Saved evidence checked. No live AI analysis was completed.';
+      if (unfinishedCount) job.message += ` ${unfinishedCount} questions have no verified answer; replace their pending text.`;
+    }
+    job.status = result.status === 'preparing' ? 'unavailable' : result.status;
+    markOverflow();
+    groupReadyAnswers(context === atsReview ? $('ats-fields') : $('fields'), group); refresh();
+  }).catch(error => {
+    if (!valid()) return;
+    if (error.stalePreview || /saved details changed/i.test(error.message || '')) {
+      job.status = 'unavailable'; job.message = error.message; showRecovery(context.popupTarget.tool); refresh(); return;
+    }
+    unfinished('AI did not finish answering this question. Replace this pending text before submitting.');
+    job.status = 'unavailable';
+    job.message = /timed out|abort/i.test(error.message || '') ? 'AI timed out. Pending text is not an AI answer; replace it before submitting.'
+      : 'AI preparation unavailable. Pending text is not an AI answer; replace it before submitting.';
+    markOverflow();
+    refresh();
+  });
+}
 function checkedFillResult(result, items) {
   const expected = new Set(items.map(item => item.id));
   if (!result || !Array.isArray(result.filled) || !Array.isArray(result.skipped) || result.submitted !== false) throw new Error('Invalid fill report.');
@@ -58,14 +187,31 @@ function checkedFillResult(result, items) {
   if (all.length !== expected.size || new Set(all).size !== all.length || all.some(id => !expected.has(id))) throw new Error('Incomplete fill report.');
   const reasons = result.reasons || {};
   if (typeof reasons !== 'object' || Array.isArray(reasons) || Object.entries(reasons).some(([id, reason]) => !result.skipped.includes(id) || typeof reason !== 'string')) throw new Error('Invalid fill reasons.');
-  return {filled: [...result.filled], skipped: [...result.skipped], reasons};
+  const needsWebsiteChoice = result.needsWebsiteChoice === undefined ? [] : result.needsWebsiteChoice;
+  if (!Array.isArray(needsWebsiteChoice) || new Set(needsWebsiteChoice).size !== needsWebsiteChoice.length
+      || needsWebsiteChoice.some(id => !result.filled.includes(id))) throw new Error('Invalid website-choice report.');
+  const needsCorrection = result.needsCorrection === undefined ? [] : result.needsCorrection;
+  if (!Array.isArray(needsCorrection) || new Set(needsCorrection).size !== needsCorrection.length
+      || needsCorrection.some(id => !result.filled.includes(id))) throw new Error('Invalid answer-correction report.');
+  return {filled: [...result.filled], skipped: [...result.skipped], reasons, needsWebsiteChoice: [...needsWebsiteChoice], needsCorrection: [...needsCorrection]};
+}
+function mergePreparedApproval(initial, pending, group, prepared) {
+  if (!pending) return initial;
+  const approved = new Map(initial.map(item => [item.id, item]));
+  const expected = new Set([...pending.fields, ...pending.overflowFields].map(field => field.id));
+  for (const item of prepared) {
+    const editor = group.get(item.id);
+    if (expected.has(item.id) && editor && !editor.edited
+        && ['saved', 'ai_draft', 'pending_confirmation', 'unfinished'].includes(editor.source)) approved.set(item.id, item);
+  }
+  return [...group.keys()].flatMap(id => approved.has(id) ? [approved.get(id)] : []);
 }
 const status = (message, error = false) => {
   $('status').textContent = message; $('status').classList.toggle('error', error);
   $('status').hidden = !error && !!$('ats-fields').childElementCount;
 };
 function refresh() {
-  $('fill').disabled = busy || !snapshot || ![...editors.values()].some(e => !e.blocked && e.input.value.trim());
+  $('fill').disabled = busy || !snapshot || !([...editors.values()].some(e => !e.blocked && e.input.value.trim()) || (preparation?.context === snapshot && preparation.status === 'preparing'));
   for (const editor of editors.values()) {
     editor.input.disabled = busy || !!editor.blocked;
     if (editor.selects) for (const select of Object.values(editor.selects)) select.disabled = busy || !!editor.blocked;
@@ -82,7 +228,7 @@ function refresh() {
   $('ats-inspect').disabled = busy;
   $('ats-attach').disabled = busy || !atsAttachmentReview;
   for (const editor of atsEditors.values()) editor.input.disabled = busy || !atsReview;
-  $('ats-fill').disabled = busy || !atsReview || ![...atsEditors.values()].some(editor => editor.input.value.trim());
+  $('ats-fill').disabled = busy || !atsReview || !([...atsEditors.values()].some(editor => editor.input.value.trim()) || (preparation?.context === atsReview && preparation.status === 'preparing'));
   $('ats-fill').hidden = !$('ats-fields').childElementCount;
   $('ats-intro').hidden = !!$('ats-fields').childElementCount;
   $('ats-profile-note').hidden = !$('ats-fields').childElementCount;
@@ -90,13 +236,17 @@ function refresh() {
   $('original-actions').hidden = !$('fields').childElementCount;
   $('review-actions').hidden = $('ats-actions').hidden && $('original-actions').hidden;
   $('status').hidden = !$('status').classList.contains('error') && !!$('ats-fields').childElementCount;
-  $('ats-fill').textContent = busy ? atsReview ? 'Checking…' : 'Filling…' : 'Fill application form';
+  $('ats-fill').textContent = busy ? atsFillState === 'waiting' ? 'Preparing…' : atsReview ? 'Checking…' : 'Filling…'
+    : !atsReview && ['rejected', 'uncertain'].includes(atsFillState) ? 'Refresh form to continue'
+      : !atsReview && atsFillState === 'complete' ? 'Fill finished' : 'Fill application form';
   $('ats-counts').hidden = !atsScanCounts;
   if (atsScanCounts) {
     const missing = [...atsEditors.values()].filter(editor => !editor.input.value.trim()).length;
-    const ready = atsReview ? atsEditors.size - missing : 0;
-    $('ats-counts').textContent = `${ready} ready · ${missing} missing · ${atsScanCounts.occupied} already filled · ${atsScanCounts.unsupported} unsupported · ${atsScanCounts.personal} answer yourself`;
+    const templates = [...atsEditors.values()].filter(editor => editor.input.value.trim() && ['template', 'pending_confirmation', 'unfinished'].includes(editor.source)).length;
+    const ready = atsReview ? atsEditors.size - missing - templates : 0;
+    $('ats-counts').textContent = `${ready} ready${templates ? ` · ${templates} templates to replace` : ''} · ${preparation?.status === 'preparing' ? `${preparation.fields.length} preparing` : `${missing} unresolved`} · ${atsScanCounts.occupied} already filled · ${atsScanCounts.unsupported} unsupported · ${atsScanCounts.personal} answer yourself`;
   }
+  updatePreparationStatus();
 }
 async function run(task, validate = true) {
   if (busy) return;
@@ -123,23 +273,26 @@ function assertSession(current) {
   if (!current || session !== current) throw new Error('Account connection changed. Read the page again.');
 }
 function clearDraft() {
+  cancelPreparation();
   snapshot = null; editors.clear(); $('fields').replaceChildren(); resetSubmission();
   $('target').textContent = ''; $('submission-status').textContent = '';
 }
 function clearAtsReview() {
+  cancelPreparation();
+  atsFillState = 'idle';
   atsReview = null; atsAttachmentReview = null; atsScanCounts = null; atsEditors.clear(); $('ats-fields').replaceChildren();
   $('ats-attachment').hidden = true; $('ats-resume').replaceChildren(); $('ats-attach-result').textContent = '';
   $('ats-manual').replaceChildren(); $('ats-manual').hidden = true; $('ats-manual').open = false;
   $('ats-target').textContent = ''; $('ats-target').removeAttribute('title'); $('ats-result').textContent = '';
   refresh();
 }
-async function api(path, body, method = 'POST', timeout = 40000) {
+async function api(path, body, method = 'POST', timeout = 40000, signal) {
   const current = session;
   if (!current?.token?.startsWith('jpx_')) throw new Error('Connect through JobPilot first.');
   const response = await fetch(session.api + path, {
     method, redirect: 'error', credentials: 'omit', cache: 'no-store',
     headers: {'Content-Type': 'application/json', Authorization: `Bearer ${current.token}`},
-    body: JSON.stringify(body), signal: AbortSignal.timeout(timeout),
+    body: JSON.stringify(body), signal: signal || AbortSignal.timeout(timeout),
   });
   assertSession(current);
   if (response.status === 401) {
@@ -264,8 +417,10 @@ function render(fields, values) {
       const note = document.createElement('p'); note.className = 'field-reason'; note.id = `reason-${field.id}`;
       const updateReason = () => { note.textContent = input.value.trim() ? 'Ready to fill when you click Fill application form.' : 'No saved answer. Enter it here or update your JobPilot profile; otherwise this field is skipped.'; };
       input.setAttribute('aria-describedby', note.id); updateReason();
-      input.addEventListener('input', () => { updateReason(); refresh(); });
-      editors.set(field.id, {input, note, widget: field.widget}); row.append(input, note);
+      const editor = {input, note, row, field: {...field, kind: 'text', available: true, draftable: field.id === 'applicant_summary'},
+        source: input.value.trim() ? 'saved' : null, edited: false, widget: field.widget};
+      input.addEventListener('input', () => { editor.edited = true; editor.source = 'user'; updateReason(); refresh(); });
+      editors.set(field.id, editor); row.append(input, note);
     }
     $('fields').append(row);
   }
@@ -292,7 +447,7 @@ function renderCountries(widgets, countries) {
     selects[key] = select; row.append(label, select);
   }
   const countryHelp = document.createElement('p'); countryHelp.className = 'field-reason'; row.append(countryHelp);
-  editors.set('applicant_countries', {input, note, widget: true, selects}); update();
+  editors.set('applicant_countries', {input, note, row, source: countries?.nationality && countries?.campus ? 'saved' : null, widget: true, selects}); update();
 }
 async function loadInternSGPreview(target, currentSession, unchanged) {
   clearDraft(); clearAtsReview(); status('Loading saved answers…');
@@ -322,11 +477,13 @@ async function loadInternSGPreview(target, currentSession, unchanged) {
   snapshot = current; $('target').textContent = `${snapshot.title} — ${snapshot.url}`;
   const values = {...data.values};
   render(snapshot.fields, values); renderCountries(widgets, data.countries);
+  groupReadyAnswers($('fields'), editors);
   showRecovery(null); status('Saved answers loaded. Click Fill application form when ready. Nothing is submitted.');
   refresh();
+  startPreparation(current, profile, editors);
 }
-async function loadAutofillProfile(unchanged) {
-  const data = await api('/browser-assistant/autofill-profile', undefined, 'GET');
+async function loadAutofillProfile(unchanged, signal) {
+  const data = await api('/browser-assistant/autofill-profile', undefined, 'GET', 8200, signal);
   unchanged();
   if (!data || typeof data.values !== 'object' || !data.fingerprint || !Array.isArray(data.resumes)) throw new Error('Update JobPilot before using saved PDF answers.');
   return data;
@@ -344,7 +501,7 @@ async function loadATSPreview(target, currentSession, unchanged) {
   const response = parseATSInspectionResult(results, target.url);
   const review = response?.result;
   const profile = await loadAutofillProfile(unchanged);
-  const mappings = []; // Startup and Refresh only reuse saved facts; unknown questions stay manual.
+  const mappings = []; // Known saved facts are immediate; current unanswered questions are prepared once below.
   const context = {...review, tabId: target.tabId, documentId: response.documentId, profileFingerprint: profile.fingerprint, popupTarget: target};
   await assertPopupDocumentBinding(chrome, target, context, unchanged);
   const manualQuestions = new Map((review.manualQuestions || []).map(question => [question, question]));
@@ -367,7 +524,7 @@ async function loadATSPreview(target, currentSession, unchanged) {
     label.textContent = field.label || field.id.replaceAll('_', ' ');
     const {key: factKey, value: factValue, candidate} = autofillSuggestion(field, profile, mappings);
     const isSelect = field.kind === 'select';
-    const input = document.createElement(isSelect ? 'select' : field.kind === 'text' && ['education', 'experience', 'skills', 'resume_summary', 'availability_period'].includes(factKey) ? 'textarea' : 'input');
+    const input = document.createElement(isSelect ? 'select' : field.kind === 'text' && (field.draftable || ['education', 'experience', 'skills', 'resume_summary', 'availability_period'].includes(factKey)) ? 'textarea' : 'input');
     input.id = 'ats-' + field.id; label.htmlFor = input.id;
     if (isSelect) {
       input.add(new Option('Choose an answer', ''));
@@ -378,6 +535,7 @@ async function loadATSPreview(target, currentSession, unchanged) {
       if (input instanceof HTMLInputElement) input.type = field.kind === 'date' ? 'date' : field.kind === 'number' ? 'number'
         : field.id === 'email' ? 'email' : field.id === 'phone' ? 'tel' : ['linkedin', 'github', 'portfolio'].includes(factKey) ? 'url' : 'text';
       input.value = factValue;
+      input.placeholder = autofillPlaceholder(field, factKey);
     }
     if (field.kind === 'combobox' && field.options?.length) {
       const choices = document.createElement('datalist'); choices.id = 'choices-' + input.id;
@@ -389,8 +547,7 @@ async function loadATSPreview(target, currentSession, unchanged) {
       const savedValue = profile.values[factKey];
       if (savedValue?.length > (field.maxLength || 10000)) note.textContent = 'Saved answer is too long. Write a shorter answer here.';
       else if (savedValue) note.textContent = 'Your saved answer needs a different choice or format here. Review this field or complete it on the website.';
-      else if (field.needsMapping) note.textContent = 'Could not match this question to a saved answer. Enter it here or answer on the website.';
-      else note.append('No saved answer. ', atsSourceLink('Add it once in Profile'), ', or enter it here.');
+      else note.textContent = 'AI is checking your saved PDF and profile for this question. You can edit here.';
       input.setAttribute('aria-describedby', note.id);
     } else {
       const source = profile.sources?.[factKey];
@@ -399,9 +556,23 @@ async function loadATSPreview(target, currentSession, unchanged) {
       else note.hidden = true;
       input.setAttribute('aria-describedby', note.hidden ? 'ats-profile-note' : note.id);
     }
-    input.addEventListener('input', refresh); input.addEventListener('change', refresh);
+    if (field.requiresWebsiteChoice) {
+      note.hidden = false; note.append(' Choose the suggested location on the website.');
+      input.setAttribute('aria-describedby', note.id);
+    }
+    const editor = {input, field, factKey, note, row, templateValue: null, source: input.value.trim() ? 'saved' : null, edited: false};
+    const edited = () => {
+      const pending = ['pending_confirmation', 'unfinished'].includes(editor.source) && input.value.trim() === editor.templateValue;
+      editor.edited = true; editor.source = pending ? editor.source : 'user';
+      note.hidden = false;
+      note.textContent = pending ? 'Pending text, not a completed answer. Replace before submitting.' : 'Your entry for this application only.';
+      if (field.requiresWebsiteChoice) note.append(' Choose the suggested location on the website.');
+      refresh();
+    };
+    input.addEventListener('input', edited);
+    input.addEventListener('change', edited);
     row.append(label, input, note); $('ats-fields').append(row);
-    atsEditors.set(field.id, {input, field, factKey});
+    atsEditors.set(field.id, editor);
   }
   if (manualQuestions.size) {
     const title = document.createElement('summary'); title.textContent = `Other fields to check (${manualQuestions.size})`;
@@ -422,33 +593,46 @@ async function loadATSPreview(target, currentSession, unchanged) {
   }
   $('ats-target').textContent = new URL(review.url).hostname; $('ats-target').title = review.url;
   $('ats-result').textContent = 'Nothing is submitted.';
+  groupReadyAnswers($('ats-fields'), atsEditors);
   showRecovery(null); status('Saved answers loaded. Missing answers can be added here or on the website.'); refresh();
   const scroller = $('workspace-content');
   scroller.scrollTop += $('ats-fields').getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  startPreparation(context, profile, atsEditors);
 }
 $('ats-fill').addEventListener('click', () => {
   if (busy || !atsReview) return;
-  const current = atsReview, approved = approvedAutofillAnswers(atsEditors);
+  const current = atsReview;
+  const pending = preparation?.context === current && preparation.status === 'preparing' ? preparation : null;
+  const initialApproved = approvedAutofillAnswers(atsEditors);
+  if (pending) { pending.awaitedForFill = true; atsFillState = 'waiting'; }
   run(async unchanged => {
+    if (pending) { await pending.promise; unchanged(); }
+    const approved = mergePreparedApproval(initialApproved, pending, atsEditors, approvedAutofillAnswers(atsEditors));
+    cancelPreparation();
     if (atsReview !== current || !approved.length) throw new Error('Read and review the form again.');
     const latest = await loadAutofillProfile(unchanged);
     if (atsReview !== current) throw new Error('The form review changed. Read the form again.');
     if (latest.fingerprint !== current.profileFingerprint) { clearAtsReview(); throw new Error('Your saved answers changed. Read the form again. Nothing was filled.'); }
     await assertPopupDocumentBinding(chrome, current.popupTarget, current, unchanged);
     if (atsReview !== current) throw new Error('The form review changed. Refresh the form before filling.');
-    atsReview = null; refresh(); $('ats-result').textContent = 'Filling the reviewed answers…';
+    atsReview = null; atsFillState = 'filling'; refresh(); $('ats-result').textContent = 'Copying answers to the application…';
     let response;
     try { [response] = await chrome.scripting.executeScript({target: {tabId: current.tabId, documentIds: [current.documentId]},
       func: interactWithATSPage, args: [{action: 'fill', expectedUrl: current.url, approved}]}); }
-    catch { unchanged(); throw new Error('Fill was interrupted. Some answers may be filled; check the original page before reading it again. Nothing was submitted.'); }
+    catch { unchanged(); atsFillState = 'uncertain'; $('ats-result').textContent = ''; throw new Error('Fill was interrupted. Check the original page, then choose Refresh form. Nothing was submitted.'); }
     unchanged();
     let report;
-    try { report = checkedFillResult(response?.result, approved); }
-    catch { throw new Error('Fill result is uncertain. Check the original page before reading it again. Nothing was submitted.'); }
+    try { report = checkedFillResult(parseATSFillResult([response], current.documentId), approved); }
+    catch (error) {
+      atsFillState = error.fillRejected ? 'rejected' : 'uncertain';
+      $('ats-result').textContent = '';
+      throw error.fillRejected ? error : new Error('Could not verify filling. Check the original page, then choose Refresh form. Nothing was submitted.');
+    }
+    atsFillState = 'complete';
     if (atsScanCounts) atsScanCounts.occupied += report.filled.length;
     for (const id of report.filled) atsEditors.delete(id);
     showRecovery('ats-tools');
-    $('ats-result').textContent = `Filled ${report.filled.length}; skipped ${report.skipped.length}. Nothing was submitted.`;
+    $('ats-result').textContent = `Filled ${report.filled.length}; skipped ${report.skipped.length}. ${report.needsWebsiteChoice.length ? `${report.needsWebsiteChoice.length} website choice${report.needsWebsiteChoice.length === 1 ? '' : 's'} still needed. ` : ''}${report.needsCorrection.length ? `${report.needsCorrection.length} copied answer${report.needsCorrection.length === 1 ? '' : 's'} need${report.needsCorrection.length === 1 ? 's' : ''} editing on the website. ` : ''}Nothing was submitted.`;
   });
 });
 $('ats-attach').addEventListener('click', () => {
@@ -479,12 +663,17 @@ $('ats-attach').addEventListener('click', () => {
 });
 $('fill').addEventListener('click', () => {
   if (busy || !snapshot) return;
-  // The click approves only this visible draft, never later edits during session validation.
   const current = snapshot;
-  const approved = [...editors].filter(([, e]) => !e.blocked && e.input.value.trim()).map(([id, e]) => ({id, value: e.input.value, confirmed: true, widget: !!e.widget}));
+  const pending = preparation?.context === current && preparation.status === 'preparing' ? preparation : null;
+  const project = () => [...editors].filter(([, e]) => !e.blocked && e.input.value.trim()).map(([id, e]) => ({id, value: e.input.value, confirmed: true, widget: !!e.widget}));
+  const initialApproved = project();
+  if (pending) pending.awaitedForFill = true;
   run(async unchanged => {
   let dispatched = false;
   try {
+   if (pending) { await pending.promise; unchanged(); }
+   const approved = mergePreparedApproval(initialApproved, pending, editors, project());
+   cancelPreparation();
   resetSubmission();
   if (snapshot !== current) throw new Error('The form review changed. Read the page again.');
   const latest = await loadAutofillProfile(unchanged);

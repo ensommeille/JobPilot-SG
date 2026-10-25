@@ -13,14 +13,14 @@ const validRunId = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 const errorMessages: Record<string, string> = {
   profile_required: 'Save your skills, education or project experience in your profile, then return to recommend jobs.',
   profile_needed: 'Save your skills, education or project experience in your profile, then return to recommend jobs.',
-  no_candidates: 'No current jobs with enough profile relevance were found. You can show all jobs and review the original postings.',
-  invalid_output: 'The model response could not be verified. No ranking is shown. You can still browse all jobs.',
+  no_candidates: 'No current jobs with enough profile relevance were found. You can show all jobs and read the original postings.',
+  invalid_output: 'AI could not complete these recommendations. You can still browse all jobs.',
   provider_unavailable: 'The AI provider is unavailable. Check the saved status before requesting recommendations again.',
-  invalid_evidence: 'The model quotes could not be verified against the source text. No ranking is shown.',
+  invalid_evidence: 'AI could not complete these recommendations reliably. You can still browse all jobs.',
 }
 
 function failureMessage(code: string | null) {
-  return (code && errorMessages[code]) || 'Recommendations could not be completed. You can show all jobs, review your saved profile and explicitly try again.'
+  return (code && errorMessages[code]) || 'Recommendations could not be completed. You can show all jobs, edit your saved profile and explicitly try again.'
 }
 
 function requestMessage(error: unknown, fallback: string) {
@@ -202,7 +202,7 @@ function RecommendationSession({ token, children, jobs, favorites, favoritePendi
       </div>
       {submitting && <p role="status">Finding relevant jobs and comparing them with your saved profile. This may take a minute. Leaving this view does not cancel a run already started.</p>}
       {loadingRun && <p role="status">Loading saved recommendations. No new AI call is being requested…</p>}
-      {runError && <p role="alert" className="ai-error">{runError} <Link to="/profile">Review profile</Link></p>}
+      {runError && <p role="alert" className="ai-error">{runError} <Link to="/profile">Edit profile</Link></p>}
       {report?.execution_mode === 'mock' && <p className="ai-notice">This is a mock preview, not a live recommendation. Show all jobs to browse current postings.</p>}
       {report?.status === 'running' && <>
         <p role="status">Comparing {report.candidates.length} shortlisted jobs. Checking status does not call the AI model again.</p>
@@ -210,13 +210,12 @@ function RecommendationSession({ token, children, jobs, favorites, favoritePendi
         {pollError && <p role="alert" className="ai-error">{pollError}</p>}
         <button type="button" className="btn btn-secondary" onClick={() => { setPollError(''); setPollVersion(value => value + 1) }}>Check saved status</button>
       </>}
-      {report?.status === 'failed' && <p role="alert" className="ai-error">{failureMessage(report.error_code)}{report.error_code && <span className="ai-error-code">Reference: {report.error_code}</span>}</p>}
+      {report?.status === 'failed' && <p role="alert" className="ai-error">{failureMessage(report.error_code)}</p>}
       {report?.status === 'succeeded' && <>
-        {report.is_current !== false && <p className="muted">AI-assisted suggestions, not a hiring decision. Check key conditions before applying; supporting quotes are available below.</p>}
         {report.is_current === false ? <p className="ai-notice" role="status">Historical result: the profile, jobs or analysis rules have changed. Click Recommend to me for an up-to-date comparison; no new analysis starts automatically.</p>
           : <p className="muted">{ranked.length} shortlisted {ranked.length === 1 ? 'job' : 'jobs'}, ranked using your saved profile. Browse filters are paused in this view; Show all jobs restores them.</p>}
         {favoriteError && <p role="alert" className="ai-error">{favoriteError} Show all jobs to reload saved jobs.</p>}
-        {!ranked.length && <p>No ranked jobs were returned. Show all jobs to review current postings.</p>}
+        {!ranked.length && <p>No ranked jobs were returned. Show all jobs to read current postings.</p>}
         <ol className="ai-ranked-jobs">{ranked.map(item => {
           const candidate = report.candidates.find(value => value.id === item.job_id)
           const job = jobs.find(value => String(value.id) === item.job_id)
@@ -238,7 +237,7 @@ function RecommendationSession({ token, children, jobs, favorites, favoritePendi
           </li>
         })}</ol>
       </>}
-      {report && <details className="ai-run-details"><summary>Analysis details</summary><p>{report.provider} · {report.model} · {timeLabel(report.started_at)}</p>{report.reused && <p>This view uses a saved result.</p>}<p>Uses the saved profile and job descriptions from this run. Save profile changes before requesting again. Identical inputs reuse the saved result.</p><p>{report.profile_skill_count} saved skill entries supplied. {report.candidates.length} jobs compared. Prompt version: {report.prompt_version}.</p><p>{report.usage.input_tokens === null && report.usage.output_tokens === null ? 'Token usage was not reported.' : `Input tokens: ${report.usage.input_tokens ?? 'not reported'} · Output tokens: ${report.usage.output_tokens ?? 'not reported'}`}</p></details>}
+      {report && <details className="ai-run-details"><summary>About this analysis</summary><p>AI-assisted guidance based on your saved profile and these jobs. Hiring decisions remain with the employer.</p><p>{report.provider} · {report.model} · {timeLabel(report.started_at)}</p>{report.reused && <p>This view uses a saved result.</p>}<p>Profile or job changes may require a new analysis. Identical inputs reuse the saved result.</p>{report.error_code && <p>Reference: {report.error_code}</p>}</details>}
     </section>}
   </div>
 }

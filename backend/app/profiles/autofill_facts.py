@@ -45,8 +45,15 @@ EDUCATION_KEYS = (
     "education_end_year",
     "education_end_month",
 )
+EDUCATION_CHOICE_KEYS = ("institution_type", "current_student")
+MANUAL_PREFERENCE_KEYS = (
+    "internship_commitment", "internship_type", "fulltime_start_year",
+    "job_discovery_source", "job_discovery_other",
+)
 EXTRA_KEYS = (
     *EDUCATION_KEYS,
+    *EDUCATION_CHOICE_KEYS,
+    *MANUAL_PREFERENCE_KEYS,
     "current_city",
     "current_country",
     "phone_country_code",
@@ -77,6 +84,8 @@ EXTRACTABLE_KEYS = tuple(
         "nationality",
         "study_country",
         *ALIASES,
+        *EDUCATION_CHOICE_KEYS,
+        *MANUAL_PREFERENCE_KEYS,
     }
 )
 
@@ -129,6 +138,14 @@ def clean_manual(key: str, value: str | None) -> str | None:
         raise ValueError("Use an explicit calling code such as +65")
     if key == "work_arrangement" and (len(value) > 200 or any(ord(char) < 32 for char in value)):
         raise ValueError("Use a short explicit work-arrangement statement")
+    if key == "institution_type" and value not in {"University", "Polytechnic", "Others"}:
+        raise ValueError("Choose University, Polytechnic or Others explicitly")
+    if key == "current_student":
+        if value.casefold() not in {"yes", "no", "true", "false"}:
+            raise ValueError("Choose Yes or No explicitly")
+        value = "Yes" if value.casefold() in {"yes", "true"} else "No"
+    if key in MANUAL_PREFERENCE_KEYS and key != "job_discovery_other" and (len(value) > 200 or any(ord(char) < 32 for char in value)):
+        raise ValueError("Use one short explicit application preference")
     if key in {"linkedin", "github", "portfolio"}:
         parsed = urlsplit(value)
         if (
@@ -489,9 +506,8 @@ def build_autofill_profile(db: Session, user: User) -> dict:
     for key, fact in facts.items():
         values[key] = fact["value"]
         sources[key] = {"source": "resume", "quote": fact["quote"], "resume_id": str(document.id)}
-    for key, value in (
-        (profile.autofill_details or {}).get("values", {}) if profile else {}
-    ).items():
+    manual_values = (profile.autofill_details or {}).get("values", {}) if profile else {}
+    for key, value in manual_values.items():
         if key not in ALL_FACT_KEYS:
             continue
         values.pop(key, None)
@@ -517,6 +533,22 @@ def build_autofill_profile(db: Session, user: User) -> dict:
             if len(links) == 1:
                 values[key] = links.pop()
                 sources[key] = {"source": "profile", "quote": None, "resume_id": None}
+    school = values.get("school", "")
+    if "institution_type" not in manual_values and school:
+        kinds = [kind for kind in ("University", "Polytechnic") if re.search(r"\b" + kind + r"\b", school, re.I)]
+        if len(kinds) == 1:
+            values["institution_type"] = kinds[0]
+            school_source = sources.get("school", {})
+            sources["institution_type"] = {**school_source, "quote": school_source.get("quote") or school,
+                                           "derived_from": "school"}
+    if "current_student" not in manual_values and facts.get("school") and facts.get("degree"):
+        context = facts["school"]["quote"]
+        if (facts["degree"]["quote"] == context and re.search(r"\b(?:19|20|21)\d{2}(?:[-/.]\d{1,2})?\s*[-–—]\s*Present\b", context, re.I)
+                and values.get("school") == facts["school"]["value"]
+                and values.get("degree") == facts["degree"]["value"]):
+            values["current_student"] = "Yes"
+            sources["current_student"] = {"source": "resume", "quote": context, "resume_id": str(document.id),
+                                          "derived_from": "ongoing_selected_education"}
     for alias, canonical in ALIASES.items():
         if canonical in values:
             values[alias] = values[canonical]

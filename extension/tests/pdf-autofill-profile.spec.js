@@ -13,11 +13,15 @@ async function setup(page, {multiple = false, empty = false, cached = false, fai
     missing_fields: ['school', 'given_name', 'current_city'], resume: multiple || empty ? null : resume,
     resumes: empty ? [] : multiple ? [resume, {...resume, id: '22222222-3333-4444-8555-666666666666'}] : [resume], requires_resume_selection: multiple,
     extraction_status: empty ? 'no_resume' : multiple ? 'selection_required' : cached ? 'ready' : 'not_extracted', fingerprint: 'before'};
-  const reads = [], patches = [], uploads = []; let release = () => {};
+  const reads = [], patches = [], uploads = [], warms = []; let release = () => {};
   await page.route('**/users/me', route => route.fulfill({json: {id: 'pdf-fixture-user', role: 'user'}}));
   await page.route('**/profile', route => route.request().resourceType() === 'document' ? route.continue() : route.fulfill({json: savedProfile}));
   await page.route('**/profile/resumes', route => route.fulfill({json: profile.resumes}));
   await page.route('**/browser-assistant/autofill-profile', route => route.fulfill({json: profile}));
+  await page.route('**/browser-assistant/prepare-answers/warm', route => {
+    warms.push(route.request().postDataJSON());
+    return route.fulfill({status: 500, json: {detail: 'A Profile visit has no application to prepare'}});
+  });
   await page.route('**/profile/resumes/upload', route => { uploads.push(route.request().method()); profile = {...profile, resumes: [...profile.resumes, uploaded]}; return route.fulfill({json: uploaded}); });
   await page.route('**/profile/autofill-details', route => {
     const body = route.request().postDataJSON(); patches.push(body);
@@ -36,7 +40,7 @@ async function setup(page, {multiple = false, empty = false, cached = false, fai
         given_name: {source: 'resume', quote: 'Fictional Applicant', resume_id: id}}, extraction_status: 'ready', missing_fields: ['current_city'], fingerprint: 'after'}; }
     return route.fulfill({json: {resume_id: id, sha256: resume.sha256, prompt_version: 'fixture-only', status: fail ? 'failed' : 'ready', reused: false, facts: {}, error_code: fail ? 'fixture_failed' : null}});
   });
-  await page.goto(base + '/profile'); return {reads, patches, uploads, release: () => release()};
+  await page.goto(base + '/profile'); return {reads, patches, uploads, warms, release: () => release()};
 }
 
 test('one upload prepares the PDF once and blocks a second selection while pending', async ({page}) => {
@@ -51,6 +55,7 @@ test('one upload prepares the PDF once and blocks a second selection while pendi
   await expect(page.getByRole('button', {name: 'Use this PDF', exact: true})).toHaveCount(0); expect(f.patches).toHaveLength(0); expect(f.reads).toHaveLength(1);
   await page.getByRole('button', {name: 'Refresh saved answers', exact: true}).click();
   await page.reload(); await expect(page.locator('.autofill-facts-ready')).toContainText('PDF ready'); expect(f.reads).toHaveLength(1);
+  expect(f.warms).toEqual([]);
 });
 
 test('legacy unread PDF has one intentional use action and no paid page-mount call', async ({page}) => {
@@ -81,6 +86,7 @@ test('choosing an already-ready PDF reuses its facts without another analysis PO
   await page.getByLabel('Resume for autofill', {exact: true}).selectOption(resume.id);
   await expect(page.locator('.autofill-facts-ready')).toContainText('PDF ready'); await expect(page.getByRole('button', {name: 'Use this PDF', exact: true})).toHaveCount(0); expect(f.reads).toHaveLength(0);
   await page.reload(); await expect(page.locator('.autofill-facts-ready')).toContainText('PDF ready'); expect(f.reads).toHaveLength(0);
+  expect(f.warms).toEqual([]);
 });
 
 test('failed preparation retains the PDF and offers manual details without automatic retry', async ({page}) => {

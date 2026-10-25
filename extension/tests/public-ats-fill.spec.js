@@ -1,9 +1,16 @@
 import {test, expect} from '@playwright/test';
-import {interactWithATSPage, matchATSSelectOption, parseATSInspectionResult} from '../ats-page.js';
+import {readFile} from 'node:fs/promises';
+import {interactWithATSPage, matchATSSelectOption, parseATSInspectionResult, parseATSFillResult} from '../ats-page.js';
 
 const greenhouse = 'https://job-boards.greenhouse.io/acme/jobs/123?gh_jid=123';
 const lever = 'https://jobs.lever.co/acme/abc-123/apply';
 const ashby = 'https://jobs.ashbyhq.com/goventi/dec35151-7bee-45ae-b088-a04986145d93/application';
+// Captured React DOM state: each native education select has value='' and
+// selectedIndex=0 even though its placeholder is disabled. outerHTML omits
+// that live property; an HTML parser would otherwise choose the first value.
+const restoreAshbyEmptyDateState = `for(const id of ['_systemfield_education_history-startDate','_systemfield_education_history-endDate']) {
+  for(const select of document.getElementById(id)?.querySelectorAll('select') || []) select.selectedIndex=0;
+}`;
 const approved = (field, value) => ({id: field.id, key: field.key, label: field.label, kind: field.kind,
   evidenceKey: field.evidenceKey, value, confirmed: true,
   ...(['select', 'combobox'].includes(field.kind) ? {optionLabel: field.kind === 'combobox' ? value
@@ -71,8 +78,10 @@ test('changed question or dropdown meaning rejects the whole preview before the 
   const review = await page.evaluate(interactWithATSPage, {action: 'inspect'});
   const country = review.fields.find(field => field.kind === 'select');
   await page.locator('option[value="SG"]').evaluate(node => { node.textContent = 'Different meaning'; });
-  await expect(page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: greenhouse,
-    approved: [approved(review.fields.find(field => field.id === 'first_name'), 'MING'), approved(country, 'SG')]})).rejects.toThrow('option changed');
+  const rejected = await page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: greenhouse,
+    approved: [approved(review.fields.find(field => field.id === 'first_name'), 'MING'), approved(country, 'SG')]});
+  expect(rejected).toMatchObject({fill_version: 1, ok: false, mutation_started: false, error: {code: 'option_changed', stage: 'fill_preflight'}});
+  expect(() => parseATSFillResult([{documentId: 'fixture-doc', result: rejected}], 'fixture-doc')).toThrow('option changed');
   await expect(page.locator('input[name="first_name"]')).toHaveValue('');
 });
 test('asynchronous blur clearing is a skipped answer and never a success', async ({page}) => {
@@ -99,6 +108,56 @@ test('observed GH React-select semantics require real option selection, not quer
   expect(result.filled).toEqual([degree.id]); await expect(page.locator('.select__single-value')).toHaveText("Master's Degree");
   await expect(page.locator('#degree--0')).toHaveValue(''); expect(await page.evaluate(() => window.submits)).toBe(0);
 });
+
+test('observed GH control mousedown opens phone-country options while an empty unrelated field cannot block identity fill', async ({page}) => {
+  await fixture(page, greenhouse, `<label for="first_name">First Name*</label><input id="first_name" maxlength="255">
+    <label for="preferred_name">Preferred First Name</label><input id="preferred_name" maxlength="255">
+    <fieldset class="phone-input"><legend>Phone</legend><div class="select"><div class="select__control">
+      <label id="country-label" for="country">Country*</label><input id="country" role="combobox" aria-labelledby="country-label" aria-expanded="false">
+      </div><div class="select__value-container"></div></div><input id="phone" type="tel"></fieldset>`, `
+    window.countryOpens=0;const input=document.getElementById('country'),container=input.closest('.select');
+    container.querySelector('.select__control').addEventListener('mousedown',()=>{window.countryOpens++;if(input.getAttribute('aria-expanded')==='true')throw new Error('Unexpected toggle');
+      const list=document.createElement('div');list.id='country-options';list.setAttribute('role','listbox');
+      for(const value of ['China +86','Singapore +65']){const option=document.createElement('div');option.setAttribute('role','option');option.textContent=value;
+        option.addEventListener('click',()=>{const selected=document.createElement('div');selected.className='select__single-value';selected.textContent=value;
+          container.querySelector('.select__value-container').append(selected);list.remove();input.value='';input.setAttribute('aria-expanded','false');});list.append(option);}
+      container.append(list);input.setAttribute('aria-controls',list.id);input.setAttribute('aria-expanded','true');});
+    input.addEventListener('keydown',event=>{if(event.key==='Escape'){document.getElementById('country-options')?.remove();input.removeAttribute('aria-controls');input.setAttribute('aria-expanded','false')}});`);
+  const review = await page.evaluate(interactWithATSPage, {action: 'inspect'});
+  const country = review.fields.find(field => field.evidenceKey === 'phone_country_code');
+  expect(country.options.map(option => option.label)).toEqual(['China +86', 'Singapore +65']);
+  const result = await page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: greenhouse,
+    approved: [approved(review.fields.find(field => field.id === 'first_name'), 'Avery'), approved(country, 'China +86')]});
+  expect(result.filled).toEqual(['first_name', country.id]);
+  await expect(page.locator('#first_name')).toHaveValue('Avery'); await expect(page.locator('#preferred_name')).toHaveValue('');
+  await expect(page.locator('.select__single-value')).toHaveText('China +86'); expect(await page.evaluate(() => window.submits)).toBe(0);
+});
+
+test('observed GH cover-letter upload becomes a draft target without an automatic click, and opens only during Fill', async ({page}) => {
+  await fixture(page, greenhouse, `<input name="first_name"><div class="file-upload" role="group" aria-labelledby="upload-label-cover_letter" data-allow-s3="false">
+    <div id="upload-label-cover_letter" class="label upload-label">Cover Letter</div><div class="file-upload__wrapper"><div class="button-container">
+    <input id="cover_letter" type="file" hidden><button type="button" data-testid="cover_letter-text">Enter manually</button></div></div></div>`, `
+    window.manualClicks=0;document.querySelector('[data-testid="cover_letter-text"]').addEventListener('click',()=>{
+      window.manualClicks++;if(document.getElementById('cover_letter_text'))return;
+      const wrapper=document.createElement('div');wrapper.className='text-input-wrapper';
+      const textarea=document.createElement('textarea');textarea.id='cover_letter_text';textarea.rows=6;wrapper.append(textarea);
+      document.querySelector('.file-upload').append(wrapper);});`);
+  const review = await page.evaluate(interactWithATSPage, {action: 'inspect'});
+  const cover = review.fields.find(field => field.key === 'gh:cover_letter_text');
+  expect(cover.label).toBe('Cover letter'); expect(cover.draftable).toBe(true);
+  expect(await page.evaluate(() => window.manualClicks)).toBe(0);
+  await expect(page.locator('#cover_letter_text')).toHaveCount(0);
+  const result = await page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: greenhouse, approved: [approved(cover, 'Reviewed evidence-based draft.')]});
+  expect(result.filled).toEqual([cover.id]); expect(await page.evaluate(() => window.manualClicks)).toBe(1);
+  await expect(page.locator('#cover_letter_text')).toHaveValue('Reviewed evidence-based draft.');
+  expect(await page.locator('#cover_letter').evaluate(node => node.files.length)).toBe(0);
+  const occupied = await page.evaluate(interactWithATSPage, {action: 'inspect'});
+  const second = await page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: greenhouse,
+    approved: [approved(occupied.fields.find(field => field.key === cover.key), 'Do not replace')]});
+  expect(second.skipped).toEqual([cover.id]);
+  await expect(page.locator('#cover_letter_text')).toHaveValue('Reviewed evidence-based draft.');
+  expect(await page.evaluate(() => window.submits)).toBe(0);
+});
 test('Ashby formless scope uses real date path and excludes the separate résumé parser', async ({page}) => {
   await fixture(page, ashby, `<input id="outside-parser" type="file" aria-label="Resume">
     <div class="ashby-application-form-container"><label>Name<input name="_systemfield_name"></label><label>Email<input type="email" name="_systemfield_email"></label>
@@ -110,6 +169,88 @@ test('Ashby formless scope uses real date path and excludes the separate résum�
   const date = review.fields.find(field => field.kind === 'date'); expect(date.key).toBe('ashby:start-path');
   expect((await page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: ashby, approved: [approved(date, '2026-10-30')]})).filled).toEqual([date.id]);
   await expect(page.locator('.ashby-application-form-input-date')).toHaveValue('10/30/2026');
+});
+test('actual empty BlockTech Ashby markup represents each ordinary radio group once and preserves unapproved choices', async ({page}) => {
+  const actualUrl = 'https://jobs.ashbyhq.com/blocktech/0b610536-94c4-4a42-b937-c163ea2cc8a1/application';
+  const markup = await readFile(new URL('./fixtures/ashby-blocktech-form.html', import.meta.url), 'utf8');
+  await fixture(page, actualUrl, '<div class="ashby-application-form-container"><input id="outside-parser" type="file" aria-label="Resume"></div>' + markup, restoreAshbyEmptyDateState, true);
+  const protectedSelector = 'input[type=radio], input[type=checkbox], select';
+  const before = await page.locator(protectedSelector).evaluateAll(nodes => nodes.map(node => ({id: node.id, name: node.name, value: node.value, checked: !!node.checked})));
+  expect(before.filter(node => /labeled-radio/.test(node.id))).toHaveLength(10);
+  const review = await page.evaluate(interactWithATSPage, {action: 'inspect'});
+  expect(review.ok).toBe(true); expect(review.provider).toBe('Ashby');
+  const radioNames = await page.locator('input[type=radio]').evaluateAll(nodes => [...new Set(nodes.map(node => node.name))]);
+  expect(radioNames).toHaveLength(3);
+  const groups = review.fields.filter(field => field.key.startsWith('ashby:radio:'));
+  expect(groups).toHaveLength(3);
+  expect(groups.every(field => radioNames.includes(field.key.replace(/^ashby:radio:/, '')) && field.kind === 'select')).toBe(true);
+  const values = {full_name: 'Avery Ng', email: 'avery@example.test', phone: '+6512345678',
+    linkedin: 'https://www.linkedin.com/in/fictional-avery', degree: 'M.Tech.', discipline: 'Software Engineering'};
+  const answers = Object.entries(values).map(([key, value]) => approved(review.fields.find(field => field.evidenceKey === key), value));
+  const result = await page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: actualUrl, approved: answers});
+  expect(result.filled).toHaveLength(6); expect(result.skipped).toEqual([]); expect(result.submitted).toBe(false);
+  await expect(page.locator('#_systemfield_name')).toHaveValue('Avery Ng');
+  await expect(page.locator('#_systemfield_education_history-degree')).toHaveValue('M.Tech.');
+  expect(await page.locator(protectedSelector).evaluateAll(nodes => nodes.map(node => ({id: node.id, name: node.name, value: node.value, checked: !!node.checked})))).toEqual(before);
+  expect(await page.evaluate(() => window.submits)).toBe(0);
+});
+test('actual Ashby ordinary radio and student controls click explicit facts and protect consent and dependent dates', async ({page}) => {
+  const actualUrl = 'https://jobs.ashbyhq.com/blocktech/0b610536-94c4-4a42-b937-c163ea2cc8a1/application';
+  const markup = await readFile(new URL('./fixtures/ashby-blocktech-form.html', import.meta.url), 'utf8');
+  const script = restoreAshbyEmptyDateState + `document.getElementById('_systemfield_education_history-isCurrent').addEventListener('change',event=>{
+    for(const select of document.getElementById('_systemfield_education_history-endDate').querySelectorAll('select'))select.disabled=event.target.checked;
+  });`;
+  await fixture(page, actualUrl, markup, script, true);
+  const review = await page.evaluate(interactWithATSPage, {action: 'inspect'});
+  const answers = Object.entries({current_student: 'Yes', fulltime_start_year: '2028', job_discovery_source: 'LinkedIn'}).map(([key, value]) => {
+    const field = review.fields.find(candidate => candidate.evidenceKey === key);
+    expect(field.available).toBe(true);
+    const option = field.options.find(candidate => candidate.label === value);
+    return approved(field, option.value);
+  });
+  const result = await page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: actualUrl, approved: answers});
+  expect(result.filled).toHaveLength(3); expect(result.skipped).toEqual([]);
+  await expect(page.locator('#_systemfield_education_history-isCurrent')).toBeChecked();
+  const fulltime = review.fields.find(field => field.evidenceKey === 'fulltime_start_year');
+  expect(await page.evaluate(id => document.getElementById(id).checked, fulltime.options.find(option => option.label === '2028').value)).toBe(true);
+  expect(await page.locator('input[type=checkbox]').evaluateAll(nodes => nodes.filter(node => /consent|agree/i.test(node.name)).some(node => node.checked))).toBe(false);
+  expect(await page.locator('#_systemfield_education_history-endDate select').evaluateAll(nodes => nodes.every(node => node.disabled && node.value === ''))).toBe(true);
+  expect(await page.evaluate(() => window.submits)).toBe(0);
+});
+test('Ashby actual education containers and observed async school/city portals require exact option clicks and persistent native choices', async ({page}) => {
+  const actualUrl = 'https://jobs.ashbyhq.com/blocktech/0b610536-94c4-4a42-b937-c163ea2cc8a1/application';
+  const markup = await readFile(new URL('./fixtures/ashby-blocktech-form.html', import.meta.url), 'utf8');
+  const script = restoreAshbyEmptyDateState + `window.ashbyChoiceClicks=[];window.ashbyQueries=[];
+    for(const [purpose,id] of [['school','_systemfield_education_history-school'],['city','_systemfield_location']]) {
+      const input=document.querySelector('label[for="'+id+'"]').parentElement.querySelector('input[role="combobox"]');
+      input.addEventListener('input',()=>{
+        window.ashbyQueries.push(purpose);document.getElementById('qa-'+purpose+'-list')?.remove();
+        const list=document.createElement('div');list.id='qa-'+purpose+'-list';list.setAttribute('role','listbox');list.textContent='Loading...';
+        document.body.append(list);input.setAttribute('aria-controls',list.id);input.setAttribute('aria-expanded','true');
+        setTimeout(()=>{
+          list.textContent='';
+          for(const label of purpose==='school'?['National University of Salta','National University of Singapore']:['Singapore']) {
+            const option=document.createElement('div');option.setAttribute('role','option');option.setAttribute('aria-selected','true');
+            if(purpose==='school') {const name=document.createElement('span');name.className='_canonicalSchoolResultName_fixture';name.textContent=label;option.append(name);const country=document.createElement('span');country.textContent='Singaporeexample.test';option.append(country)}
+            else option.textContent=label;
+            option.addEventListener('click',()=>{window.ashbyChoiceClicks.push(label);input.value=label;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-controls');list.remove()});
+            list.append(option);
+          }
+        },40);
+      });
+    }`;
+  await fixture(page, actualUrl, markup, script, true);
+  const before = await page.locator('input[type=radio],input[type=checkbox]').evaluateAll(nodes => nodes.map(node => ({id: node.id, checked: node.checked})));
+  const review = await page.evaluate(interactWithATSPage, {action: 'inspect'});
+  const values = {school: 'National University of Singapore', current_city: 'Singapore', education_start_month: '1', education_start_year: '2026', education_end_month: '6', education_end_year: '2027'};
+  expect(await page.evaluate(() => window.ashbyQueries)).toEqual([]);
+  for (const key of Object.keys(values)) expect(review.fields.some(field => field.evidenceKey === key && field.available)).toBe(true);
+  const result = await page.evaluate(interactWithATSPage, {action: 'fill', expectedUrl: actualUrl,
+    approved: Object.entries(values).map(([key, value]) => approved(review.fields.find(field => field.evidenceKey === key), value))});
+  expect(result.filled).toHaveLength(6); expect(result.skipped).toEqual([]);
+  expect(await page.evaluate(() => window.ashbyChoiceClicks)).toEqual(['National University of Singapore', 'Singapore']);
+  expect(await page.locator('input[type=radio],input[type=checkbox]').evaluateAll(nodes => nodes.map(node => ({id: node.id, checked: node.checked})))).toEqual(before);
+  expect(await page.evaluate(() => window.submits)).toBe(0);
 });
 test('attachment is separate, exact-target and hash checked without submitting', async ({page}) => {
   await fixture(page, greenhouse, `<input name="first_name"><label>Resume/CV<input name="resume" type="file" accept=".pdf"></label>

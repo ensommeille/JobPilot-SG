@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.ai_recommendations.router import router as ai_recommendations_router
+from app.answer_preparation.router import router as answer_preparation_router
 from app.application_journey.router import router as application_journey_router
 from app.applications.router import router as applications_router
 from app.assistant.router import router as assistant_router
@@ -45,6 +46,7 @@ app.include_router(ingestion_router)
 app.include_router(extraction_router)
 app.include_router(browser_assistant_router)
 app.include_router(autofill_assistant_router)
+app.include_router(answer_preparation_router)
 
 
 @app.get("/health")

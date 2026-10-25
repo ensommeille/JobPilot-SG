@@ -244,7 +244,8 @@ def test_summary_is_regenerated_from_validated_degree_outcome_without_false_unce
         education=education,
     )
     assert assessed.items[0].requirements[0].outcome == "supported"
-    assert "1 supported, 0 explicit gaps, 0 needing confirmation" in assessed.items[0].summary
+    assert "Limited evidence of a relevant fit" in assessed.items[0].summary
+    assert "0 supported" not in assessed.items[0].summary
     assert "uncertain" not in assessed.items[0].summary
 
 
@@ -281,7 +282,10 @@ def test_maximum_length_model_reason_remains_valid_after_a_conservative_downgrad
 
 
 @pytest.mark.parametrize("category", ["skill", "work_constraint", "responsibility"])
-@pytest.mark.parametrize("missing", list(RequirementAssessment.model_fields))
+@pytest.mark.parametrize(
+    "missing",
+    [key for key, field in RequirementAssessment.model_fields.items() if field.is_required()],
+)
 def test_every_category_requires_every_row_key_without_defaults(category, missing):
     condition = {**ROW_EXAMPLE, "category": category}
     del condition[missing]
@@ -290,7 +294,9 @@ def test_every_category_requires_every_row_key_without_defaults(category, missin
 
 
 def test_prompt_complete_row_example_matches_the_actual_strict_schema():
-    assert set(ROW_EXAMPLE) == set(RequirementAssessment.model_fields)
+    assert set(ROW_EXAMPLE) == {
+        key for key, field in RequirementAssessment.model_fields.items() if field.is_required()
+    }
     assert RequirementAssessment.model_validate(ROW_EXAMPLE).outcome == "unknown"
     assert "EVERY responsibility and work_constraint" in SYSTEM_PROMPT
     assert "ALL NINE keys" in SYSTEM_PROMPT

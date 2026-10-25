@@ -4,7 +4,6 @@ import Navbar from '../components/Navbar'
 import JobAIAdvice from '../components/JobAIAdvice'
 import JobDescription, { type DescriptionBlock } from '../components/JobDescription'
 import JobApplicationActions from '../components/JobApplicationActions'
-import ApplicationChannelInfo from '../components/ApplicationChannelInfo'
 import { sourceTime } from '../services/sourceStatus'
 import { fetchJobById, addFavorite, removeFavorite, formatSalary } from '../services/jobs'
 import { getToken, watchSession } from '../services/auth'
@@ -145,7 +144,6 @@ const SessionJobDetail = ({ id, token }: { id: string; token: string | null }) =
             {favError && <p id="favorite-error" className="job-detail-error" role="alert">{favError}</p>}
           </div>
         </header>
-        <ApplicationChannelInfo jobId={job.id} />
         <JobAIAdvice key={`advice-${job.id}`} jobId={job.id} active={job.status === 'active'} />
         <JobDescription description={job.description} blocks={job.description_blocks} />
         {!!job.requirements?.length && <section className="job-description" aria-labelledby="job-requirements-title"><h3 id="job-requirements-title">Requirements</h3><ul>{job.requirements.map((requirement, index) => <li key={index}>{requirement}</li>)}</ul></section>}

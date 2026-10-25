@@ -33,11 +33,13 @@ const report = {
   started_at: '2026-10-24T04:00:00Z', expires_at: '2026-10-24T04:03:00Z', finished_at: '2026-10-24T04:00:05Z',
 };
 report.advice = {[jobs[0].id]: {
-  version: 'action-advice-v3', status: 'check_first', headline: 'Check your full-time availability before applying.',
+  version: 'action-advice-v5', status: 'check_first', headline: 'Check your full-time availability before applying.',
   reasons: ['Availability is not confirmed.'],
   blockers: [{...report.result.items[0].requirements[1], requirement_index: 1}],
   strengths: [{...report.result.items[0].requirements[0], requirement_index: 0}],
   counts: {supported: 1, gap: 0, unknown: 1},
+  application_recommendation: {verdict: 'consider', summary: 'Your Python background is relevant; confirm your full-time availability.',
+    strengths: ['Python programming experience'], considerations: ['Full-time availability needs confirmation.']},
 }};
 report.display_order = [jobs[0].id];
 
@@ -97,32 +99,36 @@ test('one explicit recommendation entry uses the saved profile and replaces the 
   await expect(page.locator('.job-card')).toHaveCount(0);
   await expect(page.getByRole('search')).toHaveCount(0);
   await expect(page.getByRole('complementary', {name: 'Filters'})).toHaveCount(0);
-  await expect(page.locator('.ai-ranked-jobs')).toContainText(report.advice[jobs[0].id].headline);
+  await expect(page.locator('.ai-ranked-jobs')).toContainText(report.advice[jobs[0].id].application_recommendation.summary);
   await expect(page.locator('.ai-ranked-jobs').getByText(report.result.items[0].warnings[0], {exact: true})).not.toBeVisible();
   await expect(page.locator('.ai-ranked-jobs').getByRole('link', {name: 'Prepare application'})).toHaveAttribute('href', `/jobs/${jobs[0].id}/prepare`);
   expect(calls.posts).toBe(1);
   expect(calls.legacy).toBe(0);
 });
 
-test('the primary recommendation shows no more than two concrete reasons', async ({page}) => {
-  const verbose = {...report, advice: {[jobs[0].id]: {...report.advice[jobs[0].id], reasons: ['First concrete condition.', 'Second concrete evidence.', 'Additional detail stays out of the primary summary.']}}};
+test('the product recommendation has at most three strengths and three considerations', async ({page}) => {
+  const application_recommendation = {...report.advice[jobs[0].id].application_recommendation,
+    strengths: ['First strength.', 'Second strength.', 'Third strength.', 'Fourth strength.'],
+    considerations: ['First condition.', 'Second condition.', 'Third condition.', 'Fourth condition.']};
+  const verbose = {...report, advice: {[jobs[0].id]: {...report.advice[jobs[0].id], application_recommendation}}};
   await setup(page, {post: route => route.fulfill({json: verbose}), get: route => route.fulfill({json: verbose})});
   await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
-  await expect(page.locator('.job-advice-reasons li')).toHaveCount(2);
-  await expect(page.locator('.job-advice-reasons')).toContainText('Second concrete evidence.');
-  await expect(page.locator('.job-advice-decision')).not.toContainText('Needs your review');
+  await expect(page.locator('.job-advice-strengths li')).toHaveCount(3);
+  await expect(page.locator('.job-advice-considerations li')).toHaveCount(3);
+  await expect(page.locator('.job-advice')).not.toContainText('Fourth');
+  await expect(page.locator('.job-advice')).not.toContainText('Needs your review');
 });
 
-test('source quotes and unknown conditions remain available without invented certainty', async ({page}) => {
+test('recommendations stay focused on the decision and useful conditions without an audit checklist', async ({page}) => {
   await setup(page);
   await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
   const results = page.locator('.ai-ranked-jobs');
-  await results.getByText('Review 2 requirements and source quotes', {exact: true}).click();
-  await expect(results.locator('.job-advice-quotes dd').filter({hasText: 'Python required.'})).toHaveCount(1);
-  await expect(results.locator('.job-advice-outcome-unknown')).toHaveText('Unknown');
-  await expect(results).toContainText('No explicit saved evidence cited. More information or manual review is needed.');
-  await expect(results.locator('.job-advice-note').filter({hasText: 'does not verify'})).toContainText('does not verify proficiency or employer eligibility');
-  await expect(results).toContainText('Original AI assessments may still be uncertain. Application advice applies extra conservative evidence checks.');
+  await expect(results.locator('.job-advice-status')).toHaveText('Worth considering');
+  await expect(results.locator('.job-advice-strengths')).toContainText('Python programming experience');
+  await expect(results.locator('.job-advice-considerations')).toContainText('Full-time availability needs confirmation.');
+  await expect(results.locator('.job-advice-evidence, .job-advice-outcome-unknown, .job-advice-quotes')).toHaveCount(0);
+  await expect(results).not.toContainText('No explicit saved evidence');
+  await expect(page.locator('.ai-run-details')).not.toHaveAttribute('open');
   await expect(results.getByRole('link', {name: 'View job and original posting'})).toHaveAttribute('href', `/jobs/${jobs[0].id}?recommendation_run=${runId}`);
 });
 
@@ -130,11 +136,11 @@ test('server action advice order replaces the raw model rank without inventing a
   const second = {...report.result.items[0], job_id: jobs[1].id, rank: 2};
   const reordered = {...report, candidates: [...report.candidates, {...report.candidates[0], id: jobs[1].id, title: jobs[1].title}],
     result: {requires_review: true, items: [report.result.items[0], second]}, display_order: [jobs[1].id, jobs[0].id],
-    advice: {...report.advice, [jobs[1].id]: {...report.advice[jobs[0].id], status: 'consider', headline: 'This role has relevant saved project evidence.'}}};
+    advice: {...report.advice, [jobs[1].id]: {...report.advice[jobs[0].id], status: 'consider', application_recommendation: {verdict: 'consider', summary: 'This role is relevant to your saved projects.', strengths: ['Software project experience'], considerations: []}}}};
   await setup(page, {post: route => route.fulfill({json: reordered}), get: route => route.fulfill({json: reordered})});
   await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
   await expect(page.locator('.ai-ranked-jobs > li').first()).toContainText(jobs[1].title);
-  await expect(page.locator('.ai-ranked-jobs > li').first().locator('.job-advice-status')).toHaveText('Worth considering');
+  await expect(page.locator('.ai-ranked-jobs > li').first().locator('.job-advice-summary')).toHaveText('This role is relevant to your saved projects.');
   await expect(page.locator('.ai-rank')).toHaveCount(0);
   await expect(page.locator('.ai-ranked-jobs')).not.toContainText('%');
 });
@@ -191,13 +197,18 @@ test('browse location, sorting and page survive recommendation-detail-back navig
   expect(calls.posts).toBe(1);
 });
 
-test('a decision identical to its status is shown once while specific conclusions keep the status', async ({page}) => {
-  const duplicate = {...report, advice: {[jobs[0].id]: {...report.advice[jobs[0].id], status: 'consider', headline: 'Worth considering'}}};
-  await setup(page, {post: route => route.fulfill({json: duplicate}), get: route => route.fulfill({json: duplicate})});
+test('a valid recommendation with no strengths remains a complete result, without invented positives', async ({page}) => {
+  const application_recommendation = {verdict: 'not_priority', summary: 'Your software background is a different direction from this HR role.',
+    strengths: [], considerations: ['This role focuses on HR, Business or Psychology qualifications.']};
+  const unrelated = {...report, advice: {[jobs[0].id]: {...report.advice[jobs[0].id], application_recommendation}}};
+  await setup(page, {post: route => route.fulfill({json: unrelated}), get: route => route.fulfill({json: unrelated})});
   await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
-  await expect(page.locator('.job-advice-decision').getByText('Worth considering', {exact: true})).toHaveCount(1);
-  await expect(page.locator('.job-advice-decision .job-advice-status')).toHaveCount(0);
-  await expect(page.locator('.job-advice')).toHaveAttribute('data-advice-status', 'consider');
+  await expect(page.locator('.job-advice-status')).toHaveText('Not a priority');
+  await expect(page.locator('.job-advice-summary')).toHaveText(application_recommendation.summary);
+  await expect(page.locator('.job-advice-strengths')).toHaveCount(0);
+  await expect(page.locator('.job-advice-considerations')).toContainText('HR, Business or Psychology');
+  await expect(page.locator('.job-fit-heading, .job-fit-counts, .job-advice-pending')).toHaveCount(0);
+  await expect(page.locator('.job-advice')).toHaveAttribute('data-advice-status', 'not_priority');
 });
 
 test('requesting the same saved inputs displays the reused result', async ({page}) => {
@@ -207,7 +218,7 @@ test('requesting the same saved inputs displays the reused result', async ({page
   await page.getByRole('button', {name: 'Show all jobs'}).click();
   await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
   await expect(page.locator('.ai-run-state')).toContainText('Saved result');
-  await page.getByText('Analysis details', {exact: true}).click();
+  await page.getByText('About this analysis', {exact: true}).click();
   await expect(page.locator('.ai-run-details')).toContainText('This view uses a saved result.');
   expect(calls.posts).toBe(2); // The server owns hash-based caching; UI never auto-retries.
   expect(calls.legacy).toBe(0);
@@ -233,7 +244,7 @@ test('a rejected model output is never rendered as a recommendation', async ({pa
   const failed = {...report, status: 'failed', result: null, error_code: 'invalid_evidence'};
   const calls = await setup(page, {post: route => route.fulfill({json: failed}), get: route => route.fulfill({json: failed})});
   await page.getByRole('button', {name: 'Recommend to me', exact: true}).click();
-  await expect(page.locator('.ai-recommendations').getByRole('alert')).toContainText('quotes could not be verified');
+  await expect(page.locator('.ai-recommendations').getByRole('alert')).toContainText('could not complete these recommendations reliably');
   await expect(page.locator('.ai-ranked-jobs')).toHaveCount(0);
   expect(calls.posts).toBe(1);
 });
@@ -263,7 +274,7 @@ test('restoring an ai_run link is read-only and Show all removes the restoration
   expect(calls.posts).toBe(0);
 });
 
-for (const changed of ['profile', 'job description', 'analysis rules']) test(`a historical run after ${changed} changes shows snapshot evidence without current application advice`, async ({page}) => {
+for (const changed of ['profile', 'job description', 'analysis rules']) test(`a historical run after ${changed} changes does not display a stale recommendation or private audit checklist`, async ({page}) => {
   const historical = {...report, is_current: false, advice: {}, display_order: []};
   const calls = await setup(page, {path: `/jobs?ai_run=${runId}`, get: route => route.fulfill({json: historical})});
   await expect(page.getByRole('heading', {name: 'Historical comparison'})).toBeVisible();
@@ -273,12 +284,8 @@ for (const changed of ['profile', 'job description', 'analysis rules']) test(`a 
   await expect(page.locator('.job-advice-headline')).toHaveCount(0);
   await expect(page.locator('.ai-recommendations')).not.toContainText('ranked using your saved profile');
   await expect(page.locator('.ai-ranked-jobs').getByRole('link', {name: 'Prepare application'})).toHaveCount(0);
-  await page.getByText('Review historical evidence', {exact: true}).click();
-  await expect(page.locator('.job-advice-evidence')).toContainText('Snapshot only.');
-  const quotes = page.locator('.job-advice-quotes');
-  await expect(quotes).toHaveCount(2);
-  await expect(quotes.locator('dd').filter({hasText: /^Python required\.$/})).toHaveCount(1);
-  await expect(quotes.locator('dd').filter({hasText: /^Python$/})).toHaveCount(1);
+  await expect(page.locator('.job-advice-summary, .job-advice-evidence, .job-advice-quotes')).toHaveCount(0);
+  await expect(page.locator('.ai-ranked-jobs')).not.toContainText(report.advice[jobs[0].id].application_recommendation.summary);
   await expect(page.getByRole('button', {name: 'Recommend to me', exact: true})).toBeEnabled();
   expect(calls.posts).toBe(0);
   await page.getByRole('button', {name: 'Show all jobs'}).click();
@@ -342,7 +349,7 @@ test('account replacement discards an in-flight private result', async ({page}) 
   release.resolve();
   await expect(page.getByRole('button', {name: 'Recommend to me', exact: true})).toBeEnabled();
   await expect(page.locator('.ai-ranked-jobs')).toHaveCount(0);
-  await expect(page.locator('body')).not.toContainText(report.advice[jobs[0].id].headline);
+  await expect(page.locator('body')).not.toContainText(report.advice[jobs[0].id].application_recommendation.summary);
   expect(calls.posts).toBe(1);
 });
 
@@ -371,6 +378,6 @@ test('switching accounts on a saved run removes the previous account result befo
   }, {oldValue: tokenA, newValue: tokenB});
   await expect(page.locator('.ai-recommendations').getByRole('alert')).toContainText('unavailable for your account');
   await expect(page.locator('.ai-ranked-jobs')).toHaveCount(0);
-  await expect(page.locator('body')).not.toContainText(report.advice[jobs[0].id].headline);
+  await expect(page.locator('body')).not.toContainText(report.advice[jobs[0].id].application_recommendation.summary);
   expect(calls.posts).toBe(0);
 });

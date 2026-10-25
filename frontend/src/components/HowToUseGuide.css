@@ -1,0 +1,30 @@
+.usage-guide { background: var(--surface); border-bottom: 1px solid var(--border); }
+.usage-guide-inner { max-width: 1200px; margin-inline: auto; padding: var(--s-5); }
+.usage-guide-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); margin-bottom: var(--s-5); }
+.usage-guide-heading h2 { font-size: 18px; text-wrap: balance; }
+.usage-guide-heading .btn { min-height: 44px; flex-shrink: 0; }
+.usage-guide-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-6); margin: 0; padding-inline-start: var(--s-5); }
+.usage-guide-steps li { padding-inline-start: var(--s-1); min-width: 0; }
+.usage-guide-steps li::marker { color: var(--primary); font-weight: 600; }
+.usage-guide-steps h3 { font-size: 14px; line-height: 1.5; margin-bottom: var(--s-2); text-wrap: balance; }
+.usage-guide-steps p { color: var(--text-muted); font-size: 14px; line-height: 1.65; max-width: 34ch; }
+.usage-guide strong { color: var(--text); font-weight: 600; }
+.usage-guide a { color: var(--primary); text-underline-offset: 3px; }
+.usage-guide a:hover { color: var(--primary-hover); }
+.usage-guide-footer { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-6); margin-top: var(--s-5); padding-top: var(--s-4); border-top: 1px solid var(--border); font-size: 13px; line-height: 1.65; }
+.usage-guide-footer > p { color: var(--text-muted); max-width: 65ch; }
+.usage-guide-connection summary { color: var(--primary); cursor: pointer; min-height: 44px; align-content: center; }
+.usage-guide-connection ol { margin: var(--s-2) 0 0; padding-inline-start: var(--s-5); color: var(--text-muted); }
+.usage-guide-connection li + li { margin-top: var(--s-2); }
+.usage-guide :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 2px; }
+.usage-guide ::selection { background: var(--primary-soft); color: var(--text); }
+
+@media (max-width: 900px) {
+  .usage-guide-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-5) var(--s-6); }
+}
+@media (max-width: 560px) {
+  .usage-guide-inner { padding: var(--s-4); }
+  .usage-guide-heading { align-items: flex-start; margin-bottom: var(--s-4); }
+  .usage-guide-steps, .usage-guide-footer { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
+  .usage-guide-steps p { max-width: 65ch; }
+}

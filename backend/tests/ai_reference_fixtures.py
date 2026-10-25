@@ -48,6 +48,31 @@ def reference_fixture(data, payload):
         return {"start_id": "unissued_fixture_source", "end_id": "unissued_fixture_source"}
 
     for job in data.get("items", []):
+        if "career_fit" not in job:
+            job["career_fit"] = {
+                "direction": "undetermined",
+                "proposed_verdict": "insufficient_information",
+                "summary": "A career recommendation is not available for this scripted fixture.",
+                "jd_source_range": ids(
+                    next(
+                        (
+                            item["description"]
+                            for item in payload["jobs"]
+                            if item["id"] == job["job_id"]
+                        ),
+                        "",
+                    ),
+                    "job",
+                    job["job_id"],
+                    "description",
+                ),
+                "profile_field": None,
+                "profile_source_range": None,
+                "job_focus": "Fixture",
+                "profile_focus": None,
+                "strengths": [],
+                "considerations": [],
+            }
         for row in job.get("requirements", []):
             if "jd_source_range" in row:
                 continue

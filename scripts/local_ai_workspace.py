@@ -3,12 +3,14 @@
 Reuses the owned feature SQLite workspace. Existing extraction/form providers stay
 disabled, mail stays on the loopback test sink, and the bounded shared runtime
 can reach the fixed DeepSeek HTTPS endpoint after an explicit opt-in. Its exact
-purposes are recommendations, source-grounded PDF facts and question-key mapping.
+purposes are recommendations, source-grounded PDF facts, question-key mapping
+and source-bound application answer preparation.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import getpass
 import hashlib
 import ipaddress
@@ -112,7 +114,9 @@ class AcceptanceAudit:
 
         payload = json.loads(request.messages[-1].content)
         purpose = payload.get("purpose", "recommendation")
-        if purpose not in {"recommendation", "resume_autofill", "form_mapping"}:
+        if purpose not in {
+            "recommendation", "resume_autofill", "form_mapping", "application_answers"
+        }:
             raise ProviderCapabilityError("Local acceptance refuses this model purpose")
         ids = {str(job["id"]) for job in payload.get("jobs", [])}
         if purpose == "recommendation" and not ids:
@@ -162,6 +166,7 @@ class AcceptanceAudit:
 
 def recommendation_runtime(key: str, audit: AcceptanceAudit, *, revision: str):
     import httpx
+
     from app.ai_recommendations.runtime import AIRuntime
     from app.llm.deepseek import DeepSeekProvider
 
@@ -176,6 +181,9 @@ def recommendation_runtime(key: str, audit: AcceptanceAudit, *, revision: str):
             number = audit.start(request)
             try:
                 response = await self.provider.generate_structured(request)
+            except asyncio.CancelledError:
+                audit.event({"call": number, "event": "cancelled", "error_code": "provider_cancelled"})
+                raise
             except Exception as error:
                 code = getattr(error, "code", "provider_error")
                 audit.event({"call": number, "event": "failed", "error_code": code})

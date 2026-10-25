@@ -8,6 +8,7 @@ from app.db.session import engine
 def test_all_planned_core_tables_are_created() -> None:
     assert set(inspect(engine).get_table_names()) == {
         "ai_recommendation_runs",
+        "answer_preparations",
         "resume_file_contents",
         "application_forms",
         "applications",

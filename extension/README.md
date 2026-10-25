@@ -1,6 +1,155 @@
-# JobPilot SG — Review & Fill (InternSG pilot)
+# JobPilot SG — Review & Fill
 
-## Version 0.9.2: open, preview, Fill
+## Version 0.10.8: Ashby searches and evidence-based choices
+
+Ashby school and city fields can now search their own bound listboxes and click
+one exact observed option. A query string or highlighted result is insufficient:
+the clicked option must close the menu and persist after blur. School matching
+allows a trailing acronym only when it exactly matches the full name's initials
+(for example, National University of Singapore (NUS)); campus and country suffixes
+are not discarded. Duplicate candidates remain manual.
+
+Education start/end month/year dropdowns use their labelled date containers and
+semantic month/year options, never their order in the DOM. Saved values win;
+AI may map a missing ordinary choice from cited PDF evidence to an actual option
+or prepare a literal school/city search. Missing dates and personal declarations
+are not invented. Fill stays one explicit action and never submits.
+
+Job detail pages also show the current fit assessment automatically. Saved
+results are reused, and one new analysis is started per current profile/job
+context. The result highlights alignment and supported/gap/unknown counts, with
+source evidence available in an optional fold. Failed or uncertain starts do not
+automatically trigger another paid request.
+
+## Version 0.10.7: Ashby manual option groups no longer block the form
+
+Some Ashby radio/checkbox groups use one shared HTML name for all options. These
+controls require the applicant's own choices. They are now listed as manual
+questions without duplicate writable answer records, so unique name, email,
+phone and ordinary text fields can continue through preparation and Fill.
+Duplicate ordinary answer identifiers, mixed control collisions and ambiguous
+identity containers still reject the preview. No positional answer keys or new
+automatic choices are introduced. The reported BlockTech form's school/location
+searches and unlabelled education-date dropdowns still require website input.
+
+## Version 0.10.6: AI answers the actual form questions from the selected PDF
+
+After loading existing facts, the popup sends the remaining supported questions
+as one bounded batch. Every question receives a model disposition using the
+selected PDF's exact passages and verified profile facts. Ordinary questions no
+longer need to match the three common narrative names. Extracted answers carry
+source citations; missing information is distinguished from unfinished analysis.
+Generic editable text is a fallback after this attempt, not a substitute for it.
+One batch analyzes at most 40 unanswered questions. Additional ordinary text
+questions receive explicitly unanalysed editable pending text, without a second
+model request; native choices, numbers, dates and declarations retain their own
+requirements.
+
+If Fill is clicked during preparation, it waits for that existing batch within
+the same time budget and then dispatches once. Answers and edits already present
+at click time remain frozen. No second model request or Generate/Read step is
+introduced. Platform preparation pages only read cached drafts; they do not
+start generic warm-up work before the actual questions are known.
+
+The model selects source text rather than inventing missing autobiographical
+facts. Numbers and current employment require matching explicit evidence. A
+location in the PDF's contact header may answer a broad current-location question;
+it cannot establish legal residence or citizenship. A semantically mismatched
+answer is withheld individually; malformed output and invalid source references
+still reject the batch.
+Unfinished or truncated analysis is never presented as proof the PDF lacks data.
+Files, consent and unsupported choices retain their separate manual actions.
+
+## Version 0.10.5: ordinary text drafts and actual Ashby form selection
+
+Available ordinary text questions can show editable template text when no saved
+fact exists. These are real values copied by Fill, explicitly marked for editing
+before submission. Saved facts and user edits win; untouched templates for unknown
+questions can still be replaced by an exact saved-fact mapping or cited AI draft.
+Declarations, consent, unsupported choices and missing numeric/date facts remain
+manual. Template creation itself does not call the model.
+
+Lever uses the unique question caption rather than loading/error text inside its
+wrapping label. Current-company and current-location text can therefore be
+recognized. A visible location value does not imply the site's hidden location
+entity was selected; the original site's location selection remains explicit.
+
+Ashby now anchors the application container to its unique name/email controls,
+excluding the separate resume-autofill uploader. Initial inspection waits at most
+two seconds for hydration and shows a visible loading/recovery message if the
+real form is still unavailable. It does not submit or upload a file.
+
+Fill reports copied values separately from remaining website choices and native
+format corrections. A URL template can be copied successfully while the website
+still requires a genuine URL; native validation stays active.
+
+## Version 0.10.4: unbound cover-letter answers and editable URL templates
+
+The reported `field:lflj1e/evidence_key` rejection identifies the Greenhouse cover
+letter target. Missing and explicit null now both represent no bound saved fact,
+so an omitted optional property does not reject the entire batch. Actual fact
+classifications, controls, labels, account and document checks remain strict.
+
+Missing LinkedIn, GitHub and portfolio links now get actual editable template
+text, such as **Your LinkedIn URL**, and Fill copies that text to the website.
+Templates are marked for replacement before submitting and are never saved to
+Profile or presented as genuine links. Existing answers win. A site's URL
+validator may flag this text until the applicant replaces it with a real URL.
+
+## Version 0.10.3: missing-answer hints and precise fill diagnostics
+
+Unanswered text inputs show a useful hint, such as **Your LinkedIn URL**. Hints
+are placeholders, not applicant answers, and are never included in Fill. The
+popup header shows the loaded extension version. A rejected ATS preflight now
+identifies the stable field ID and mismatch category without exposing answers.
+The original whole-batch checks remain in place. This improves diagnosis; real
+Chrome filling on the reported SimplifyNext form is still awaiting verification.
+
+## Version 0.10.2: visible saved answers and recoverable ATS failures
+
+Saved answers now open in the preview, so missing optional answers do not hide
+the facts already loaded. A failed Fill clears its loading message and exposes
+**Refresh form** beside the action footer; it never retries automatically.
+The reader distinguishes a verified no-write preflight rejection from an unknown
+Chrome response. Greenhouse React-select options are opened with their required
+control interaction, then selected and checked against exact saved facts.
+An exact internship-period question reuses saved availability without inventing
+dates. Preferred names, absent dates and declarations are not guessed.
+
+## Version 0.10.1: selected-PDF return route compatibility
+
+Embedded InternSG filling now accepts the platform's optional single
+`?resume=<UUID>` selection parameter. The exact parent URL remains bound to the
+review; changing the selected-PDF route, account, saved details or application
+document still stops filling. Unknown or duplicate query parameters, hashes and
+credentials remain rejected. No submission or model-call behavior changed.
+
+## Version 0.10.0: saved facts first, one background preparation
+
+Opening a supported InternSG, Greenhouse, Lever or Ashby application shows saved
+PDF/Profile facts immediately, folded under **Saved answers ready**. One bounded
+background batch maps unfamiliar ordinary questions and prepares short narrative
+drafts from saved evidence. **AI draft** answers stay visible and editable. Missing
+facts and pending confirmations are marked; dates, numbers, qualifications,
+personal declarations, consent and legal answers are never invented.
+
+Preparation may use the model authorized for this workflow. Persisted results are
+reused; a concurrent preparation is checked only with cache-only requests, within
+an approximately eight-second total budget. A timeout or unavailable model leaves
+saved answers usable. Choosing **Fill application form** approves that current
+snapshot, cancels late draft updates and never submits. Previously entered website
+answers and user edits in the popup are preserved. No Read or Generate step and no
+per-answer checkbox is required.
+
+InternSG introductions use the same preparation engine. On the observed Greenhouse
+cover-letter widget, inspection does not open the text editor: Fill opens the
+uniquely identified **Enter manually** control only for the approved cover-letter
+draft, provided no cover-letter file or text is already present. The résumé PDF
+still requires the separate **Attach saved PDF** action; CAPTCHA and final
+submission remain manual. Account, page, document or saved-facts changes discard
+late preparation results.
+
+## Version 0.9.2: open, preview, Fill (historical)
 
 With a connected account, opening the popup on a supported application loads the
 current form and saved PDF/Profile answers automatically. Review or edit the
@@ -119,7 +268,7 @@ study-country replacement; it does not authorize submission.
    the account in the backend database.
 3. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**
    and select this directory. Existing users should reload the extension
-   (version 0.9.2), then reopen its popup. Keep the same directory and extension
+   (version 0.10.9), then reopen its popup. Keep the same directory and extension
    ID to preserve device copies. Register its 32-letter ID in the backend
    `EXTENSION_CLIENT_IDS=["your-installed-extension-id"]` environment setting.
    The default empty list intentionally rejects connections.

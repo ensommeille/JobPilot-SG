@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {autofillSuggestion, formPlanFields, approvedAutofillAnswers, activeApplicationTool} from '../popup-review.js';
+import {autofillSuggestion, formPlanFields, approvedAutofillAnswers, activeApplicationTool, professionalUrlTemplate, autofillTextTemplate} from '../popup-review.js';
 
 test('full names never supply guessed given/family names, including Chinese and compound names', () => {
   for (const name of ['LI MING', '王小明', 'María del Carmen García', 'Cher']) {
@@ -38,6 +38,58 @@ test('one Fill click freezes edited values and cannot approve occupied, empty or
   assert.ok(Object.isFrozen(items)); assert.ok(Object.isFrozen(items[0]));
 });
 
+test('missing ordinary professional links get explicit editable template text, never a saved fact', () => {
+  for (const [key, value] of [['linkedin', 'Your LinkedIn URL'], ['github', 'Your GitHub URL'], ['portfolio', 'Your website or portfolio URL']]) {
+    const field = {id: 'url-' + key, evidenceKey: key, key: 'id:' + key, label: key, kind: 'text', available: true, maxLength: 255};
+    const template = professionalUrlTemplate(field, {values: {}});
+    assert.deepEqual(template, {key, value, source: 'template'});
+    assert.equal(autofillSuggestion(field, {values: {}}).value, '', 'The template is not part of saved-fact projection');
+    const approved = approvedAutofillAnswers(new Map([[field.id, {field, input: {value: template.value}, factKey: null}]]));
+    assert.equal(approved[0].value, value, 'Fill receives actual text, not an HTML placeholder');
+    assert.equal(Object.hasOwn(approved[0], 'factKey'), false);
+    assert.equal(approved[0].evidenceKey, key, 'The original question contract is unchanged');
+    assert.equal(professionalUrlTemplate(field, {values: {[key]: 'https://example.test/real'}}), null);
+    for (const extra of [{occupied: true}, {manualOnly: true}, {available: false}, {kind: 'date'}, {kind: 'number'}, {kind: 'select'}, {maxLength: 3}]) {
+      assert.equal(professionalUrlTemplate({...field, ...extra}, {values: {}}), null);
+    }
+  }
+  for (const key of ['email', 'phone', 'given_name', 'internship_start_date', 'nationality', 'work_authorization', 'summary']) {
+    assert.equal(professionalUrlTemplate({id: key, evidenceKey: key, kind: 'text', available: true}, {values: {}}), null);
+  }
+});
+
+test('ordinary missing text gets a labelled template while personal declarations and genuine value formats stay empty', () => {
+  const ordinary = (label, evidenceKey = null, extra = {}) => ({id: 'field:q', label, evidenceKey, kind: 'text', available: true, maxLength: 500, ...extra});
+  for (const [label, key, text] of [['Current company', 'current_company', 'Your current company'],
+    ['Current location', 'current_city', 'Your current city'], ['Github / Portfolio URL', null, 'Your GitHub or portfolio URL'],
+    ['Preferred First Name', null, 'Your preferred first name (optional)']]) {
+    assert.equal(autofillTextTemplate(ordinary(label, key), {values: {}}).value, text);
+  }
+  assert.equal(autofillTextTemplate(ordinary('Cover letter', null, {draftable: true}), {values: {}}).value, 'Your cover letter');
+  assert.equal(autofillTextTemplate(ordinary('Current location', 'current_city'), {values: {current_city: 'Singapore'}}), null);
+  for (const label of ['Email', 'Phone', 'Expected salary', 'Start date', 'Graduation year', 'Notice period', 'Employment status',
+    'Nationality', 'PDPA consent', 'Work authorization', 'Do you require sponsorship?', 'Date of birth']) {
+    assert.equal(autofillTextTemplate(ordinary(label), {values: {}}), null, label);
+  }
+  for (const extra of [{kind: 'number'}, {kind: 'date'}, {kind: 'select'}, {kind: 'combobox'}, {manualOnly: true}, {occupied: true}, {available: false}, {maxLength: 2}]) {
+    assert.equal(autofillTextTemplate(ordinary('Current company', null, extra), {values: {}}), null);
+  }
+});
+
+test('combined GitHub and portfolio uses only one unambiguous saved URL and keeps the original field contract', () => {
+  const field = {id: 'combined', key: 'name:urls[Github / Portfolio]', label: 'Github / Portfolio URL', kind: 'text', evidenceKey: null, available: true};
+  const github = 'https://github.com/avery', portfolio = 'https://avery.example.test';
+  for (const values of [{github}, {portfolio}, {github, portfolio: github}]) {
+    const projected = autofillSuggestion(field, {values});
+    assert.ok([github, portfolio].includes(projected.value));
+    assert.equal(autofillTextTemplate(field, {values}), null);
+    assert.equal(field.evidenceKey, null);
+  }
+  const profile = {values: {github, portfolio}};
+  assert.equal(autofillSuggestion(field, profile).value, '');
+  assert.equal(autofillTextTemplate(field, profile).value, 'Your GitHub or portfolio URL');
+});
+
 test('native and searchable choices bind option meaning without inventing a native choice', () => {
   const field = {available: true, kind: 'select', key: 'id:country', label: 'Country of study', evidenceKey: 'study_country', options: [{value: 'sg', label: 'Singapore'}]};
   const input = {value: 'sg'};
@@ -64,7 +116,9 @@ test('popup projection integrates explicit phone prefixes, ISO countries and sav
     [{field_id: 'start-month', fact_key: 'education_start_month'}]).value, 'January');
   assert.equal(autofillSuggestion(field('ambiguous-phone', 'phone_country_code', ['United States +1', 'Canada +1'], 'combobox'), {values: {phone_country_code: '+1'}}).value, '');
   assert.equal(autofillSuggestion(field('degree', 'degree', ["Master's Degree", "Bachelor's Degree"]), {values: {degree: 'M.Tech.'}}).value, "Master's Degree");
-  assert.equal(autofillSuggestion(field('degree', 'degree', ["Master's Degree", 'Master of Science']), {values: {degree: 'M.Tech.'}}).value, '');
+  assert.equal(autofillSuggestion(field('degree', 'degree', ["Master's Degree", 'Master of Science']), {values: {degree: 'M.Tech.'}}).value, "Master's Degree");
+  assert.equal(autofillSuggestion(field('degree', 'degree', ["Master's Degree", 'Master of Technology']), {values: {degree: 'M.Tech.'}}).value, '');
+  assert.equal(autofillSuggestion(field('degree', 'degree', ['Master of Science']), {values: {degree: 'M.Tech.'}}).value, '');
 });
 
 test('saved school and city reach exact async search even when absent from the first option page', () => {

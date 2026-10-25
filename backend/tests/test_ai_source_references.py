@@ -132,6 +132,18 @@ def wire(payload, catalog):
                 "summary": "Investigate this role.",
                 "requirements": [requirement if index == 0 else second],
                 "warnings": [],
+                "career_fit": {
+                    "direction": "undetermined",
+                    "proposed_verdict": "insufficient_information",
+                    "summary": "No career judgment in this citation fixture.",
+                    "jd_source_range": source_range(spans(catalog, scope="job", owner=job["id"])),
+                    "profile_field": None,
+                    "profile_source_range": None,
+                    "job_focus": "Fixture",
+                    "profile_focus": None,
+                    "strengths": [],
+                    "considerations": [],
+                },
             }
             for index, job in enumerate(payload["jobs"])
         ],

@@ -2,9 +2,17 @@
 
 import re
 
+from .career import application_recommendation
 from .claim_scope import zero_experience_entry_route
 from .evidence_rules import PREFERRED, _education_timing
-from .schemas import ActionAdvice, AdviceEvidence, BatchAssessment, EvidenceCounts, JobAssessment
+from .schemas import (
+    ActionAdvice,
+    AdviceEvidence,
+    BatchAssessment,
+    EvidenceCounts,
+    JobAssessment,
+    RelatedEvidence,
+)
 
 STATE_ORDER = {"priority_apply": 0, "consider": 1, "check_first": 2, "not_priority": 3}
 QUALIFICATIONS = {"education", "work_constraint"}
@@ -80,6 +88,43 @@ def _core_supported(item: JobAssessment) -> int:
     )
 
 
+def related_evidence(item: JobAssessment) -> list[RelatedEvidence]:
+    """Keep positive atoms visible without turning them into whole-row strengths."""
+    evidence = []
+    for index, row in enumerate(item.requirements):
+        if row.outcome == "supported" or row.category not in CORE | QUALIFICATIONS:
+            continue
+        for condition_index, check in enumerate(row.condition_checks):
+            if check.outcome != "supported" or not check.profile_field or not check.profile_quote:
+                continue
+            evidence.append(
+                RelatedEvidence(
+                    requirement_index=index,
+                    condition_index=condition_index,
+                    kind="partial_condition",
+                    statement=check.condition,
+                    jd_quote=row.jd_quote,
+                    profile_field=check.profile_field,
+                    profile_quote=check.profile_quote,
+                    reason="This condition has evidence; the complete requirement remains unconfirmed.",
+                )
+            )
+    evidence.extend(item.related_evidence)
+    unique = {}
+    for entry in evidence:
+        key = (entry.requirement_index, entry.profile_field, entry.profile_quote)
+        unique.setdefault(key, entry)
+    return list(unique.values())[:8]
+
+
+def _unconfirmed(rows) -> list[str]:
+    conditions = []
+    for _index, row in rows:
+        local = [check.condition for check in row.condition_checks if check.outcome != "supported"]
+        conditions.extend(local or [row.requirement])
+    return list(dict.fromkeys(conditions))
+
+
 def derive_advice(item: JobAssessment) -> ActionAdvice:
     """Separate eligibility gates from ordinary gaps in saved skill evidence.
 
@@ -115,6 +160,16 @@ def derive_advice(item: JobAssessment) -> ActionAdvice:
         )
     ]
     supported = _core_supported(item)
+    related = related_evidence(item)
+    relevant = [
+        entry
+        for entry in related
+        if item.requirements[entry.requirement_index].category in CORE
+        or (
+            entry.kind == "related_activity"
+            and item.requirements[entry.requirement_index].category == "responsibility"
+        )
+    ]
     if gaps:
         state, headline = "not_priority", "Lower priority for now"
         reasons = [
@@ -122,15 +177,29 @@ def derive_advice(item: JobAssessment) -> ActionAdvice:
             + gaps[0][1].requirement[:160]
         ]
     elif qualifications:
-        state, headline = "check_first", "Confirm eligibility before applying"
+        state, headline = (
+            "check_first",
+            (
+                "Relevant background, but a stretch application"
+                if supported or relevant
+                else "Eligibility and relevant fit remain unconfirmed"
+            ),
+        )
         reasons = ["Confirm this eligibility condition: " + qualifications[0][1].requirement[:160]]
     elif mandatory_unknown:
-        state, headline = "check_first", "Confirm a required capability first"
+        state, headline = (
+            "check_first",
+            (
+                "Relevant background, with a required capability unconfirmed"
+                if supported or relevant
+                else "A required capability remains unconfirmed"
+            ),
+        )
         reasons = [
             "Evidence is missing for an explicitly required condition: "
             + mandatory_unknown[0][1].requirement[:160]
         ]
-    elif supported == 0:
+    elif supported == 0 and not relevant:
         state, headline = "not_priority", "Limited evidence of a relevant fit"
         reasons = [
             "No core skill or experience was established by the displayed evidence; this is a relevance limit, not an eligibility rejection."
@@ -150,7 +219,27 @@ def derive_advice(item: JobAssessment) -> ActionAdvice:
     positive = [
         row for _index, row in critical if row.outcome == "supported" and row.category in CORE
     ]
-    if positive:
+    if relevant:
+        atoms = [entry.statement for entry in relevant if entry.kind == "partial_condition"]
+        activities = any(entry.kind == "related_activity" for entry in relevant)
+        positive_reason = (
+            "Related evidence: " + "; ".join(atoms[:2])[:220]
+            if atoms
+            else "The cited hands-on project work is relevant to this role"
+        )
+        if atoms and activities:
+            positive_reason += "; plus related hands-on project work"
+        positive_reason += ". This supports relevance, not the complete job requirements."
+        limitations = _unconfirmed(core_unknown)[:2]
+        eligibility = ["; ".join(_unconfirmed([pair])[:2])[:130] for pair in qualifications[:2]]
+        limit_reason = (
+            "Not established: " + "; ".join(limitations)[:220] + ". " if limitations else ""
+        ) + ("Eligibility to confirm: " + "; ".join(eligibility)[:220] + "." if eligibility else "")
+        if gaps:
+            reasons = [reasons[0], positive_reason]
+        else:
+            reasons = [positive_reason, limit_reason or reasons[0]]
+    elif positive:
         prefix = (
             "Tool or skill evidence: "
             if positive[0].profile_field == "skills"
@@ -181,6 +270,16 @@ def derive_advice(item: JobAssessment) -> ActionAdvice:
         reasons=reasons,
         blockers=[_evidence(index, row) for index, row in blockers],
         strengths=[_evidence(index, row) for index, row in strengths],
+        related_evidence=related,
+        application_recommendation=application_recommendation(
+            item,
+            core_supported=supported,
+            related=related,
+            conflicts=gaps,
+            qualifications=qualifications,
+            mandatory_unknown=mandatory_unknown,
+            core_unknown=core_unknown,
+        ),
         counts=EvidenceCounts(
             **{
                 outcome: sum(row.outcome == outcome for row in item.requirements)
@@ -199,8 +298,17 @@ def advice_for_batch(
         timing_concern = any(
             _education_timing(row, profile.get("education") or "") for row in item.requirements
         )
+        action = advice[str(item.job_id)]
+        application_order = {
+            "priority_apply": 0,
+            "consider": 1,
+            "not_priority": 2,
+            "insufficient_information": 3,
+        }
         return (
-            STATE_ORDER[advice[str(item.job_id)].status],
+            application_order[action.application_recommendation.verdict]
+            if action.application_recommendation
+            else STATE_ORDER[action.status],
             bool(timing_concern),
             -_core_supported(item),
             -len(advice[str(item.job_id)].strengths),

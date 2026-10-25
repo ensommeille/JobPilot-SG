@@ -4,6 +4,8 @@ import axios from 'axios'
 import Navbar from '../components/Navbar'
 import EmailApplication from '../components/EmailApplication'
 import ApplicationChannelInfo from '../components/ApplicationChannelInfo'
+import PreparedAnswersStatus from '../components/PreparedAnswersStatus'
+import { useApplicationFacts, usePreparedAnswers } from '../hooks/usePreparedAnswers'
 import { getToken, watchSession } from '../services/auth'
 import { fetchApplicationContext, savePreparationDraft, type ApplicationContext } from '../services/applicationJourney'
 import { downloadResumeFile, listResumes, type ResumeFile } from '../services/resumes'
@@ -44,12 +46,18 @@ function PreparationSession({ id, token }: { id: string; token: string | null })
   const pending = useRef<AbortController | null>(null)
   const [search, setSearch] = useSearchParams()
   const location = useLocation()
+  const facts = useApplicationFacts(token, !!context && !loading, retry)
   const savedPdfs = resumes.filter(resume => resume.has_file)
+  const preferredResume = savedPdfs.find(resume => resume.id === facts?.resume?.id)
   const selectedId = savedPdfs.some(resume => resume.id === search.get('resume')) ? search.get('resume')!
-    : !search.has('resume') && savedPdfs.length === 1 ? savedPdfs[0].id : ''
+    : !search.has('resume') && preferredResume ? preferredResume.id
+      : !search.has('resume') && savedPdfs.length === 1 ? savedPdfs[0].id : ''
   const selectedResume = savedPdfs.find(resume => resume.id === selectedId) ?? null
   const returnTo = location.pathname + location.search
   const profileLink = `/profile?returnTo=${encodeURIComponent(returnTo)}`
+  const preparation = usePreparedAnswers({ token, jobId: id, profile: facts,
+    enabled: !loading && !resumeError && !!context && ['internsg', 'ats'].includes(context.channel),
+    attachmentResumeId: selectedId || null })
 
   useEffect(() => {
     const request = new AbortController()
@@ -116,7 +124,7 @@ function PreparationSession({ id, token }: { id: string; token: string | null })
     `Kind regards,\n${context.profile.full_name || context.profile.contact_email || ''}`,
   ].filter(Boolean).join('\n\n') : undefined
   const legacyPath = context?.channel === 'internsg' && context.preparation_url === `/jobs/${id}/apply-external`
-    ? context.preparation_url
+    ? context.preparation_url + (selectedResume ? `?resume=${encodeURIComponent(selectedResume.id)}` : '')
     : context?.channel === 'assistant' && context.preparation_url === `/jobs/${id}/apply`
       ? context.preparation_url : null
   const missingDetails = context ? [
@@ -145,6 +153,7 @@ function PreparationSession({ id, token }: { id: string; token: string | null })
               <section className="prepare-section" aria-labelledby="prepare-details-title">
                 <div className="prepare-section-heading"><h2 id="prepare-details-title">Your saved details</h2><Link className="link" to={profileLink}>Edit profile</Link></div>
                 <p className="prepare-profile-summary">{context.profile.full_name || 'Name not saved'}{context.profile.contact_email ? ` · ${context.profile.contact_email}` : ''}</p>
+                <PreparedAnswersStatus state={preparation} profileLink={profileLink} />
                 {missingDetails.length > 0 && <p className="muted prepare-missing">Not saved: {missingDetails.join(', ')}. Add only what this employer needs.</p>}
                 <details className="prepare-profile-detail"><summary>Review saved profile</summary>
                   <dl className="prepare-details prepare-long-details">

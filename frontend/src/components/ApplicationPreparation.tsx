@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import api from '../services/api'
 import { getToken } from '../services/auth'
 import { countries } from '../services/countries'
@@ -9,6 +9,8 @@ import { applicationFields, draftFingerprint, parseApplicationReview, parseFillR
   type FillReport, type SavedApplicationDraft } from '../services/applicationPreparation'
 import InternSGApplication from './InternSGApplication'
 import ExtensionStatus from './ExtensionStatus'
+import PreparedAnswersStatus from './PreparedAnswersStatus'
+import { useApplicationFacts, usePreparedAnswers } from '../hooks/usePreparedAnswers'
 import './ApplicationPreparation.css'
 
 export default function ApplicationPreparation({jobId, url, token}: {jobId: string; url: string; token: string}) {
@@ -23,12 +25,42 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
   const [frameLoaded, setFrameLoaded] = useState(false)
   const [extensionConnected, setExtensionConnected] = useState(false)
   const [editingSaved, setEditingSaved] = useState(false)
+  const [factsRevision, setFactsRevision] = useState(0)
+  const [editedFields, setEditedFields] = useState<ApplicationFieldId[]>([])
+  const [editedCountries, setEditedCountries] = useState(false)
+  const [fillStarted, setFillStarted] = useState(false)
   const alive = useRef(true)
   const generation = useRef(0)
   const busy = useRef(false)
   const filling = useRef(false)
   const draftRequest = useRef<AbortController | null>(null)
-  const profileLink = '/profile?returnTo=' + encodeURIComponent(`/jobs/${jobId}/apply-external`)
+  const [search] = useSearchParams()
+  const requestedResume = search.get('resume')
+  const attachmentResumeId = requestedResume && /^[a-f0-9-]{36}$/i.test(requestedResume) ? requestedResume : undefined
+  const facts = useApplicationFacts(token, true, factsRevision)
+  const preparation = usePreparedAnswers({ token, jobId, profile: facts, enabled: !!savedDraft && !draftBusy, attachmentResumeId })
+  const profileLink = '/profile?returnTo=' + encodeURIComponent(`/jobs/${jobId}/apply-external${attachmentResumeId ? `?resume=${attachmentResumeId}` : ''}`)
+  const shownValues = { ...values }
+  const shownChoices = { ...choices }
+  const canUsePrepared = !fillStarted && !['pdf_mismatch', 'pdf_selection'].includes(preparation.phase)
+  const factKeys: Record<ApplicationFieldId, string> = { applicant_name: 'full_name', applicant_email: 'contact_email',
+    applicant_contact: 'phone', applicant_period: 'availability_period', applicant_summary: 'resume_summary' }
+  if (savedDraft && facts && canUsePrepared) {
+    for (const field of applicationFields) if (!editedFields.includes(field.id) && !shownValues[field.id].trim()
+      && !savedDraft.values[field.id].trim()) {
+      const value = facts.values[factKeys[field.id]]
+      if (value && value.length <= field.maxLength) shownValues[field.id] = value
+    }
+    if (!editedCountries) {
+      if (!shownChoices.nationality && !savedDraft.countries.nationality) shownChoices.nationality = facts.values.nationality || ''
+      if (!shownChoices.campus && !savedDraft.countries.campus) shownChoices.campus = facts.values.study_country || ''
+    }
+  }
+  const introduction = preparation.report?.answers.find(answer => answer.field_id === 'intro'
+    && ['saved', 'ai_draft'].includes(answer.source) && answer.value.trim() && answer.value.length <= 3000)
+  const useIntroduction = !!savedDraft && canUsePrepared && !editedFields.includes('applicant_summary')
+    && !savedDraft.values.applicant_summary.trim() && !shownValues.applicant_summary.trim() && !!introduction
+  if (useIntroduction) shownValues.applicant_summary = introduction!.value
 
   const loadDraft = useCallback(() => {
     if (busy.current || getToken() !== token) return
@@ -41,6 +73,7 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
       if (!alive.current || request.signal.aborted || getToken() !== token) return
       const draft = parseSavedDraft(response.data)
       setSavedDraft(draft); setValues(draft.values); setChoices(draft.countries)
+      setEditedFields([]); setEditedCountries(false); setFillStarted(false)
     }).catch(err => {
       if (alive.current && !request.signal.aborted && getToken() === token) setDraftError(err instanceof Error && !('isAxiosError' in err)
         ? err.message : 'Could not load saved application details. Your account has not been changed. Try loading them again.')
@@ -54,6 +87,7 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
     setDraftBusy(true); setDraftError(''); setSavedDraft(null)
     setEditingSaved(false)
     setExtensionConnected(false)
+    setFactsRevision(value => value + 1)
     void loadDraft()
   }
 
@@ -82,7 +116,8 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
     if (busy.current || !savedDraft || draftBusy || !frameLoaded || !extensionConnected || getToken() !== token) return
     if (!event.currentTarget.reportValidity()) return
     // The explicit click approves this snapshot, never later edits or a stale review.
-    const shown = {values: {...values}, countries: {...choices}}
+    const shown = {values: {...shownValues}, countries: {...shownChoices}}
+    setValues(shown.values); setChoices(shown.countries); setFillStarted(true)
     const version = ++generation.current
     let dispatched = false
     busy.current = true; setOperation('inspect'); setError(''); setReport(null)
@@ -128,16 +163,18 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
   }
 
   function changeValue(id: ApplicationFieldId, value: string) {
+    setEditedFields(previous => previous.includes(id) ? previous : [...previous, id])
     setValues(previous => ({...previous, [id]: value})); setReport(null)
   }
   function fieldReason(id: ApplicationFieldId) {
     if (report?.filled.includes(id)) return 'Filled. Check the answer on the original form.'
     if (report?.skipped.includes(id)) return report.reasons[id]
-    if (!values[id].trim()) return 'No saved answer. Add one here for this application, or update your profile to reuse it.'
+    if (id === 'applicant_summary' && useIntroduction && introduction?.source === 'ai_draft') return `${preparation.report?.execution_mode === 'mock' ? 'Mock ' : ''}AI draft for this application. Review or edit it before filling.`
+    if (!shownValues[id].trim()) return 'No saved answer. Add one here for this application, or update your profile to reuse it.'
     return null
   }
-  const missingCount = applicationFields.filter(field => !values[field.id].trim()).length
-    + Number(!choices.nationality) + Number(!choices.campus)
+  const missingCount = applicationFields.filter(field => !shownValues[field.id].trim()).length
+    + Number(!shownChoices.nationality) + Number(!shownChoices.campus)
 
   const hasMissingSavedAnswers = savedDraft && (applicationFields.some(field => !savedDraft.values[field.id].trim()) || !savedDraft.countries.nationality || !savedDraft.countries.campus)
   const fillState = operation === 'inspect' ? 'Checking the original form…' : operation === 'fill' ? 'Filling approved answers…'
@@ -148,12 +185,13 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
     <section className="application-review" aria-labelledby="application-review-title" aria-busy={draftBusy}>
       <header className="preparation-summary">
         <h2 id="application-review-title">Your application details</h2>
-        {savedDraft && <p role="status">{missingCount ? `${7 - missingCount} saved details loaded; ${missingCount} need your input.` : 'All seven saved details are loaded.'} No need to type them again.</p>}
+        {savedDraft && <p role="status">{missingCount ? `${7 - missingCount} application details ready; ${missingCount} need your input.` : 'All seven application details are ready.'} No need to type them again.</p>}
+        <PreparedAnswersStatus state={preparation} profileLink={profileLink} />
       </header>
       {draftBusy && <p role="status" className="preparation-loading">Loading your saved application details…</p>}
       {draftError && <p role="alert" className="alert alert-error">{draftError} <button type="button" className="link" onClick={() => void reloadDraft()}>Reload saved details</button></p>}
       {savedDraft && <>
-        <details className="preparation-saved-details"><summary>Review the details already loaded</summary><dl>{applicationFields.filter(field => values[field.id].trim()).map(field => <div key={field.id}><dt>{field.label}</dt><dd>{values[field.id]}</dd></div>)}{(['nationality', 'campus'] as const).filter(key => choices[key]).map(key => <div key={key}><dt>{key === 'nationality' ? 'Nationality' : 'Country of study / graduation'}</dt><dd>{countries.find(country => country.code === choices[key])?.name || choices[key]}</dd></div>)}</dl>
+        <details className="preparation-saved-details"><summary>Review the details already loaded</summary><dl>{applicationFields.filter(field => shownValues[field.id].trim()).map(field => <div key={field.id}><dt>{field.label}</dt><dd>{shownValues[field.id]}</dd></div>)}{(['nationality', 'campus'] as const).filter(key => shownChoices[key]).map(key => <div key={key}><dt>{key === 'nationality' ? 'Nationality' : 'Country of study / graduation'}</dt><dd>{countries.find(country => country.code === shownChoices[key])?.name || shownChoices[key]}</dd></div>)}</dl>
           <div className="preparation-actions"><Link to={profileLink}>Update my saved profile</Link><button type="button" className="link" disabled={draftBusy || !!operation} onClick={() => void reloadDraft()}>Reload saved details</button></div>
           <p className="muted preparation-hint">Reloading replaces one-off edits. Edits below apply only to this application.</p>
         </details>
@@ -164,14 +202,14 @@ export default function ApplicationPreparation({jobId, url, token}: {jobId: stri
             {applicationFields.filter(field => editingSaved || !savedDraft.values[field.id].trim()).map(field => <div className={'preparation-field' + (field.id === 'applicant_summary' ? ' preparation-field-wide' : '')} key={field.id}>
               <label htmlFor={'review-' + field.id}>{field.label}</label>
               {field.id === 'applicant_summary'
-                ? <textarea id={'review-' + field.id} rows={5} value={values[field.id]} maxLength={field.maxLength} onChange={event => changeValue(field.id, event.target.value)} aria-describedby={fieldReason(field.id) ? field.id + '-reason' : undefined} />
+                ? <textarea id={'review-' + field.id} rows={5} value={shownValues[field.id]} maxLength={field.maxLength} onChange={event => changeValue(field.id, event.target.value)} aria-describedby={fieldReason(field.id) ? field.id + '-reason' : undefined} />
                 : <input id={'review-' + field.id} type={field.id === 'applicant_email' ? 'email' : field.id === 'applicant_contact' ? 'tel' : 'text'}
-                    value={values[field.id]} maxLength={field.maxLength} onChange={event => changeValue(field.id, event.target.value)} aria-describedby={fieldReason(field.id) ? field.id + '-reason' : undefined} />}
+                    value={shownValues[field.id]} maxLength={field.maxLength} onChange={event => changeValue(field.id, event.target.value)} aria-describedby={fieldReason(field.id) ? field.id + '-reason' : undefined} />}
               {fieldReason(field.id) && <p className="muted preparation-hint" id={field.id + '-reason'}>{fieldReason(field.id)}</p>}
             </div>)}
             {(['nationality', 'campus'] as const).filter(key => editingSaved || !savedDraft.countries[key]).map(key => <div className="preparation-field" key={key}>
               <label htmlFor={'review-country-' + key}>{key === 'nationality' ? 'Nationality' : 'Country of study / graduation'}</label>
-              <select id={'review-country-' + key} value={choices[key]} onChange={event => { setChoices(previous => ({...previous, [key]: event.target.value})); setReport(null) }}>
+              <select id={'review-country-' + key} value={shownChoices[key]} onChange={event => { setEditedCountries(true); setChoices({...shownChoices, [key]: event.target.value}); setReport(null) }}>
                 <option value="">Not specified</option>{countries.map(country => <option key={country.code} value={country.code}>{country.name}</option>)}
               </select>
             </div>)}

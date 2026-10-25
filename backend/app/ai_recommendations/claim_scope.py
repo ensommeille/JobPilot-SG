@@ -61,6 +61,63 @@ def performed_actions(text: str) -> set[str]:
     }
 
 
+def skill_subject_evidence_issue(condition: str, category: str, quote: str | None) -> str | None:
+    """A non-activity skill atom needs an explicit subject anchor, not broad affinity.
+
+    This only lowers an unsupported inference. It cannot establish proficiency or
+    decide semantic equivalence from one shared word; other evidence guards remain.
+    """
+    if category != "skill" or actions(condition) or not quote:
+        return None
+    glue = {
+        "working",
+        "knowledge",
+        "familiarity",
+        "strong",
+        "good",
+        "excellent",
+        "ability",
+        "understanding",
+        "proficiency",
+        "proficient",
+        "familiar",
+        "required",
+        "basic",
+        "foundation",
+        "foundational",
+        "skill",
+        "skills",
+        "experience",
+        "using",
+        "with",
+        "of",
+        "and",
+        "or",
+        "in",
+        "a",
+        "the",
+        "to",
+        "at",
+        "for",
+        "some",
+        "have",
+    }
+    subjects = [
+        token
+        for token in re.findall(r"[a-z][a-z0-9+#]*", condition.casefold())
+        if token not in glue and len(token) >= 3
+    ]
+    source_words = re.findall(r"[a-z][a-z0-9+#]*", quote.casefold())
+    if subjects and not any(
+        word.startswith(subject) for subject in subjects for word in source_words
+    ):
+        return (
+            "The cited passage does not explicitly name the subject of this skill condition. "
+            "A broad degree, another tool or related project does not establish this specific capability."
+        )
+    return None
+
+
 def activity_evidence_issue(requirement: str, category: str, field, quote) -> str | None:
     """Only lower a concrete activity claim; do not infer a person's ability."""
     required = actions(requirement)

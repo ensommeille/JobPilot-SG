@@ -25,7 +25,9 @@ from app.llm import LLMProviderError, Message, StructuredGenerationRequest
 
 from .advice import advice_for_batch, derive_advice
 from .candidate_recall import role_adjustment
+from .career import validate_career_fit
 from .citations import ReferencedBatch, request_with_sources, resolve_assessment, source_catalog
+from .claim_scope import performed_actions, skill_subject_evidence_issue
 from .evidence_rules import prioritize_assessment
 from .gap_evidence import NEGATIVE, correct_unverified_gaps, unverified_gap_reason
 from .models import AIRecommendationRun
@@ -259,7 +261,12 @@ def _append_reason(row, note: str) -> None:
 
 
 def validate_assessment(
-    data: dict, payload: dict, *, allow_promotions: bool = True
+    data: dict,
+    payload: dict,
+    *,
+    allow_promotions: bool = True,
+    _validate_components: bool = True,
+    _condition_context: bool = False,
 ) -> BatchAssessment:
     result = BatchAssessment.model_validate(data)
     jobs = {job["id"]: job for job in payload["jobs"]}
@@ -285,6 +292,12 @@ def validate_assessment(
                 not row.profile_quote or not row.profile_field or "[redacted]" in row.profile_quote
             ):
                 raise ValueError("invalid_evidence")
+            if _condition_context and row.outcome == "supported":
+                subject_issue = skill_subject_evidence_issue(
+                    row.requirement, row.category, row.profile_quote
+                )
+                if subject_issue:
+                    row.outcome, row.reason = "unknown", subject_issue
             if row.outcome == "gap" and (
                 not row.profile_quote or not NEGATIVE.search(row.profile_quote)
             ):
@@ -294,6 +307,7 @@ def validate_assessment(
                 )
             if row.outcome == "supported" and row.category == "work_constraint":
                 quote = row.profile_quote or ""
+                constraint = row.requirement if _condition_context else row.jd_quote
                 timing_inferred = row.profile_field == "education" or (
                     row.profile_field != "availability"
                     and not re.search(
@@ -302,14 +316,14 @@ def validate_assessment(
                 )
                 requested_duration = {
                     (number, unit.casefold().rstrip("s"))
-                    for number, unit in DURATIONS.findall(row.jd_quote)
+                    for number, unit in DURATIONS.findall(constraint)
                 }
                 stated_duration = {
                     (number, unit.casefold().rstrip("s"))
                     for number, unit in DURATIONS.findall(quote)
                 }
                 qualifiers_missing = any(
-                    re.search(pattern, row.jd_quote, re.I) and not re.search(pattern, quote, re.I)
+                    re.search(pattern, constraint, re.I) and not re.search(pattern, quote, re.I)
                     for pattern in (r"\bfull[ -]?time\b", r"\bpart[ -]?time\b", r"\bon[ -]?site\b")
                 )
                 if (
@@ -343,6 +357,7 @@ def validate_assessment(
                         "Explicit corresponding years are not established; dates are not converted into experience years.",
                     )
             if row.outcome == "supported" and row.category == "education":
+                education_condition = row.requirement if _condition_context else row.jd_quote
                 levels = [
                     (3, r"\b(?:doctor(?:ate|al)?|ph\.?\s*d\.?|d\.?\s*phil)\b"),
                     (2, r"\b(?:master(?:'s|s)?|m\.?\s*(?:sc|eng|tech|comp|phil|s)\.?)\b"),
@@ -354,9 +369,11 @@ def validate_assessment(
                     + r"|degree|enrolled|pursuing|student",
                     re.I,
                 )
-                numbers = re.findall(r"\b20\d{2}\b", row.jd_quote)
+                numbers = re.findall(r"\b20\d{2}\b", education_condition)
                 requested = [
-                    level for level, pattern in levels if re.search(pattern, row.jd_quote, re.I)
+                    level
+                    for level, pattern in levels
+                    if re.search(pattern, education_condition, re.I)
                 ]
                 stated = [
                     level
@@ -367,7 +384,7 @@ def validate_assessment(
                     r"enrolled|pursuing|student|studying|expected", row.profile_quote or "", re.I
                 )
                 permits_progress = re.search(
-                    r"enrolled|pursuing|student|studying|currently", row.jd_quote, re.I
+                    r"enrolled|pursuing|student|studying|currently", education_condition, re.I
                 )
                 if (
                     not degree.search(row.profile_quote or "")
@@ -379,7 +396,99 @@ def validate_assessment(
                     _append_reason(
                         row, "Complete explicit education/date evidence is not established."
                     )
-    result = prioritize_assessment(result, payload["profile"], allow_promotions=allow_promotions)
+            if _validate_components:
+                for check in row.condition_checks:
+                    # Reuse the same evidence guards for each atomic condition.
+                    # Its local wording supplies scope; the cited JD stays the
+                    # original exact passage, never a model-written substitute.
+                    atom = {
+                        "requires_review": True,
+                        "items": [
+                            {
+                                "job_id": str(item.job_id),
+                                "rank": 1,
+                                "summary": "Atomic evidence review",
+                                "warnings": [],
+                                "requirements": [
+                                    {
+                                        "requirement": check.condition,
+                                        "category": row.category,
+                                        "outcome": check.outcome,
+                                        "jd_quote": row.jd_quote,
+                                        "profile_field": check.profile_field,
+                                        "profile_quote": check.profile_quote,
+                                        "reason": check.reason,
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                    validated = validate_assessment(
+                        atom,
+                        {"profile": fields, "jobs": [jobs[str(item.job_id)]]},
+                        allow_promotions=False,
+                        _validate_components=False,
+                        _condition_context=True,
+                    )
+                    child = validated.items[0].requirements[0]
+                    shown = (
+                        child.profile_field == row.profile_field
+                        and child.profile_quote
+                        and row.profile_quote
+                        and _contains(child.profile_quote, row.profile_quote)
+                    )
+                    check.outcome = child.outcome if shown else "unknown"
+                    check.reason = child.reason[:1000]
+                if row.outcome == "supported" and row.condition_checks and row.condition_operator:
+                    evidence = [check.outcome == "supported" for check in row.condition_checks]
+                    sufficient = (
+                        any(evidence)
+                        if row.condition_operator == "any_of"
+                        else all(evidence)
+                        if row.condition_operator in {"atomic", "all_of"}
+                        else False
+                    )
+                    if not sufficient:
+                        row.outcome = "unknown"
+                        _append_reason(
+                            row,
+                            "The validated atomic evidence does not establish the full condition.",
+                        )
+        for related in item.related_evidence:
+            if related.requirement_index >= len(item.requirements):
+                raise ValueError("invalid_evidence")
+            parent = item.requirements[related.requirement_index]
+            original = payload["profile"].get(related.profile_field)
+            originals = original if isinstance(original, list) else [original] if original else []
+            if related.jd_quote != parent.jd_quote or not any(
+                _contains(related.profile_quote, text) for text in originals
+            ):
+                raise ValueError("invalid_evidence")
+            if related.kind == "partial_condition":
+                if related.condition_index is None or related.condition_index >= len(
+                    parent.condition_checks
+                ):
+                    raise ValueError("invalid_evidence")
+                check = parent.condition_checks[related.condition_index]
+                if (
+                    check.outcome != "supported"
+                    or related.profile_field != check.profile_field
+                    or related.profile_quote != check.profile_quote
+                ):
+                    raise ValueError("invalid_evidence")
+            elif related.profile_field != "experience" or not performed_actions(
+                related.profile_quote
+            ):
+                raise ValueError("invalid_evidence")
+        validate_career_fit(item, source, fields)
+    result = prioritize_assessment(
+        result,
+        payload["profile"],
+        allow_promotions=allow_promotions,
+        condition_context=_condition_context,
+    )
+    for item in result.items:
+        validate_career_fit(item, jobs[str(item.job_id)]["description"], payload["profile"])
     return correct_unverified_gaps(BatchAssessment.model_validate(result.model_dump()))
 
 
@@ -521,7 +630,21 @@ def job_assessment(db: Session, user: User, job_id: UUID) -> JobAssessmentReport
         "company": _clean(job.company, identifiers),
         "description": _clean(job.description, identifiers),
     }
-    fallback = JobAssessmentReport(job_id=job_id, status="not_analyzed", reason="no_saved_analysis")
+    context_hash = _digest(
+        {
+            "profile": profile,
+            "job": current_job,
+            "prompt_version": PROMPT_VERSION,
+            "revision": {
+                "raw_hash": job.raw_hash,
+                "source_id": str(job.source_id),
+                "external_id": job.external_id,
+            },
+        }
+    )
+    fallback = JobAssessmentReport(
+        job_id=job_id, status="not_analyzed", reason="no_saved_analysis", context_hash=context_hash
+    )
     for run in db.scalars(
         select(AIRecommendationRun)
         .where(AIRecommendationRun.user_id == user.id)
@@ -542,11 +665,15 @@ def job_assessment(db: Session, user: User, job_id: UUID) -> JobAssessmentReport
         ):
             if fallback.status == "not_analyzed":
                 fallback = JobAssessmentReport(
-                    job_id=job_id, status="outdated", reason="inputs_changed"
+                    job_id=job_id,
+                    status="outdated",
+                    reason="inputs_changed",
+                    context_hash=context_hash,
                 )
             continue
         base = {
             "job_id": job_id,
+            "context_hash": context_hash,
             "source_run_id": run.id,
             "execution_mode": pipeline["execution_mode"],
             "model": pipeline["model"],

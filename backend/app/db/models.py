@@ -496,6 +496,7 @@ class JobExtractionRun(UUIDPrimaryKeyMixin, Base):
 
 # Register private discovery results, email pilot tables and resume contents.
 from app.ai_recommendations.models import AIRecommendationRun as AIRecommendationRun  # noqa: E402
+from app.answer_preparation.models import AnswerPreparation as AnswerPreparation  # noqa: E402
 from app.email_applications.models import (  # noqa: E402
     EmailApplication as EmailApplication,
 )

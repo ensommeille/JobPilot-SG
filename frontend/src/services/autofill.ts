@@ -5,14 +5,18 @@ export const autofillFields = [
   ['given_name', 'First / given name'], ['family_name', 'Last / family name'], ['full_name', 'Full name'],
   ['contact_email', 'Contact email'], ['phone', 'Phone'], ['phone_country_code', 'Phone country code'],
   ['school', 'School'], ['degree', 'Degree'], ['discipline', 'Field of study'],
+  ['institution_type', 'Institution type'], ['current_student', 'Currently studying (Yes/No)'],
   ['education_start_year', 'Education start year'], ['education_start_month', 'Education start month'],
   ['education_end_year', 'Education end year'], ['education_end_month', 'Education end month'],
   ['current_city', 'Current city'], ['current_country', 'Current country'],
   ['nationality', 'Nationality'], ['study_country', 'Country of study'],
   ['internship_start_date', 'Internship start date'], ['internship_end_date', 'Internship end date'],
   ['availability_period', 'Availability'], ['work_arrangement', 'Work arrangement'],
+  ['internship_commitment', 'Internship commitment'], ['internship_type', 'Internship type'],
+  ['fulltime_start_year', 'Full-time start year'],
   ['salary_expectation', 'Salary expectation'], ['notice_period', 'Notice period'],
   ['linkedin', 'LinkedIn'], ['github', 'GitHub'], ['portfolio', 'Portfolio'],
+  ['job_discovery_source', 'Where you found this job'], ['job_discovery_other', 'Other source details'],
   ['skills', 'Skills'], ['experience', 'Experience'], ['education', 'Education summary'], ['resume_summary', 'Introduction'],
 ] as const
 export type AutofillKey = typeof autofillFields[number][0]

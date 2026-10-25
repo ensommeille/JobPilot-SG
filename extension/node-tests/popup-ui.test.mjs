@@ -15,7 +15,8 @@ test('manual form reads are initially hidden recovery actions, leaving Fill as t
   }
   assert.doesNotMatch(html, />\s*(?:Read (?:page|form)|Load (?:page|form))/i);
   assert.match(html, /answers load automatically/i);
-  assert.match(html, /Opening the extension starts no paid analysis\./);
+  assert.match(html, /Missing narrative answers prepare in the background/);
+  assert.match(html, /id="preparation-status"[^>]*aria-live="polite"/);
 });
 
 test('attachment stays separate and describes immediate upload without claiming submission', () => {
@@ -23,7 +24,7 @@ test('attachment stays separate and describes immediate upload without claiming 
   assert.match(html, /id="ats-attach"[^>]*>Attach saved PDF<\/button>/);
   assert.match(html, /may upload the PDF to the employer immediately/);
   assert.match(html, /It does not submit your application/);
-  assert.match(html, /Add missing answers yourself/);
+  assert.match(html, /Check AI drafts and unresolved answers/);
 });
 
 test('the popup keeps a definite Chrome width and one scrolling preview above its action footer', () => {
@@ -38,4 +39,5 @@ test('the popup keeps a definite Chrome width and one scrolling preview above it
   }
   assert.match(css, /#workspace-content\s*\{[^}]*overflow-y:\s*auto/s);
   assert.match(html, /<\/div>\s*<footer id="review-actions"/);
+  assert.ok(html.indexOf('id="ats-inspect"') > html.indexOf('id="review-actions"'), 'Refresh recovery remains visible in the action footer');
 });

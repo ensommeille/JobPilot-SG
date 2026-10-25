@@ -9,9 +9,15 @@ const profile = {full_name: 'Fictional Saved Applicant', contact_email: 'fixture
   availability_period: 'January to June 2027', nationality: null, study_country: null};
 const pdf = {id: pdfId, filename: 'fixture-resume.pdf', size_bytes: 12345, uploaded_at: '2026-10-24T04:00:00Z',
   has_file: true, content_type: 'application/pdf', sha256: 'a'.repeat(64), extraction_status: 'parsed', page_count: 1};
+const readyPreparation = {status: 'ready', profile_fingerprint: 'fixture-preparation-facts', resume_id: pdfId,
+  preparation_id: 'fixture-preparation', answers: [{field_id: 'intro', value: profile.resume_summary, source: 'saved', fact_key: 'resume_summary', citations: []}],
+  omitted: [], reused: false, execution_mode: 'not_needed', elapsed_ms: 4, error_code: null};
 
-async function setup(page, {channel = 'external', files = [pdf], connection, userId = 'fixture-user', path = 'prepare'} = {}) {
-  const calls = {writes: [], messages: [], users: 0};
+async function setup(page, {channel = 'external', files = [pdf], connection, userId = 'fixture-user', path = 'prepare', facts, warmHandler} = {}) {
+  const calls = {writes: [], messages: [], users: 0, warm: [], profileChanges: []};
+  const autofill = facts || {values: {full_name: profile.full_name}, sources: {}, missing_fields: [],
+    resume: files.length === 1 ? files[0] : null, resumes: files,
+    requires_resume_selection: files.length > 1, extraction_status: files.length === 1 ? 'ready' : 'selection_required', fingerprint: 'fixture-preparation-facts'};
   await page.addInitScript(({token, connection}) => {
     localStorage.setItem('jobpilot_token', token);
     if (connection) {
@@ -27,6 +33,15 @@ async function setup(page, {channel = 'external', files = [pdf], connection, use
   await page.route('**/profile', route => route.request().resourceType() === 'document' ? route.continue() : route.fulfill({json: profile}));
   await page.route('**/users/me', route => { calls.users++; return route.fulfill({json: {id: userId, role: 'user'}}); });
   await page.route('**/profile/resumes', route => route.fulfill({json: files}));
+  await page.route('**/browser-assistant/autofill-profile', route => route.fulfill({json: autofill}));
+  await page.route('**/profile/autofill-details', route => { calls.profileChanges.push(route.request().postDataJSON()); return route.fulfill({json: autofill}); });
+  await page.route('**/browser-assistant/prepare-answers/warm', route => {
+    calls.warm.push({body: route.request().postDataJSON(), authorization: route.request().headers().authorization});
+    if (warmHandler) return warmHandler(route, calls);
+    return route.fulfill({json: {status: 'ready', profile_fingerprint: autofill.fingerprint, resume_id: autofill.resume?.id ?? null,
+      preparation_id: 'fixture-preparation', answers: [{field_id: 'intro', value: profile.resume_summary, source: 'saved', fact_key: 'resume_summary', citations: []}],
+      omitted: [], reused: false, execution_mode: 'not_needed', elapsed_ms: 4, error_code: null}});
+  });
   await page.route(`**/jobs/${jobId}`, route => route.request().resourceType() === 'document' ? route.continue() : route.fulfill({json: {
     id: jobId, title: 'Fictional actual-flow fixture', company: 'Fixture employer', status: 'active', city: 'Singapore',
     job_type: 'internship', deadline: null, salary_min: null, salary_max: null, source: {name: 'Fixture'}, tags: [],
@@ -101,10 +116,51 @@ test('a failed preparation save keeps the selected PDF and allows a deliberate r
   await expect(page.getByRole('button', {name: 'Continue on employer site', exact: true})).toBeEnabled();
 });
 
-test('detail exposes the manual application channel before the job description', async ({page}) => {
+test('detail keeps the application path without repeating the assistance guide', async ({page}) => {
   await setup(page, {path: 'detail'});
-  await expect(page.getByRole('region', {name: 'Application channel'})).toContainText('Employer site · manual application');
-  expect(await page.locator('.application-channel-info').evaluate(element => Boolean(element.compareDocumentPosition(document.querySelector('.job-description')) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  await expect(page.getByRole('heading', {name: 'Fictional actual-flow fixture', exact: true})).toBeVisible();
+  await expect(page.getByRole('region', {name: 'Application channel'})).toHaveCount(0);
+  await expect(page.locator('.application-extension-status')).toHaveCount(0);
+  await expect(page.getByRole('link', {name: 'Prepare application', exact: true})).toHaveAttribute('href', `/jobs/${jobId}/prepare`);
+  await expect(page.getByRole('link', {name: 'View original posting', exact: true})).toHaveAttribute('href', 'https://employer.example.test/apply');
+});
+
+test('Jobs offers an optional keyboard-accessible four-step guide without starting an application or AI request', async ({page}) => {
+  const calls = await setup(page, {path: 'detail'});
+  let recommendations = 0;
+  await page.route(/\/jobs(\?.*)?$/, route => route.request().resourceType() === 'document' ? route.continue()
+    : route.fulfill({json: {items: [], total: 0, pages: 1}}));
+  await page.route(/\/favorites(\?.*)?$/, route => route.fulfill({json: {items: [], total: 0, pages: 1}}));
+  await page.route('**/job-sources/status', route => route.fulfill({json: {sources: []}}));
+  await page.route('**/jobs/ai-recommendations', route => { recommendations++; return route.fulfill({status: 500, json: {detail: 'The guide must not request recommendations'}}); });
+  await page.getByRole('navigation', {name: 'Main navigation'}).getByRole('button', {name: 'Jobs', exact: true}).click();
+  const trigger = page.getByRole('button', {name: 'How to use', exact: true});
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await trigger.focus();
+  await trigger.press('Enter');
+  const guide = page.getByRole('region', {name: 'How to use JobPilot', exact: true});
+  await expect(guide).toBeVisible();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(guide.locator('.usage-guide-steps > li')).toHaveCount(4);
+  await expect(guide).toContainText('Show all jobs');
+  await expect(guide).toContainText('Fill never submits.');
+  await expect(guide.getByRole('link', {name: 'Profile', exact: true})).toHaveAttribute('href', '/profile?returnTo=%2Fjobs');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await guide.getByText('Connect the extension once', {exact: true}).click();
+  await expect(guide).toContainText('Connect through JobPilot');
+  await guide.getByText('Connect the extension once', {exact: true}).press('Escape');
+  await expect(guide).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await page.setViewportSize({width: 390, height: 844});
+  await trigger.click();
+  await expect(guide).toBeVisible();
+  const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+  expect(horizontalOverflow).toBe(false);
+  await guide.getByRole('button', {name: 'Close guide', exact: true}).click();
+  await expect(trigger).toBeFocused();
+  expect(recommendations).toBe(0);
+  expect(calls.writes).toEqual([]);
+  expect(calls.warm).toEqual([]);
 });
 
 for (const [scenario, connection, text] of [
@@ -135,4 +191,94 @@ test('email application capability is labelled test-only before any send action'
   await expect(page.getByRole('region', {name: 'Application channel'})).toContainText('Email test pilot · test mailbox only');
   await expect(page.getByRole('region', {name: 'Application channel'})).toContainText('does not deliver an application to the employer');
   expect(calls.writes).toEqual([]);
+});
+
+test('supported preparation reads cache only across StrictMode and returning from Profile', async ({page}) => {
+  const calls = await setup(page, {channel: 'ats'});
+  await expect(page.locator('.prepared-answers-status')).toContainText('1 saved application answer ready');
+  expect(calls.warm).toEqual([{body: {confirmed: true, job_id: jobId, profile_fingerprint: 'fixture-preparation-facts', resume_id: pdfId, cache_only: true}, authorization: `Bearer ${token}`}]);
+  await page.getByRole('link', {name: 'Edit profile', exact: true}).click();
+  await expect(page).toHaveURL(/\/profile\?returnTo=/);
+  await page.goBack();
+  await expect(page.locator('.prepared-answers-status')).toContainText('1 saved application answer ready');
+  expect(calls.warm.filter(call => !call.body.cache_only)).toHaveLength(0);
+  expect(calls.warm.filter(call => call.body.cache_only)).toHaveLength(2);
+  expect(calls.writes).toEqual([]);
+  expect(calls.profileChanges).toEqual([]);
+  await expect(page.getByRole('button', {name: /Generate|Create AI|Answer questions/})).toHaveCount(0);
+});
+
+test('an attachment change never warms with another PDF or changes the global selection', async ({page}) => {
+  const other = {...pdf, id: '66666666-7777-4888-8999-000000000000', filename: 'Other fixture.pdf'};
+  const facts = {values: {full_name: profile.full_name}, sources: {}, missing_fields: [], resume: pdf, resumes: [pdf, other],
+    requires_resume_selection: false, extraction_status: 'ready', fingerprint: 'fixture-preparation-facts'};
+  const calls = await setup(page, {channel: 'ats', files: [pdf, other], facts});
+  await expect(page.getByLabel('Resume PDF for this application')).toHaveValue(pdfId);
+  await expect(page.locator('.prepared-answers-status')).toContainText('1 saved application answer ready');
+  await page.getByLabel('Resume PDF for this application').selectOption(other.id);
+  await expect(page.locator('.prepared-answers-status')).toContainText('This attachment differs from the PDF used for autofill');
+  await expect(page.locator('.prepared-answers-status').getByRole('link')).toContainText('Choose the same PDF in Profile');
+  expect(calls.warm).toHaveLength(1);
+  expect(calls.profileChanges).toEqual([]);
+  await page.getByRole('checkbox', {name: 'I have reviewed my saved details and PDF selection.'}).check();
+  await expect(page.getByRole('button', {name: 'Open employer form', exact: true})).toBeEnabled();
+});
+
+test('preparation stays optional while running and polls only free cached status', async ({page}) => {
+  const calls = await setup(page, {channel: 'ats', warmHandler: (route, recorded) => route.fulfill({json: {
+    ...readyPreparation, status: recorded.warm.length > 1 ? 'ready' : 'preparing',
+  }})});
+  await expect(page.locator('.prepared-answers-status')).toContainText('Checking saved application details');
+  await page.getByRole('checkbox', {name: 'I have reviewed my saved details and PDF selection.'}).check();
+  await expect(page.getByRole('button', {name: 'Open employer form', exact: true})).toBeEnabled();
+  await expect(page.locator('.prepared-answers-status')).toContainText('1 saved application answer ready');
+  expect(calls.warm.filter(call => !call.body.cache_only)).toHaveLength(0);
+  expect(calls.warm.filter(call => call.body.cache_only)).toHaveLength(2);
+  expect(calls.writes).toEqual([]);
+});
+
+test('a failed optional warm-up does not retry when returning to the application', async ({page}) => {
+  const calls = await setup(page, {channel: 'ats', warmHandler: route => route.fulfill({status: 503, json: {detail: 'fixture_unavailable'}})});
+  await expect(page.locator('.prepared-answers-status')).toContainText('Open JobPilot on the application form');
+  await page.getByRole('link', {name: 'Edit profile', exact: true}).click();
+  await page.goBack();
+  await expect(page.locator('.prepared-answers-status')).toContainText('Open JobPilot on the application form');
+  expect(calls.warm.filter(call => !call.body.cache_only)).toHaveLength(0);
+  expect(calls.warm.filter(call => call.body.cache_only)).toHaveLength(2);
+  await page.getByRole('checkbox', {name: 'I have reviewed my saved details and PDF selection.'}).check();
+  await expect(page.getByRole('button', {name: 'Open employer form', exact: true})).toBeEnabled();
+});
+
+test('returning after a JD cache change cannot reuse an old draft or start another paid preparation', async ({page}) => {
+  const calls = await setup(page, {channel: 'ats', warmHandler: (route, recorded) => route.fulfill({json: recorded.warm.length > 1
+    ? {...readyPreparation, status: 'unavailable', preparation_id: null, answers: [], error_code: 'preparation_not_cached'}
+    : readyPreparation})});
+  await expect(page.locator('.prepared-answers-status')).toContainText('1 saved application answer ready');
+  await page.getByRole('link', {name: 'Edit profile', exact: true}).click();
+  await page.goBack();
+  await expect(page.locator('.prepared-answers-status')).toContainText('Open JobPilot on the application form');
+  await expect(page.locator('.prepared-answers-status')).not.toContainText('1 saved application answer ready');
+  expect(calls.warm.filter(call => !call.body.cache_only)).toHaveLength(0);
+  expect(calls.warm.filter(call => call.body.cache_only)).toHaveLength(2);
+  await page.getByRole('checkbox', {name: 'I have reviewed my saved details and PDF selection.'}).check();
+  await expect(page.getByRole('button', {name: 'Open employer form', exact: true})).toBeEnabled();
+});
+
+test('the complete warm-up has one short time budget and leaves saved details usable on timeout', async ({page}) => {
+  await page.clock.install();
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  const calls = await setup(page, {channel: 'ats', warmHandler: async route => {
+    await held;
+    try { await route.fulfill({json: readyPreparation}); } catch { /* The bounded client request was aborted. */ }
+  }});
+  await expect.poll(() => calls.warm.length).toBe(1);
+  await page.getByRole('checkbox', {name: 'I have reviewed my saved details and PDF selection.'}).check();
+  await expect(page.getByRole('button', {name: 'Open employer form', exact: true})).toBeEnabled();
+  await page.clock.fastForward(8300);
+  await expect(page.locator('.prepared-answers-status')).toContainText('Open JobPilot on the application form');
+  release();
+  expect(calls.warm).toHaveLength(1);
+  await expect(page.getByRole('button', {name: 'Open employer form', exact: true})).toBeEnabled();
+  await expect(page.getByLabel('Resume PDF for this application')).toHaveValue(pdfId);
 });

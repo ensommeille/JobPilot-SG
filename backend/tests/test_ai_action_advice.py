@@ -92,11 +92,13 @@ def test_action_states_use_conditions_and_core_evidence_not_summary(rows, status
     original = assessed.model_dump(mode="json")
     advice = derive_advice(assessed)
     assert advice.status == status
-    assert advice.version == "action-advice-v3"
+    assert advice.version == "action-advice-v5"
     assert assessed.model_dump(mode="json") == original
     assert sum(advice.counts.model_dump().values()) == len(rows)
     for evidence in [*advice.blockers, *advice.strengths]:
-        projected = evidence.model_dump(exclude={"requirement_index", "reason"})
+        projected = evidence.model_dump(
+            exclude={"requirement_index", "reason", "condition_checks", "condition_operator"}
+        )
         original_row = rows[evidence.requirement_index]
         assert projected == {key: value for key, value in original_row.items() if key != "reason"}
         assert evidence.reason.startswith(original_row["reason"])
@@ -378,6 +380,49 @@ def test_free_detail_does_not_depend_on_model_configuration(client, context, pro
     assert len(provider.calls) == 1
 
 
+def test_detail_context_hash_is_stable_across_read_and_analysis_status(client, context, provider):
+    path = f"/jobs/{context.jobs[0].id}/ai-assessment"
+    initial = client.get(path, headers=context.headers).json()
+    assert initial["status"] == "not_analyzed"
+    key = initial["context_hash"]
+    assert len(key) == 64 and set(key) <= set("0123456789abcdef")
+    assert client.get(path, headers=context.headers).json()["context_hash"] == key
+    assert not provider.calls
+    shared.post(client, context)
+    complete = client.get(path, headers=context.headers).json()
+    assert complete["status"] == "available" and complete["context_hash"] == key
+    assert len(provider.calls) == 1
+
+
+@pytest.mark.parametrize("changed", ["profile", "description", "revision"])
+def test_detail_context_hash_changes_with_current_inputs_without_model_call(
+    client, db, context, provider, changed
+):
+    path = f"/jobs/{context.jobs[0].id}/ai-assessment"
+    previous = client.get(path, headers=context.headers).json()["context_hash"]
+    if changed == "profile":
+        assert (
+            client.put(
+                "/profile",
+                headers=context.headers,
+                json={**shared.PROFILE, "skills": ["Python", "Rust"]},
+            ).status_code
+            == 200
+        )
+    elif changed == "description":
+        context.jobs[0].description += " Familiarity with Rust is preferred."
+        db.commit()
+    else:
+        context.jobs[0].raw_hash = "a" * 64 if context.jobs[0].raw_hash != "a" * 64 else "b" * 64
+        db.commit()
+    current = client.get(path, headers=context.headers).json()
+    assert current["context_hash"] != previous
+    assert (
+        client.get(path, headers=context.headers).json()["context_hash"] == current["context_hash"]
+    )
+    assert current["status"] == "not_analyzed" and not provider.calls
+
+
 def test_saved_availability_is_minimized_sent_and_explicitly_citable(client, db, context, provider):
     availability = "Available full-time for 12 weeks."
     saved = {
@@ -399,7 +444,7 @@ def test_saved_availability_is_minimized_sent_and_explicitly_citable(client, db,
     ]
     created = shared.post(client, context).json()
     assert created["status"] == "succeeded"
-    assert created["prompt_version"] == "ai-recommendation-v9-evidence-scope"
+    assert created["prompt_version"] == "ai-recommendation-v11-career-application-judgment"
     assessed = created["result"]["items"][0]["requirements"][0]
     assert assessed["outcome"] == "supported" and assessed["profile_field"] == "availability"
     payload = json.loads(provider.calls[0].messages[-1].content)
