@@ -25,6 +25,7 @@ function Library({ token, onFilesChanged, pdfGate }: { token: string; onFilesCha
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [retry, setRetry] = useState(0)
+  const [uploadFilename, setUploadFilename] = useState('')
   const alive = useRef(true)
   const locked = useRef(false)
   const requests = useRef(new Set<AbortController>())
@@ -69,13 +70,15 @@ function Library({ token, onFilesChanged, pdfGate }: { token: string; onFilesCha
   const saveFile = (file?: File) => {
     if (!file) return
     if (!file.name.toLowerCase().endsWith('.pdf') || file.size < 1 || file.size > 2 * 1024 * 1024) {
-      setError('Choose a PDF up to 2 MiB.'); if (upload.current) upload.current.value = ''; return
+      setError('Choose a PDF up to 2 MiB.'); setUploadFilename(''); if (upload.current) upload.current.value = ''; return
     }
+    setUploadFilename(file.name)
     void action('Uploading your PDF…', async request => {
       const result = await uploadResumeFile(file, config(request))
       if (!current(request)) return
       setDetail(null)
       if (upload.current) upload.current.value = ''
+      setUploadFilename('')
       setBusy('Preparing your PDF for applications…')
       try {
         const prepared = await readResumeForAutofill(result.data.id, config(request))
@@ -107,11 +110,17 @@ function Library({ token, onFilesChanged, pdfGate }: { token: string; onFilesCha
     <p>Upload once to prepare reusable answers and save the original file for applications.</p>
     <label htmlFor="resume-library-upload">Upload and analyze PDF with AI (up to 2 MiB)</label>
     <p id="resume-upload-cost" className="muted">Choosing a file starts preparation. A new AI analysis may be billed; saved readings are reused. No application or employer upload is sent.</p>
-    <input ref={upload} id="resume-library-upload" type="file" accept=".pdf,application/pdf" aria-describedby="resume-upload-cost" disabled={Boolean(busy) || loading || pdfGate.busy} onChange={event => saveFile(event.target.files?.[0])} />
+    <div className="resume-upload-control">
+      <span className="resume-upload-picker">
+        <span className="btn btn-secondary" aria-hidden="true">Choose PDF</span>
+        <input ref={upload} id="resume-library-upload" type="file" accept=".pdf,application/pdf" aria-describedby="resume-upload-cost resume-upload-filename" title="Choose a PDF resume" disabled={Boolean(busy) || loading || pdfGate.busy} onChange={event => saveFile(event.target.files?.[0])} />
+      </span>
+      <span id="resume-upload-filename" className="muted" role="status">{uploadFilename || 'No file selected'}</span>
+    </div>
     {loading && <p role="status">Loading your saved resumes…</p>}
     {!loading && !items.length && <p className="muted">Upload a PDF to review its text and reuse the original file when applying.</p>}
     {items.length > 0 && <ul className="resume-library-files">{items.map(item => <li key={item.id}>
-      <div><strong>{item.filename}</strong><p className="muted">{(item.size_bytes / 1024).toFixed(1)} KiB · {new Date(item.uploaded_at).toLocaleString()} · {item.has_file ? item.extraction_status === 'parsed' ? 'PDF saved' : 'PDF saved — text unavailable' : 'Filename only — upload the actual PDF to reuse it'}</p></div>
+      <div><strong>{item.filename}</strong><p className="muted">{(item.size_bytes / 1024).toFixed(1)} KiB · {new Date(item.uploaded_at).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })} · {item.has_file ? item.extraction_status === 'parsed' ? 'PDF saved' : 'PDF saved — text unavailable' : 'Filename only — upload the actual PDF to reuse it'}</p></div>
       <div className="resume-library-actions">
         {item.has_file && <><button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(busy) || pdfGate.busy} onClick={() => open(item)}>Review PDF text</button><button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(busy) || pdfGate.busy} onClick={() => void action('Downloading PDF…', async () => { await downloadResumeFile(item.id, item.filename, token) })}>Download PDF</button></>}
         <button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(busy) || pdfGate.busy} onClick={() => remove(item)}>Delete</button>
