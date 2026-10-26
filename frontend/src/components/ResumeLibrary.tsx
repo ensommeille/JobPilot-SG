@@ -115,7 +115,7 @@ function Library({ token, onFilesChanged, pdfGate }: { token: string; onFilesCha
         <span className="btn btn-secondary" aria-hidden="true">Choose PDF</span>
         <input ref={upload} id="resume-library-upload" type="file" accept=".pdf,application/pdf" aria-describedby="resume-upload-cost resume-upload-filename" title="Choose a PDF resume" disabled={Boolean(busy) || loading || pdfGate.busy} onChange={event => saveFile(event.target.files?.[0])} />
       </span>
-      <span id="resume-upload-filename" className="muted" role="status">{uploadFilename || 'No file selected'}</span>
+      <span id="resume-upload-filename" className="muted" aria-live="polite" aria-atomic="true">{uploadFilename || 'No file selected'}</span>
     </div>
     {loading && <p role="status">Loading your saved resumes…</p>}
     {!loading && !items.length && <p className="muted">Upload a PDF to review its text and reuse the original file when applying.</p>}
