@@ -2,7 +2,13 @@
 .resume-library h2, .resume-library h3 { margin-top: 0; }
 .resume-library > p, .resume-text-review > p { max-width: 72ch; }
 .resume-library label { display: block; margin-block: var(--s-2); }
-.resume-library input[type="file"] { max-width: 100%; }
+.resume-upload-control { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+.resume-upload-picker { position: relative; display: inline-flex; flex-shrink: 0; border-radius: var(--radius-sm); }
+.resume-upload-picker input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.resume-upload-picker:focus-within { outline: 2px solid var(--primary); outline-offset: 3px; }
+.resume-upload-picker:has(input:disabled) { opacity: .55; }
+.resume-upload-picker input:disabled { cursor: not-allowed; }
+#resume-upload-filename { min-width: 0; overflow-wrap: anywhere; }
 .resume-library-files { padding: 0; margin: var(--s-4) 0; list-style: none; }
 .resume-library-files > li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s-3); padding-block: var(--s-3); border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
 .resume-library-files > li > div { min-width: 0; }
