@@ -37,7 +37,14 @@ jobs:
         run: python -m pip install --upgrade pip
       - name: Lint (Ruff)
         if: hashFiles('backend/pyproject.toml') != ''
-        run: ruff check .
+        run: ruff check . --output-format=sarif --output-file=ruff.sarif
+      - name: Upload lint report
+        if: ${{ always() && hashFiles('backend/pyproject.toml') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-lint
+          path: backend/ruff.sarif
+          if-no-files-found: ignore
       - name: Unit / API tests + coverage (pytest)
         if: hashFiles('backend/pyproject.toml') != ''
         run: >-
@@ -55,7 +62,14 @@ jobs:
           if-no-files-found: ignore
       - name: SAST (Semgrep)
         if: hashFiles('backend/pyproject.toml') != ''
-        run: semgrep --config=auto --error app/
+        run: semgrep --config=auto --error --sarif --output=semgrep.sarif app/
+      - name: Upload SAST report
+        if: ${{ always() && hashFiles('backend/pyproject.toml') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-sast
+          path: backend/semgrep.sarif
+          if-no-files-found: ignore
       - name: Dependency scan (pip-audit)
         if: hashFiles('backend/pyproject.toml') != ''
         # Audit the backend project, not Semgrep/pip-audit packages installed only in CI.
