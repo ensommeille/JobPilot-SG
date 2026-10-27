@@ -1,6 +1,6 @@
 # Security Testing — Results & Before/After Evidence
 
-Scans run 2026-10-27 on `main`. Raw artifacts in this directory + GitHub Security tab + CI artifacts.
+Scans on `main`. Raw artifacts in this directory + GitHub Security tab + CI artifacts.
 
 ## 1. SAST — Semgrep
 
@@ -20,11 +20,11 @@ Fixed (project runtime deps):
 
 | Package | Before | Findings | Fixed to |
 |---|---|---|---|
-| PyJWT | 2.13.0 | 15 CVE (incl. GHSA-pxh4) | 2.15.1 |
+| PyJWT | 2.13.0 | 15 CVE | 2.15.1 |
 | urllib3 | 2.7.0 | 3 CVE | 2.8.0 |
 | certifi | 2026.7.22 | 2 CVE (compromised CA) | 2026.10.23 |
 
-Remaining are toolchain-only (filelock/mcp/opentelemetry, pulled by `semgrep`/`pip-audit`, not project runtime deps).
+Remaining are toolchain-only (filelock/mcp/opentelemetry — pulled by `semgrep`/`pip-audit`, not project runtime deps).
 
 ## 3. SCA — Frontend (npm audit)
 
@@ -33,34 +33,43 @@ Remaining are toolchain-only (filelock/mcp/opentelemetry, pulled by `semgrep`/`p
 | Before | **0 vulnerabilities** (`sca-npm-before.json`) |
 | After | 0 |
 
-## 4. DAST — OWASP ZAP baseline (new, added to CI)
+## 4. DAST — OWASP ZAP baseline (partial — honest scope)
 
 | Stage | Result |
 |---|---|
-| Before | not previously run — added `zaproxy/action-baseline` job |
-| Baseline | runs against the full stack; no blocking highs (`fail_action: warn`, `allow_issue_writing: false`) |
+| Before | not previously run |
+| Current | baseline scan of the **public `/jobs` endpoint** (200 response) |
 
-Evidence: CI artifact `zap-report` (zap_scan.html) on every `Security Scans` run.
+**Not yet covered**: login, profile, PDF, and application endpoints require authentication and are **not** exercised by this baseline. This is a public-endpoint baseline, **not** a full-stack DAST. Report artifact: `zap-report` (contains `zap_scan.html`).
 
-## 5. Container scanning — Trivy (new, added to CI)
+## 5. Container scanning — Trivy
+
+High-severity alerts: **39 before → 1 remaining**, classified honestly:
+
+| Category | Items | Status |
+|---|---|---|
+| **Fixed** (dependency upgraded, re-scan shows no finding) | urllib3 2.7→2.8.0 (CVE-2026-97687/97689), setuptools 70.3→84.2.1 (CVE-2025-47273) | ✅ re-scanned clean |
+| **Accepted risk** (`.trivyignore`, no upstream fix available) | 7 Debian OS-package CVEs (util-linux/ncurses/systemd/perl), msgpack (pip-vendored, not an app dep) | ⚠️ documented, not "fixed" |
+| **Unresolved** (high, no fix version) | **CVE-2026-54369 (libacl1)** | ❌ open on main |
+
+Evidence: GitHub Security tab → Code scanning (tool = Trivy), `.trivyignore` at repo root, `trivy-backend.sarif` SARIF.
+
+## 6. IaC scanning — Checkov
 
 | Stage | Result |
 |---|---|
-| Before | **100 open alerts (39 high)** |
-| After | **0 high** — Python-dep highs remediated (urllib3 2.8.0, setuptools 84.2.1); Debian base-image + pip-vendored CVEs accepted via `.trivyignore` (11 IDs, no upstream fix) |
+| Scope | scans **Dockerfiles** (`--framework dockerfile`) — not docker-compose |
+| Report | `results_json.json` (artifact `checkov-report`) |
 
-Remaining open alerts are medium/low OS-package CVEs in `python:3.13-slim` — not application code, below the "fix high" bar.
+## Scan → fix → re-scan correspondence
 
-Evidence: GitHub Security tab → Code scanning (tool = Trivy), `.trivyignore` at repo root, + `trivy-backend.sarif` SARIF upload.
-
-## 6. IaC scanning — Checkov (new, added to CI)
-
-| Stage | Result |
-|---|---|
-| Baseline | scans `docker-compose.yml` + `Dockerfile`s (`--framework dockerfile`) |
-
-Evidence: CI artifact `checkov-report` (checkov json) on every `Security Scans` run.
+| Scan | Initial report | Issue recorded | Fix commit / PR | Re-scan report |
+|---|---|---|---|---|
+| pip-audit | `sca-pip-before.json` (25 vulns) | PyJWT/urllib3/certifi | PR #58 | `sca-pip-after.json` (runtime cleared) |
+| Semgrep | `sast-semgrep-before.json` (0) | — | — | 0 |
+| npm audit | `sca-npm-before.json` (0) | — | — | 0 |
+| Trivy | Code scanning (39 high) | urllib3/setuptools fixed; Debian+msgpack accepted; libacl1 open | PR #58, #61, #63, #64 | 1 high remaining (CVE-2026-54369) |
 
 ## Verification
 
-Full backend suite after dependency upgrades: **1847 passed, 1 skipped** (no regression). All `Security Scans` jobs green on `main`.
+Full backend suite: **1848 collected / 1847 passed, 1 skipped**, 90% branch coverage, no regression after dependency upgrades.
