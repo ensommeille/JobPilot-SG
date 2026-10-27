@@ -13,7 +13,7 @@ jobs:
       - name: Build backend image
         run: docker build -t jobpilot-backend:scan backend/
       - name: Trivy scan backend
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: jobpilot-backend:scan
           severity: HIGH,CRITICAL
@@ -32,12 +32,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Checkov scan (Dockerfiles)
-        uses: bridgecrewio/checkov-action@v12
+        uses: bridgecrewio/checkov-action@v12.1347.0
         with:
           directory: .
           framework: dockerfile
           output_format: sarif
-          output_file_path: console,checkov.sarif
+          output_file_path: checkov.sarif
           soft_fail: true
       - name: Upload Checkov SARIF
         if: always()
@@ -61,7 +61,7 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8000/health
       - name: ZAP baseline scan
-        uses: zaproxy/action-baseline@v0.12.0
+        uses: zaproxy/action-baseline@v0.15.0
         with:
           target: http://127.0.0.1:8000
           fail_action: warn
