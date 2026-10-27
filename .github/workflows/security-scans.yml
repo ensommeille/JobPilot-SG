@@ -31,20 +31,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Checkov scan (Dockerfiles)
-        uses: bridgecrewio/checkov-action@v12.1347.0
+      - uses: actions/setup-python@v6
         with:
-          directory: .
-          framework: dockerfile
-          output_format: sarif
-          output_file_path: checkov.sarif
-          soft_fail: true
-      - name: Upload Checkov SARIF
+          python-version: "3.13"
+      - name: Install Checkov
+        run: pip install checkov
+      - name: Run Checkov (Dockerfiles)
+        continue-on-error: true
+        run: checkov -d . --framework dockerfile --output json --output-file-path . --output-basename checkov --soft-fail
+      - name: Upload Checkov report
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: checkov.sarif
-          category: checkov
+          name: checkov-report
+          path: checkov*.json
+          if-no-files-found: ignore
 
   dast:
     name: DAST (OWASP ZAP baseline)
@@ -65,6 +66,7 @@ jobs:
         with:
           target: http://127.0.0.1:8000
           fail_action: warn
+          allow_issue_writing: false
       - name: Upload ZAP report
         if: always()
         uses: actions/upload-artifact@v4
