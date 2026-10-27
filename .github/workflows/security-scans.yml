@@ -42,14 +42,13 @@ jobs:
       - name: Install Checkov
         run: pip install checkov
       - name: Run Checkov (Dockerfiles)
-        continue-on-error: true
-        run: checkov -d . --framework dockerfile --output json --output-file-path . --output-basename checkov --soft-fail
+        run: checkov -d . --framework dockerfile --output json --output-file-path . --soft-fail
       - name: Upload Checkov report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: checkov-report
-          path: checkov*.json
+          path: results_json.json
           if-no-files-found: ignore
 
   dast:
@@ -66,10 +65,10 @@ jobs:
             sleep 3
           done
           curl -fsS http://127.0.0.1:8000/health
-      - name: ZAP baseline scan
+      - name: ZAP baseline scan (public /jobs endpoint)
         uses: zaproxy/action-baseline@v0.15.0
         with:
-          target: http://127.0.0.1:8000
+          target: http://127.0.0.1:8000/jobs
           fail_action: warn
           allow_issue_writing: false
       - name: Upload ZAP report
