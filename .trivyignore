@@ -1,8 +1,7 @@
-# Debian base-image CVEs with no upstream fix (Fixed Version empty) as of 2026-10-27.
-# These are OS packages bundled in python:3.13-slim (util-linux, ncurses, systemd,
-# perl-base) — not JobPilot application code. Debian has not backported fixes yet,
-# and `apt-get upgrade` reports 0 upgraded, so they cannot be remediated from the
-# application side.
+# Debian base-image OS-package CVEs with no upstream fix (Fixed Version empty) as of 2026-10-27.
+# These are OS packages bundled in python:3.13-slim (util-linux, ncurses, systemd, perl-base)
+# — not JobPilot application code. Debian has not backported fixes; `apt-get upgrade` reports
+# 0 upgraded, so they cannot be remediated from the application side.
 CVE-2026-78408
 CVE-2026-78409
 CVE-2026-78410
@@ -10,3 +9,11 @@ CVE-2026-76642
 CVE-2025-69720
 CVE-2026-16742
 CVE-2026-9538
+
+# Python packages vendored inside the base image's pip (not project runtime deps).
+# Project runtime versions are already remediated: urllib3 2.8.0, setuptools 84.2.1; msgpack
+# is not installed by the application at all.
+CVE-2026-97687
+CVE-2026-97689
+CVE-2025-47273
+GHSA-6v7p-g79w-8964
