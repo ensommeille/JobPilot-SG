@@ -1,0 +1,12 @@
+# Debian base-image CVEs with no upstream fix (Fixed Version empty) as of 2026-10-27.
+# These are OS packages bundled in python:3.13-slim (util-linux, ncurses, systemd,
+# perl-base) — not JobPilot application code. Debian has not backported fixes yet,
+# and `apt-get upgrade` reports 0 upgraded, so they cannot be remediated from the
+# application side.
+CVE-2026-78408
+CVE-2026-78409
+CVE-2026-78410
+CVE-2026-76642
+CVE-2025-69720
+CVE-2026-16742
+CVE-2026-9538
