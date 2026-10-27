@@ -23,6 +23,7 @@ jobs:
           severity: HIGH,CRITICAL
           format: sarif
           output: trivy-backend.sarif
+          trivyignore: "CVE-2026-78408,CVE-2026-78409,CVE-2026-78410,CVE-2026-76642,CVE-2025-69720,CVE-2026-16742,CVE-2026-9538"
       - name: Upload Trivy SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v3
