@@ -52,7 +52,15 @@ jobs:
           --cov=app --cov-branch
           --cov-report=term-missing
           --cov-report=xml:coverage.xml
+          --junitxml=junit.xml
           --cov-fail-under=85
+      - name: Upload unit / API test results
+        if: ${{ always() && hashFiles('backend/pyproject.toml') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: backend/junit.xml
+          if-no-files-found: error
       - name: Upload coverage report
         if: ${{ always() && hashFiles('backend/pyproject.toml') != '' }}
         uses: actions/upload-artifact@v4
@@ -95,7 +103,14 @@ jobs:
         run: npm ci
       - name: Lint (ESLint)
         if: hashFiles('frontend/package.json') != ''
-        run: npm run lint
+        run: npm run lint -- --format json --output-file eslint-report.json
+      - name: Upload frontend lint report
+        if: ${{ always() && hashFiles('frontend/package.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-lint
+          path: frontend/eslint-report.json
+          if-no-files-found: error
       - name: Type-check and build (tsc + Vite)
         if: hashFiles('frontend/package.json') != ''
         run: npm run build
