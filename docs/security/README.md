@@ -46,15 +46,18 @@ Not yet covered (needs auth): login, profile, PDF, application endpoints. This i
 
 ## 5. Container scanning — Trivy
 
-The team's earlier register reported **39 HIGH before → 1 unignored HIGH after**. Eleven IDs in [`.trivyignore`](../../.trivyignore) are excluded from displayed findings; they are **accepted/suppressed, not fixed**. The latest [Trivy job log](https://github.com/ensommeille/JobPilot-SG/actions/runs/40622693826) proves scan and SARIF upload but does not print the finding count. Verify the current SARIF in GitHub Security or the downloadable report added by this branch before claiming the latest count.
+The team's earlier register reported **39 HIGH before → 1 unignored HIGH after**, but this was superseded by an actual [PR #68 Trivy SARIF artifact](https://github.com/ensommeille/JobPilot-SG/actions/runs/40691560445/artifacts/12816284892): **2 HIGH** (`CVE-2026-54369` in `libacl1`; `CVE-2026-114613` in `msgpack`). The SARIF contains 125 findings across all severities because the action reports all severities in SARIF, despite the configured `HIGH,CRITICAL` scan input. Eleven IDs in [`.trivyignore`](../../.trivyignore) are excluded from displayed findings; they are **suppressed, not fixed**.
 
 | Category | Items | Status |
 |---|---|---|
 | **Previously reported fixed** (dependency upgraded) | urllib3 2.7→2.8.0, setuptools 70.3→84.2.1 | Check current SARIF before closing |
 | **Suppressed in the scan** (`.trivyignore`) | 7 Debian OS-package CVEs and 4 vendored-package advisories | ⚠️ exclusions, **not** fixes; risk owner/acceptance still needs team sign-off |
 | **Unresolved** (HIGH, no fix version) | **CVE-2026-54369 — libacl1 (symlink-traversal privilege escalation)** | ❌ open |
+| **New on PR #68 first scan** (HIGH, fix version listed) | **CVE-2026-114613 — msgpack 1.1.2**, vendored inside pip 26.2.2; no standalone runtime `msgpack` distribution | Runtime pip removed in PR #68; re-scan pending |
 
 **CVE-2026-54369** (`libacl1`, HIGH) is recorded in the team's earlier register as having no fixed version. The backend container now runs as non-root, but that does not patch `libacl1`. Assign a risk owner, inspect the current SARIF and re-scan when a base-image update becomes available. Do not mark the issue closed from a green scan job alone.
+
+**CVE-2026-114613** was traced to `/usr/local/lib/python3.13/site-packages/pip/_vendor/msgpack/`, not a JobPilot runtime dependency. A disposable container showed `pip` 26.2.2 vendoring msgpack 1.1.2 and no standalone `msgpack` distribution. [PR #68](https://github.com/ensommeille/JobPilot-SG/pull/68) removes pip after installing the application. The modified image built; `app.main` imported and `alembic --version` ran while both pip and msgpack were absent. Treat the issue as **fix implemented, re-scan pending** until the next Trivy SARIF confirms it.
 
 ## 6. IaC scanning — Checkov
 
@@ -73,7 +76,7 @@ The team's earlier register reported **39 HIGH before → 1 unignored HIGH after
 | pip-audit | `sca-pip-before.json` (25) | PyJWT/urllib3/certifi | #58 | Project-scoped CI audit: 0; older whole-environment JSON: 5 toolchain findings |
 | Semgrep | 0 | — | — | 0 |
 | npm audit | 0 | — | — | 0 |
-| Trivy | 39 HIGH (earlier summary; raw pre-fix SARIF not retained here) | deps fixed / suppressed / 1 reported unresolved | #58, #61, #63, #64 | Re-scan and SARIF upload ran; independently inspect SARIF for latest count |
+| Trivy | 39 HIGH (earlier summary; raw pre-fix SARIF not retained here) | deps fixed/suppressed; new pip-vendored msgpack finding | #58, #61, #63, #64, #68 | PR #68 first SARIF: 2 HIGH; post-pip-removal re-scan pending |
 | Checkov | 90 pass / 4 fail | HEALTHCHECK + USER | #67 | 113 pass / 0 fail on 28 October |
 | ZAP | 2 Low + 1 Info | security headers | #67 | 0 FAIL / 1 WARN / 67 PASS on 28 October |
 
@@ -81,7 +84,7 @@ The team's earlier register reported **39 HIGH before → 1 unignored HIGH after
 
 Latest CI: **1,848 passed**, 1 warning, **90.11%** branch-aware coverage; [coverage XML](https://github.com/ensommeille/JobPilot-SG/actions/runs/40622693753/artifacts/12787589015). Semgrep: 293 rules, 119 targets, 0 findings; [SARIF](https://github.com/ensommeille/JobPilot-SG/actions/runs/40622693753/artifacts/12788311573). Backend Ruff [SARIF](https://github.com/ensommeille/JobPilot-SG/actions/runs/40622693753/artifacts/12788396786). Frontend ESLint and npm audit passed (log only on this commit); npm audit found 0 vulnerabilities. This branch adds downloadable JUnit XML, frontend ESLint JSON and Trivy SARIF artifacts; do not describe them as produced until its CI succeeds.
 
-**Open:** `CVE-2026-54369` (`libacl1`, HIGH) was recorded as unresolved in the team register. Non-root containers reduce exposure but do not patch the library. The team must check current SARIF, assign a risk owner and re-scan after an upstream fix. The 1 ZAP warning remains open. Authenticated endpoints and external employer sites were not DAST-scanned. The teacher's auto-caption “TASD” is not an additional scan; the configured tool is **DAST with OWASP ZAP**.
+**Open:** `CVE-2026-54369` (`libacl1`, HIGH) remains unresolved. The new pip-vendored msgpack finding is fixed in the Dockerfile but awaits re-scan. Non-root containers reduce exposure but do not patch `libacl1`. The team must assign a risk owner and re-scan after an upstream fix. The 1 ZAP warning remains open. Authenticated endpoints and external employer sites were not DAST-scanned. The teacher's auto-caption “TASD” is not an additional scan; the configured tool is **DAST with OWASP ZAP**.
 
 **IaC scope:** Docker Compose and Dockerfiles define reproducible **local** containers. Checkov scans Dockerfiles only. No cloud network, managed database, compute platform, secrets store or autoscaling has been provisioned as code. See [deployment/IAC_STATUS.md](../deployment/IAC_STATUS.md).
 
