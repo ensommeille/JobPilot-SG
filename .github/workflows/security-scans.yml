@@ -23,7 +23,7 @@ jobs:
           severity: HIGH,CRITICAL
           format: sarif
           output: trivy-backend.sarif
-          trivyignore: "CVE-2026-78408,CVE-2026-78409,CVE-2026-78410,CVE-2026-76642,CVE-2025-69720,CVE-2026-16742,CVE-2026-9538,CVE-2026-97687,CVE-2026-97689,CVE-2025-47273,GHSA-6v7p-g79w-8964"
+          trivyignores: ".trivyignore"
       - name: Upload Trivy SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v3
@@ -71,12 +71,4 @@ jobs:
           target: http://127.0.0.1:8000/jobs
           fail_action: warn
           allow_issue_writing: false
-      - name: Upload ZAP report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-report
-          path: |
-            zap_scan.html
-            report.html
-          if-no-files-found: ignore
+          artifact_name: zap-report
