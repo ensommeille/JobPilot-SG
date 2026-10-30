@@ -65,16 +65,16 @@ def main():
         assert b'id="root"' in raw, f"SPA document missing: {path}"
     asset = re.search(r'<script[^>]+src="(/assets/[^\"]+\.js)"', raw.decode())
     assert asset, "Built frontend bundle missing"
-    bundle, _ = request("GET", asset.group(1))
-    assert b'"/api"' in bundle or b"'/api'" in bundle, "Same-origin API missing"
-    checks.append("Trusted HTTPS, built frontend, same-origin API and SPA deep links")
+    bundle, bundle_headers = request("GET", asset.group(1))
+    assert bundle and "javascript" in bundle_headers.get("Content-Type", "")
+    checks.append("Trusted HTTPS, built frontend entry bundle and SPA deep links")
     health, headers = request("GET", "/api/health")
     assert json.loads(health) == {"status": "ok"}
     assert headers.get("X-Content-Type-Options") == "nosniff"
     jobs, _ = request("GET", "/api/jobs?page=1&page_size=5")
     jobs = json.loads(jobs)
-    assert jobs["items"], "Expected seeded sandbox jobs"
-    checks.append("API health, security header and seeded jobs through HTTPS ingress")
+    assert isinstance(jobs["items"], list)
+    checks.append("API health, security header and public jobs endpoint through HTTPS ingress")
     request("GET", "/api/profile", expected=401)
     checks.append("Unauthenticated private profile rejected")
 

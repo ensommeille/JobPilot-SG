@@ -1,0 +1,195 @@
+{
+  "checkedAtUtc": "2026-10-30T05:20:04.871118+00:00",
+  "region": "ap-southeast-1",
+  "cloudFormation": {
+    "Name": "jobpilot-sg-demo",
+    "Status": "CREATE_COMPLETE",
+    "Created": "2026-10-30T05:00:47.752000+00:00",
+    "Outputs": [
+      {
+        "OutputKey": "ApiHealthUrl",
+        "OutputValue": "https://52.77.50.207.sslip.io/api/health"
+      },
+      {
+        "OutputKey": "Administration",
+        "OutputValue": "aws ssm start-session --target i-053cf287bceafb9e0 --region ap-southeast-1"
+      },
+      {
+        "OutputKey": "DeployedCommit",
+        "OutputValue": "7fb4bf26d89548be63eec1a4a42b5b400e8fdeae"
+      },
+      {
+        "OutputKey": "InstanceId",
+        "OutputValue": "i-053cf287bceafb9e0"
+      },
+      {
+        "OutputKey": "WebsiteUrl",
+        "OutputValue": "https://52.77.50.207.sslip.io"
+      },
+      {
+        "OutputKey": "PublicAddress",
+        "OutputValue": "52.77.50.207"
+      }
+    ]
+  },
+  "resources": [
+    {
+      "Logical": "BootstrapReady",
+      "Type": "AWS::CloudFormation::WaitCondition",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "BootstrapSignal",
+      "Type": "AWS::CloudFormation::WaitConditionHandle",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "GatewayAttachment",
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "Instance",
+      "Type": "AWS::EC2::Instance",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "InstanceProfile",
+      "Type": "AWS::IAM::InstanceProfile",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "InstanceRole",
+      "Type": "AWS::IAM::Role",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "InternetGateway",
+      "Type": "AWS::EC2::InternetGateway",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "InternetRoute",
+      "Type": "AWS::EC2::Route",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "NetworkInterface",
+      "Type": "AWS::EC2::NetworkInterface",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "PublicIp",
+      "Type": "AWS::EC2::EIP",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "PublicIpAssociation",
+      "Type": "AWS::EC2::EIPAssociation",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "RouteAssociation",
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "RouteTable",
+      "Type": "AWS::EC2::RouteTable",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "Subnet",
+      "Type": "AWS::EC2::Subnet",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "Vpc",
+      "Type": "AWS::EC2::VPC",
+      "Status": "CREATE_COMPLETE"
+    },
+    {
+      "Logical": "WebSecurityGroup",
+      "Type": "AWS::EC2::SecurityGroup",
+      "Status": "CREATE_COMPLETE"
+    }
+  ],
+  "volumes": [
+    {
+      "Encrypted": true,
+      "SizeGiB": 30,
+      "Type": "gp3",
+      "State": "in-use"
+    }
+  ],
+  "securityGroups": [
+    {
+      "Ingress": [
+        {
+          "IpProtocol": "tcp",
+          "FromPort": 80,
+          "ToPort": 80,
+          "UserIdGroupPairs": [],
+          "IpRanges": [
+            {
+              "Description": "ACME challenge and HTTPS redirect",
+              "CidrIp": "0.0.0.0/0"
+            }
+          ],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        },
+        {
+          "IpProtocol": "tcp",
+          "FromPort": 443,
+          "ToPort": 443,
+          "UserIdGroupPairs": [],
+          "IpRanges": [
+            {
+              "Description": "HTTPS demo",
+              "CidrIp": "0.0.0.0/0"
+            }
+          ],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        }
+      ],
+      "Egress": [
+        {
+          "IpProtocol": "-1",
+          "UserIdGroupPairs": [],
+          "IpRanges": [
+            {
+              "Description": "Package images ACME and source downloads",
+              "CidrIp": "0.0.0.0/0"
+            }
+          ],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        }
+      ]
+    }
+  ],
+  "templateSha256": "b5294748bfad7a3cb316e7323b21f33aba65cf0f968c0a016ee4637030121adf",
+  "deployedTemplateMatchesLocal": true,
+  "persistence": {
+    "status": "Success",
+    "ssmCommandId": "3754117a-4c58-4339-8940-29cb1473485d",
+    "output": "APPLICATION_COMMIT=7fb4bf26d89548be63eec1a4a42b5b400e8fdeae\nENV_FILE_MODE=600\nBOOTSTRAP_RESULT=1\njobpilot|PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit\nDATABASE_RECREATED_AND_COUNTS_PRESERVED\nCOUNTS_USERS_PROFILES_JOBS=4,4,2,\nbackend running healthy 8000/tcp\ndb running healthy 5432/tcp\nfrontend running healthy 80/tcp, 8080/tcp\ningress running  0.0.0.0:80->80/tcp, [::]:80->80/tcp, 0.0.0.0:443->443/tcp, [::]:443->443/tcp, 443/udp, 2019/tcp\nredis running  6379/tcp\nDATABASE_DRIVER=postgresql+psycopg\n",
+    "scope": "Database container recreated; backend restarted; no host reboot or stack destroy test."
+  },
+  "browserCheck": {
+    "browser": "Microsoft Edge",
+    "registeredSyntheticAccount": true,
+    "loginReached": "/jobs",
+    "publicJobCount": 0,
+    "sourceStatus": "No public job sources have been configured yet."
+  },
+  "limits": [
+    "LLM provider credentials not configured",
+    "Chrome extension not paired",
+    "No public source ingestion configured",
+    "Stack deletion not tested",
+    "No high availability or automated backups"
+  ]
+}

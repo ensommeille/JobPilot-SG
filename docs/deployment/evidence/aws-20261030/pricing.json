@@ -1,0 +1,28 @@
+{
+  "checkedDate": "2026-10-30",
+  "region": "ap-southeast-1",
+  "ec2PriceSource": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/ap-southeast-1/index.json",
+  "ipv4PriceSource": "https://aws.amazon.com/vpc/pricing/",
+  "selectedRates": {
+    "linuxT3SmallPerHour": {
+      "usd": "0.0264000000",
+      "description": "$0.0264 per On Demand Linux t3.small Instance Hour",
+      "effectiveDate": "2026-10-01T00:00:00Z"
+    },
+    "gp3PerGiBMonth": {
+      "usd": "0.0960000000",
+      "description": "$0.096 per GB-month of General Purpose (gp3) provisioned storage - Asia Pacific (Singapore)",
+      "effectiveDate": "2026-10-01T00:00:00Z"
+    }
+  },
+  "publicIpv4UsdPerHour": 0.005,
+  "diskGiB": 30,
+  "baselineUsdPer730HourMonth": 25.8,
+  "excluded": [
+    "traffic beyond allowances",
+    "tax",
+    "snapshots",
+    "credit or free-tier deductions"
+  ],
+  "spendingCap": false
+}

@@ -1,0 +1,47 @@
+{
+  "checkedAtUtc": "2026-10-30T05:18:40.759225+00:00",
+  "host": "52.77.50.207.sslip.io",
+  "httpRedirect": {
+    "status": 308,
+    "location": "https://52.77.50.207.sslip.io/"
+  },
+  "tls": {
+    "version": "TLSv1.3",
+    "issuer": [
+      [
+        [
+          "countryName",
+          "US"
+        ]
+      ],
+      [
+        [
+          "organizationName",
+          "Let's Encrypt"
+        ]
+      ],
+      [
+        [
+          "commonName",
+          "YE2"
+        ]
+      ]
+    ],
+    "expires": "Jan 28 04:15:33 2027 GMT",
+    "subjectAltName": [
+      [
+        "DNS",
+        "52.77.50.207.sslip.io"
+      ]
+    ],
+    "sha256": "5f476dde86905bb013bd9c2661abc6b9eb46648058a2884a4df33f443df5bf8e",
+    "verified": true
+  },
+  "unpublishedPorts": {
+    "22": "not-reachable-from-test-client",
+    "5432": "not-reachable-from-test-client",
+    "6379": "not-reachable-from-test-client",
+    "8000": "not-reachable-from-test-client",
+    "8080": "not-reachable-from-test-client"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "checkedAtUtc": "2026-10-30T05:15:58.404417+00:00",
+  "baseUrl": "https://52.77.50.207.sslip.io",
+  "passed": true,
+  "testWrites": true,
+  "checks": [
+    "Trusted HTTPS, built frontend entry bundle and SPA deep links",
+    "API health, security header and public jobs endpoint through HTTPS ingress",
+    "Unauthenticated private profile rejected",
+    "Two synthetic registrations, login, identity and private profile isolation"
+  ],
+  "visibleJobCount": 0
+}

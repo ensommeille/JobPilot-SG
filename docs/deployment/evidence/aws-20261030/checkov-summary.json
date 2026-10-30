@@ -1,0 +1,39 @@
+{
+  "sourceCommit": "82141d2",
+  "ciRun": "https://github.com/ensommeille/JobPilot-SG/actions/runs/41006683774",
+  "advisory": true,
+  "frameworks": [
+    {
+      "framework": "dockerfile",
+      "summary": {
+        "passed": 130,
+        "failed": 0,
+        "skipped": 0,
+        "parsing_errors": 0,
+        "resource_count": 2,
+        "checkov_version": "3.4.0"
+      },
+      "failedChecks": []
+    },
+    {
+      "framework": "cloudformation",
+      "summary": {
+        "passed": 11,
+        "failed": 1,
+        "skipped": 0,
+        "parsing_errors": 0,
+        "resource_count": 16,
+        "checkov_version": "3.4.0"
+      },
+      "failedChecks": [
+        {
+          "id": "CKV_AWS_260",
+          "name": "Ensure no security groups allow ingress from 0.0.0.0:0 to port 80",
+          "resource": "AWS::EC2::SecurityGroup.WebSecurityGroup",
+          "file": "/infra/aws/cloudformation.yaml",
+          "disposition": "Accepted for public ACME HTTP-01 verification and automatic HTTPS redirect; application credentials use HTTPS. No skip or suppression added."
+        }
+      ]
+    }
+  ]
+}
