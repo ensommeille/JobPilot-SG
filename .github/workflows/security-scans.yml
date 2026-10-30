@@ -30,9 +30,16 @@ jobs:
         with:
           sarif_file: trivy-backend.sarif
           category: trivy
+      - name: Preserve Trivy report for the final report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-backend
+          path: trivy-backend.sarif
+          if-no-files-found: error
 
   iac-scan:
-    name: IaC scanning (Checkov)
+    name: Dockerfile policy scanning (Checkov)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -69,6 +76,7 @@ jobs:
         uses: zaproxy/action-baseline@v0.15.0
         with:
           target: http://127.0.0.1:8000/jobs
-          fail_action: warn
+          # Baseline is advisory: the report records warnings for review.
+          fail_action: false
           allow_issue_writing: false
           artifact_name: zap-report

@@ -10,6 +10,9 @@ venv/
 .coverage
 .coverage.*
 coverage.xml
+/backend/junit.xml
+/frontend/eslint-report.json
+/trivy-backend.sarif
 htmlcov/
 
 # Node

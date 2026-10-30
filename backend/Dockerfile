@@ -10,7 +10,10 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
 
-RUN pip install --no-cache-dir --upgrade pip setuptools && pip install --no-cache-dir .
+# pip is only needed during the build. Its vendored msgpack is not an app dependency.
+RUN pip install --no-cache-dir --upgrade pip setuptools && \
+    pip install --no-cache-dir . && \
+    python -m pip uninstall -y pip
 
 # Run as a non-root user.
 RUN useradd --create-home --uid 10001 appuser
