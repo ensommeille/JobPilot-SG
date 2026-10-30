@@ -10,6 +10,8 @@ RUN npm run build
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+RUN sed -i 's@^pid[[:space:]].*;@pid /tmp/nginx.pid;@' /etc/nginx/nginx.conf && \
+    chown -R nginx:nginx /var/cache/nginx
 USER nginx
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
