@@ -1,0 +1,264 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: JobPilot SG disposable course demo - single EC2 host, HTTPS, private container database.
+Parameters:
+  ApplicationCommit:
+    Type: String
+    Default: 7fb4bf26d89548be63eec1a4a42b5b400e8fdeae
+    AllowedPattern: '[0-9a-f]{40}'
+    Description: Full immutable commit in the public ensommeille/JobPilot-SG repository.
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.small, t3.medium]
+  LatestAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.79.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{Key: Name, Value: !Ref 'AWS::StackName'}]
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.79.1.0/24
+      MapPublicIpOnLaunch: false
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  RouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTPS application and HTTP ACME/redirect only; administration through SSM.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0, Description: ACME challenge and HTTPS redirect}
+        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: HTTPS demo}
+      SecurityGroupEgress:
+        - {IpProtocol: '-1', CidrIp: 0.0.0.0/0, Description: Package images ACME and source downloads}
+  NetworkInterface:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref Subnet
+      GroupSet: [!Ref WebSecurityGroup]
+  PublicIp:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachment
+    Properties:
+      Domain: vpc
+  PublicIpAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt PublicIp.AllocationId
+      NetworkInterfaceId: !Ref NetworkInterface
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ec2.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+  BootstrapSignal:
+    Type: AWS::CloudFormation::WaitConditionHandle
+  BootstrapReady:
+    Type: AWS::CloudFormation::WaitCondition
+    DependsOn: Instance
+    Properties:
+      Handle: !Ref BootstrapSignal
+      Timeout: '2400'
+      Count: 1
+  Instance:
+    Type: AWS::EC2::Instance
+    DependsOn: [PublicIpAssociation, InternetRoute, RouteAssociation]
+    Properties:
+      ImageId: !Ref LatestAmi
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      CreditSpecification: {CPUCredits: standard}
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref NetworkInterface
+          DeviceIndex: '0'
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - {Key: Name, Value: !Ref 'AWS::StackName'}
+        - {Key: Project, Value: JobPilot-SG}
+        - {Key: Purpose, Value: disposable-course-demo}
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -Eeuo pipefail
+          exec > >(tee -a /var/log/jobpilot-bootstrap.log) 2>&1
+          SIGNAL_URL='${BootstrapSignal}'
+          signal_result() {
+            code=$?
+            trap - EXIT
+            status=FAILURE
+            if [ "$code" -eq 0 ]; then status=SUCCESS; fi
+            curl --retry 5 --fail --silent --show-error -X PUT -H 'Content-Type:' \
+              --data-binary "{\"Status\":\"$status\",\"Reason\":\"See /var/log/jobpilot-bootstrap.log\",\"UniqueId\":\"bootstrap\",\"Data\":\"$status\"}" \
+              "$SIGNAL_URL" || true
+            exit "$code"
+          }
+          trap signal_result EXIT
+          dnf install -y docker git python3
+          systemctl enable --now docker amazon-ssm-agent
+          install -d /usr/local/lib/docker/cli-plugins /opt/jobpilot
+          curl --retry 5 --fail --location 'https://github.com/docker/compose/releases/download/v2.39.4/docker-compose-linux-x86_64' -o /usr/local/lib/docker/cli-plugins/docker-compose
+          echo '7af95166a730b87e172d4fc9aefea8725d3c6c7327d59149267b452114ddb7d4  /usr/local/lib/docker/cli-plugins/docker-compose' | sha256sum --check --strict
+          curl --retry 5 --fail --location 'https://github.com/docker/buildx/releases/download/v0.26.1/buildx-v0.26.1.linux-amd64' -o /usr/local/lib/docker/cli-plugins/docker-buildx
+          echo '9451034b6ca5354e8bf88a2002a413aedabf110fd0f12ebb0b2f2cc241be8e41  /usr/local/lib/docker/cli-plugins/docker-buildx' | sha256sum --check --strict
+          chmod 755 /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/lib/docker/cli-plugins/docker-buildx
+          fallocate -l 2G /swapfile
+          chmod 600 /swapfile
+          mkswap /swapfile
+          swapon /swapfile
+          echo '/swapfile none swap sw 0 0' >> /etc/fstab
+          git clone https://github.com/ensommeille/JobPilot-SG.git /opt/jobpilot/source
+          git -C /opt/jobpilot/source checkout --detach '${ApplicationCommit}'
+          cd /opt/jobpilot
+          umask 077
+          python3 - <<'PY'
+          import secrets
+          from pathlib import Path
+          Path('.env').write_text('\n'.join([
+              'DB_PASSWORD=' + secrets.token_hex(24),
+              'JWT_SECRET_KEY=' + secrets.token_hex(32),
+              'JOBPILOT_DEMO_ADMIN_PASSWORD=' + secrets.token_urlsafe(30),
+              'DEMO_HOST=${PublicIp}.sslip.io',
+          ]) + '\n')
+          PY
+          cat > compose.yaml <<'COMPOSE'
+          name: jobpilot-cloud
+          services:
+            db:
+              image: postgres:16-alpine
+              restart: unless-stopped
+              environment:
+                POSTGRES_USER: jobpilot
+                POSTGRES_DB: jobpilot
+                POSTGRES_PASSWORD: ${!DB_PASSWORD:?required}
+              volumes: [pgdata:/var/lib/postgresql/data]
+              healthcheck:
+                test: [CMD-SHELL, pg_isready -U jobpilot -d jobpilot]
+                interval: 5s
+                timeout: 3s
+                retries: 20
+            redis:
+              image: redis:7-alpine
+              restart: unless-stopped
+            backend:
+              build: ./source/backend
+              restart: unless-stopped
+              depends_on:
+                db: {condition: service_healthy}
+                redis: {condition: service_started}
+              environment:
+                DATABASE_URL: postgresql+psycopg://jobpilot:${!DB_PASSWORD}@db:5432/jobpilot
+                JWT_SECRET_KEY: ${!JWT_SECRET_KEY:?required}
+                JOBPILOT_DEMO_ADMIN_PASSWORD: ${!JOBPILOT_DEMO_ADMIN_PASSWORD:?required}
+                CORS_ORIGINS: '["https://${!DEMO_HOST}"]'
+                EXTENSION_WEB_ORIGINS: '["https://${!DEMO_HOST}"]'
+                EXTENSION_CLIENT_IDS: '[]'
+            frontend:
+              build:
+                context: ./source/frontend
+                args: {VITE_API_BASE_URL: /api}
+              restart: unless-stopped
+            ingress:
+              image: caddy:2-alpine
+              restart: unless-stopped
+              environment:
+                DEMO_HOST: ${!DEMO_HOST:?required}
+              ports: ['80:80', '443:443']
+              volumes: [./Caddyfile:/etc/caddy/Caddyfile:ro, caddy_data:/data, caddy_config:/config]
+              depends_on:
+                backend: {condition: service_healthy}
+                frontend: {condition: service_healthy}
+          volumes:
+            pgdata:
+            caddy_data:
+            caddy_config:
+          COMPOSE
+          cat > Caddyfile <<'CADDY'
+          {$DEMO_HOST} {
+            header X-Content-Type-Options nosniff
+            header Referrer-Policy strict-origin-when-cross-origin
+            handle_path /api/* {
+              reverse_proxy backend:8000
+            }
+            handle {
+              reverse_proxy frontend:8080
+            }
+          }
+          CADDY
+          docker compose config --quiet
+          docker compose build backend
+          docker compose build frontend
+          docker compose run --rm --no-deps frontend nginx -t
+          docker compose up -d --wait --wait-timeout 240
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --max-time 15 'https://${PublicIp}.sslip.io/api/health' > /tmp/jobpilot-health.json; then
+              python3 -c 'import json; assert json.load(open("/tmp/jobpilot-health.json")) == {"status": "ok"}'
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          test "$ready" -eq 1
+          curl --fail --silent --show-error 'https://${PublicIp}.sslip.io/' | grep -q 'id="root"'
+          echo 'JOBPILOT_BOOTSTRAP_SUCCESS'
+Outputs:
+  WebsiteUrl:
+    Value: !Sub https://${PublicIp}.sslip.io
+  ApiHealthUrl:
+    Value: !Sub https://${PublicIp}.sslip.io/api/health
+  InstanceId:
+    Value: !Ref Instance
+  PublicAddress:
+    Value: !Ref PublicIp
+  DeployedCommit:
+    Value: !Ref ApplicationCommit
+  Administration:
+    Value: !Sub aws ssm start-session --target ${Instance} --region ${AWS::Region}

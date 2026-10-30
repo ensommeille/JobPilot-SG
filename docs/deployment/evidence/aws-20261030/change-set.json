@@ -1,0 +1,90 @@
+{
+  "region": "ap-southeast-1",
+  "stack": "jobpilot-sg-demo",
+  "changeSet": "validated-cloud-deployment",
+  "status": "CREATE_COMPLETE",
+  "applicationCommit": "7fb4bf26d89548be63eec1a4a42b5b400e8fdeae",
+  "templateSha256": "b5294748bfad7a3cb316e7323b21f33aba65cf0f968c0a016ee4637030121adf",
+  "changes": [
+    {
+      "Action": "Add",
+      "LogicalResourceId": "BootstrapReady",
+      "ResourceType": "AWS::CloudFormation::WaitCondition"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "BootstrapSignal",
+      "ResourceType": "AWS::CloudFormation::WaitConditionHandle"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "GatewayAttachment",
+      "ResourceType": "AWS::EC2::VPCGatewayAttachment"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "InstanceProfile",
+      "ResourceType": "AWS::IAM::InstanceProfile"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "InstanceRole",
+      "ResourceType": "AWS::IAM::Role"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "Instance",
+      "ResourceType": "AWS::EC2::Instance"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "InternetGateway",
+      "ResourceType": "AWS::EC2::InternetGateway"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "InternetRoute",
+      "ResourceType": "AWS::EC2::Route"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "NetworkInterface",
+      "ResourceType": "AWS::EC2::NetworkInterface"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "PublicIpAssociation",
+      "ResourceType": "AWS::EC2::EIPAssociation"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "PublicIp",
+      "ResourceType": "AWS::EC2::EIP"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "RouteAssociation",
+      "ResourceType": "AWS::EC2::SubnetRouteTableAssociation"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "RouteTable",
+      "ResourceType": "AWS::EC2::RouteTable"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "Subnet",
+      "ResourceType": "AWS::EC2::Subnet"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "Vpc",
+      "ResourceType": "AWS::EC2::VPC"
+    },
+    {
+      "Action": "Add",
+      "LogicalResourceId": "WebSecurityGroup",
+      "ResourceType": "AWS::EC2::SecurityGroup"
+    }
+  ]
+}
