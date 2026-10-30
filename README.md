@@ -46,6 +46,11 @@ loopback and is not an internet-facing production configuration.
 See [clean deployment acceptance](docs/member3/CLEAN_DEPLOYMENT_ACCEPTANCE.md)
 for isolated-port testing, PostgreSQL verification and Chrome extension pairing.
 
+For a real AWS course demonstration, see the [CloudFormation template and runbook](infra/aws/README.md)
+and the [verified deployment status](docs/deployment/IAC_STATUS.md). This separate
+single-host configuration provides HTTPS and private container database ports;
+review its ongoing AWS cost and disposable-data lifecycle before deployment.
+
 ```bash
 # 1. Infrastructure (PostgreSQL + Redis)
 docker compose up -d db redis

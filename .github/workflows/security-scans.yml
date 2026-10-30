@@ -39,17 +39,19 @@ jobs:
           if-no-files-found: error
 
   iac-scan:
-    name: Dockerfile policy scanning (Checkov)
+    name: IaC validation and policy scanning
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: Install Checkov
-        run: pip install checkov
-      - name: Run Checkov (Dockerfiles)
-        run: checkov -d . --framework dockerfile --output json --output-file-path . --soft-fail
+      - name: Install IaC checkers
+        run: pip install checkov cfn-lint
+      - name: Validate AWS CloudFormation template
+        run: cfn-lint infra/aws/cloudformation.yaml
+      - name: Run Checkov (Dockerfiles and CloudFormation)
+        run: checkov -d . --framework dockerfile cloudformation --output json --output-file-path . --soft-fail
       - name: Upload Checkov report
         if: always()
         uses: actions/upload-artifact@v4
